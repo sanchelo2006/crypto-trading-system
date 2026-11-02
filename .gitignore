@@ -1,0 +1,43 @@
+# === СЕКРЕТЫ (НЕЛЬЗЯ КОММИТИТЬ!) ===
+.env
+.env.local
+*.key
+*.pem
+
+# === Виртуальные окружения ===
+venv/
+.venv/
+env/
+
+# === Данные и состояние ===
+backtest_data/
+data/
+*.csv
+*.json
+!config.json.example
+!strategy_spec.schema.json
+
+# === Логи ===
+logs/
+*.log
+*.html
+
+# === Python кэш ===
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# === IDE ===
+.vscode/
+.idea/
+
+# === Системные файлы ===
+.DS_Store
+Thumbs.db
+help.txt
+
+# === Результаты оптимизации ===
+optimization/results/
+research/*_results.csv
+research/plots/

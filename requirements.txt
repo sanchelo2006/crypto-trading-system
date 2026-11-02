@@ -1,0 +1,17 @@
+pandas>=2.0.0
+numpy>=1.24.0
+pybit>=5.0.0
+python-dotenv>=1.0.0
+openai>=1.0.0
+requests>=2.31.0
+feedparser>=6.0.0
+python-dateutil>=2.8.0
+flask>=2.3.0
+nicegui>=2.0.0
+TA-Lib
+transformers>=4.40.0
+torch>=2.0.0
+pyarrow>=14.0.0
+pytest
+json_repair
+xlsxwriter>=3.2.0
