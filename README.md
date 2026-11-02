@@ -1,5 +1,5 @@
 This is trading system for manual and automatic trading on cryptomarket. I build short and in details descriptions (2 files PROJECT_OVERVIEW(SHORT).md and PROJECT_OVERVIEW.md).
-In very short: this system use AI for advices and optimization trading strategies. Have very good instrument - strategy_spec (logic - AI build strategy and convert it to commands which can work without AI).
+In very short: this system use AI for advices and optimization trading strategies. Have very good instrument - strategy_spec (logic - AI build strategy and convert it to commands which can work without AI). Project on Russian language, if somebody interest i can translate it to English.
 Your comments and suggestions always welcome.
 
 ## 📄 License
