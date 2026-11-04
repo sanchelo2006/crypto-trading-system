@@ -75,12 +75,11 @@ On top of raw candles it precomputes `market_stats`:
 
 Three package flavours exist:
 
-| Package ↕▾ | Window ↕▾ | Purpose ↕▾ |
+| Package | Window | Purpose |
 |---|---|---|
-| −`morning_package` | Wide (2 days, up to 64×15m candles) | Full context analysis at the start of a session |
-| −`intraday_package` | Tighter (8h, up to 30×15m candles) | Periodic re-evaluation during the day |
-| −`intraday_light` | Minimal (2 candles + fresh stats) | Validating a pending setup or babysitting a position at a fraction of the token cost |
-⚙
+| `morning_package` | Wide (2 days, up to 64×15m candles) | Full context analysis at the start of a session |
+| `intraday_package` | Tighter (8h, up to 30×15m candles) | Periodic re-evaluation during the day |
+| `intraday_light` | Minimal (2 candles + fresh stats) | Validating a pending setup or babysitting a position at a fraction of the token cost |
 
 #### 2️⃣ Indicator Layer — `indicators.py` + engine
 
@@ -98,14 +97,13 @@ Purpose-built series round it out:
 
 #### 3️⃣ AI Layer — `ai_client.py`
 
-| Method ↕▾ | Role ↕▾ |
+| Method | Role |
 |---|---|
-| −`init_symbol` | Runs up to **5 iterations** in which the model may call a `web_search` tool to research a coin, then is forced to return JSON |
-| −`analyze` | Requests structured JSON with `response_format`; auto-corrects any timeframe the model invented that isn't in the data |
-| −`optimize_strategy` | Takes a TRAIN/TEST backtest summary and returns a revised spec — with hard guardrails injected into the prompt (see below) |
-| −`revise_init_strategy` | Rebuilds a spec after a sanity backtest |
-| −`chat_with_tools` | Multi-turn tool-calling loop for the interactive chat |
-⚙
+| `init_symbol` | Runs up to **5 iterations** in which the model may call a `web_search` tool to research a coin, then is forced to return JSON |
+| `analyze` | Requests structured JSON with `response_format`; auto-corrects any timeframe the model invented that isn't in the data |
+| `optimize_strategy` | Takes a TRAIN/TEST backtest summary and returns a revised spec — with hard guardrails injected into the prompt (see below) |
+| `revise_init_strategy` | Rebuilds a spec after a sanity backtest |
+| `chat_with_tools` | Multi-turn tool-calling loop for the interactive chat |
 
 **Guardrails injected automatically:**
 
@@ -118,14 +116,13 @@ Every response passes through `_safe_json_loads` — a tolerant parser that stri
 
 The **contract** between model and engine. Each side (`long` / `short`) declares:
 
-| Field ↕▾ | Purpose ↕▾ |
+| Field | Purpose |
 |---|---|
-| −`entry` or `entry_any` | A list of AND-groups (OR-combined) |
-| −`stop_loss_atr_mult` / `take_profit_atr_mult` | ATR-based risk, with percentage fallbacks |
-| −`management` | Breakeven trigger, ATR trailing, max hold candles, optional exits on level failure / trend loss / MACD flip |
-| −`filters` | Global filters applied to both sides |
-| −`risk_controls` | Cooldown after losing streaks |
-⚙
+| `entry` or `entry_any` | A list of AND-groups (OR-combined) |
+| `stop_loss_atr_mult` / `take_profit_atr_mult` | ATR-based risk, with percentage fallbacks |
+| `management` | Breakeven trigger, ATR trailing, max hold candles, optional exits on level failure / trend loss / MACD flip |
+| `filters` | Global filters applied to both sides |
+| `risk_controls` | Cooldown after losing streaks |
 
 **Six condition primitives:** `compare`, `cross`, `range`, `volume`, `slope`, `distance`.
 
@@ -133,13 +130,12 @@ Validation is **opinionated**: every entry group must contain a volume filter, a
 
 #### 5️⃣ Backtest Engine — `backtest_engine.py`
 
-| Rule ↕▾ | Detail ↕▾ |
+| Rule | Detail |
 |---|---|
-| −**Signal timing** | Signals are evaluated on the close of bar *i* and filled at the **open of bar *i+1*** — no same-bar cheating |
-| −**Slippage** | **0.05%** against the trade on entry and on SL/TP fills; deliberately **not** on soft exits (which execute at an already-observed close) |
-| −**Commission** | 0.055% per side |
-| −**Position management** | Runs every bar; SL/TP checked intrabar by high/low |
-⚙
+| **Signal timing** | Signals are evaluated on the close of bar *i* and filled at the **open of bar *i+1*** — no same-bar cheating |
+| **Slippage** | **0.05%** against the trade on entry and on SL/TP fills; deliberately **not** on soft exits (which execute at an already-observed close) |
+| **Commission** | 0.055% per side |
+| **Position management** | Runs every bar; SL/TP checked intrabar by high/low |
 
 **Outputs:** full trade list with entry snapshots (RSI, ADX, ATR, pivots at the moment of entry), equity curve, and stats — win rate, profit factor, expectancy, max drawdown, average win/loss, long/short split, cooldown activation counters.
 
@@ -149,11 +145,10 @@ Signal detection, risk management, position management, order execution and trad
 
 Order routing and data sourcing are gated by **two independent flags**:
 
-| Flag ↕▾ | Controls ↕▾ |
+| Flag | Controls |
 |---|---|
-| −`BYBIT_TESTNET` | Where **orders** go |
-| −`BYBIT_DATA_TESTNET` | Where **candles** come from |
-⚙
+| `BYBIT_TESTNET` | Where **orders** go |
+| `BYBIT_DATA_TESTNET` | Where **candles** come from |
 
 This lets signals be validated on real mainnet history while orders still go to testnet.
 
@@ -161,17 +156,16 @@ This lets signals be validated on real mainnet history while orders still go to 
 
 ### 🧩 Core components at a glance
 
-| File ↕▾ | Lines ↕▾ | Responsibility ↕▾ |
+| File | Lines | Responsibility |
 |---|---|---|
-| −`config.py` | ~110 | Paths, API keys, symbols, candle limits, slippage, testnet flags |
-| −`data_fetcher.py` | ~775 | Bybit REST: klines, orderbook, trades, fundamentals, news, precomputed stats |
-| −`indicators.py` | ~478 | TA-Lib wrappers, 1h/4h resampling, volume profile, pivots |
-| −`ai_client.py` | ~856 | DeepSeek client: init, analyze, optimize, revise, chat |
-| −`strategy_spec.py` | ~604 | Strategy DSL: evaluator, validator, defaults, explainer |
-| −`backtest_engine.py` | ~865 | Deterministic simulation with slippage, commissions, management |
-| −`data_loader.py` | ~226 | Offline CSV loader for `backtest_data/` |
-| −`trading/` | — | Live execution: signals, risk, positions, orders, journal |
-⚙
+| `config.py` | ~110 | Paths, API keys, symbols, candle limits, slippage, testnet flags |
+| `data_fetcher.py` | ~775 | Bybit REST: klines, orderbook, trades, fundamentals, news, precomputed stats |
+| `indicators.py` | ~478 | TA-Lib wrappers, 1h/4h resampling, volume profile, pivots |
+| `ai_client.py` | ~856 | DeepSeek client: init, analyze, optimize, revise, chat |
+| `strategy_spec.py` | ~604 | Strategy DSL: evaluator, validator, defaults, explainer |
+| `backtest_engine.py` | ~865 | Deterministic simulation with slippage, commissions, management |
+| `data_loader.py` | ~226 | Offline CSV loader for `backtest_data/` |
+| `trading/` | — | Live execution: signals, risk, positions, orders, journal |
 
 ---
 
@@ -189,29 +183,27 @@ This lets signals be validated on real mainnet history while orders still go to 
 
 ### 🎯 Design principles
 
-| Principle ↕▾ | Why it matters ↕▾ |
+| Principle | Why it matters |
 |---|---|
-| −**Separation of reasoning and execution** | The LLM is creative but unreliable; the engine is dumb but exact. Each does what it's good at |
-| −**Zero lookahead** | Every indicator is shifted, every pivot uses yesterday's data, every entry fills on the next bar. Backtest results mean something |
-| −**Explicit risk contract** | No entry without a volume filter, a trend filter, a level confirmation, a stop and a take profit |
-| −**Token economy** | Three package sizes, precomputed stats, trimmed context — so a real trading loop runs on a real API budget |
-| −**Deterministic replay** | Same JSON + same data = same trades. Every time |
-⚙
+| **Separation of reasoning and execution** | The LLM is creative but unreliable; the engine is dumb but exact. Each does what it's good at |
+| **Zero lookahead** | Every indicator is shifted, every pivot uses yesterday's data, every entry fills on the next bar. Backtest results mean something |
+| **Explicit risk contract** | No entry without a volume filter, a trend filter, a level confirmation, a stop and a take profit |
+| **Token economy** | Three package sizes, precomputed stats, trimmed context — so a real trading loop runs on a real API budget |
+| **Deterministic replay** | Same JSON + same data = same trades. Every time |
 
 ---
 
 ### 🔧 Technology stack
 
-| Layer ↕▾ | Choice ↕▾ |
+| Layer | Choice |
 |---|---|
-| −Language | **Python 3.10+** |
-| −Exchange | **Bybit** (via `pybit`) |
-| −LLM | **DeepSeek** (via `openai` SDK) |
-| −Indicators | **TA-Lib** + **pandas** / **numpy** |
-| −UI | **NiceGUI** |
-| −Persistence | JSON files + CSV journals |
-| −Backtest data | Yearly 15m CSVs in `backtest_data/` |
-⚙
+| Language | **Python 3.10+** |
+| Exchange | **Bybit** (via `pybit`) |
+| LLM | **DeepSeek** (via `openai` SDK) |
+| Indicators | **TA-Lib** + **pandas** / **numpy** |
+| UI | **NiceGUI** |
+| Persistence | JSON files + CSV journals |
+| Backtest data | Yearly 15m CSVs in `backtest_data/` |
 
 ---
 
@@ -302,9 +294,9 @@ The default view. Six cards that update together on every refresh.
 
 A key-value table rendered from `state.last_analysis`:
 
-| Field ↕▾ | Source ↕▾ |
+| Field | Source |
 |---|---|
-| −Время анализа | `analysis.timestamp_utc` |
+| Время анализа | `analysis.timestamp_utc` |
 | Цена | `analysis.current_price` |
 | Изменение 24ч | `analysis.price_change_24h_pct` |
 | Стакан | `analysis.orderbook_bias` |
@@ -313,7 +305,6 @@ A key-value table rendered from `state.last_analysis`:
 | Fear & Greed | `analysis.fear_greed_state` |
 | L/S Ratio | `analysis.long_short_ratio_signal` |
 | Новости | `analysis.news_impact` |
-⚙
 
 Below the table, the model's own words: `📝 Сводка: {summary}`.
 
@@ -364,14 +355,13 @@ The card is hidden until the first package has been delivered.
 
 Appears only when `state.active_trade` exists. Shows:
 
-| Field ↕▾ | Content ↕▾ |
+| Field | Content |
 |---|---|
-| −Направление | `direction` (LONG/SHORT) |
+| Направление | `direction` (LONG/SHORT) |
 | Цена входа | `entry_price` |
 | Стоп-лосс | `stop_loss` |
 | Тейк-профит | `take_profit[]` |
 | Тип входа | `entry_type` (`manual` / `signal`) |
-⚙
 
 Two actions:
 
@@ -397,13 +387,12 @@ That last step is subtle but important: the system deliberately learns from loss
 
 The manual trade form. Appears when there is **no active position**.
 
-| Field ↕▾ | Notes ↕▾ |
+| Field | Notes |
 |---|---|
-| −Направление | `long` / `short` |
-| −Цена входа | must be > 0 |
+| Направление | `long` / `short` |
+| Цена входа | must be > 0 |
 | Стоп-лосс | direction-dependent validation |
 | Тейк-профит | direction-dependent validation |
-⚙
 
 **Validation rules** (rejected with a toast if violated):
 
@@ -442,12 +431,11 @@ Two views of the same thing, synced on save.
 
 `rules_table` splits the rules text into rows:
 
-| Column ↕▾ | Content ↕▾ |
+| Column | Content |
 |---|---|
-| −№ | Sequential number |
-| −Условие | Text before the first `:` (or `---`) |
+| № | Sequential number |
+| Условие | Text before the first `:` (or `---`) |
 | Описание | Text after |
-⚙
 
 Trading rules come first, then a divider row (`=== РИСК-МЕНЕДЖМЕНТ ===`), then risk rules.
 
@@ -473,12 +461,11 @@ This is the human-in-the-loop override. The AI writes its own rules at initializ
 
 One row per archived day:
 
-| Column ↕▾ | Content ↕▾ |
+| Column | Content |
 |---|---|
-| −Дата | `YYYY-MM-DD` |
-| −P&L | Sum of `result_pct` for that day's trades, formatted with sign |
-| −Сделок | Trade count |
-⚙
+| Дата | `YYYY-MM-DD` |
+| P&L | Sum of `result_pct` for that day's trades, formatted with sign |
+| Сделок | Trade count |
 
 Clicking a row opens a modal:
 
@@ -590,12 +577,11 @@ Before the AI's spec is accepted as final, the code runs it over the **last 60 d
 
 Diagnostic checks:
 
-| Check ↕▾ | Threshold ↕▾ | Failure message ↕▾ |
+| Check | Threshold | Failure message |
 |---|---|---|
-| −Trade frequency | `< 1.5 trades/week` | *"фильтры входа слишком жёсткие"* |
-| −Edge | `PF < 1.0` **and** `expectancy < 0` | *"нет эджа"* |
-| −Quick losses | `> 50% of losses` close in ≤ 3 candles | *"входы слишком поздние или стоп внутри шума"* |
-⚙
+| Trade frequency | `< 1.5 trades/week` | *"фильтры входа слишком жёсткие"* |
+| Edge | `PF < 1.0` **and** `expectancy < 0` | *"нет эджа"* |
+| Quick losses | `> 50% of losses` close in ≤ 3 candles | *"входы слишком поздние или стоп внутри шума"* |
 
 If **any** of these triggers, the text is passed to `revise_init_strategy` with a specific remediation checklist:
 
@@ -622,9 +608,14 @@ After this the coin is live-ready: it has a spec, rules, and a fresh day.
 
 `_ensure_safe_setup_fallback` in `ui/ai_handlers.py` catches the case where the model returns `ANALYSIS` without setup/signal/position_update and no active trade. Instead of leaving the UI blank, it inserts a **placeholder setup** with:
 
-```
+```json
 {
-  "direction
+  "direction": "long",
+  "entry_price": 0,
+  "stop_loss": 0,
+  "take_profit": [],
+  "confidence_pct": 0
+}
 ```
 
 Zero-confidence means no trade, but the structure is preserved — the UI doesn't crash, the next iteration can overwrite it, and the reason is documented.
@@ -637,11 +628,10 @@ Toggled by **🚀 Авторежим** (becomes **⏹ Остановить** whe
 
 #### Two start modes
 
-| Mode ↕▾ | Triggered by ↕▾ | What it does ↕▾ |
+| Mode | Triggered by | What it does |
 |---|---|---|
-| −**`full`** | 🚀 Авторежим button | Catch-up + morning package (if needed) + loop |
-| −**`position_only`** | `open_trade()` in the coin page | **Skips** catch-up and morning, because a manual entry is already in flight |
-⚙
+| **`full`** | 🚀 Авторежим button | Catch-up + morning package (if needed) + loop |
+| **`position_only`** | `open_trade()` in the coin page | **Skips** catch-up and morning, because a manual entry is already in flight |
 
 #### The full-mode bootstrap
 
@@ -663,11 +653,10 @@ On start, the loop:
 
 Waits for the **next 15-minute boundary** (minute 0, 15, 30, or 45), then:
 
-| Condition ↕▾ | Package used ↕▾ |
+| Condition | Package used |
 |---|---|
-| −`active_trade` exists **or** `last_setup` exists | `get_intraday_light_package()` — 2 candles, cheap |
-| −Neither | `get_intraday_package()` — 30 candles, full |
-⚙
+| `active_trade` exists **or** `last_setup` exists | `get_intraday_light_package()` — 2 candles, cheap |
+| Neither | `get_intraday_package()` — 30 candles, full |
 
 Then `analyze()` → `process_ai_response()` → wait for the next boundary.
 
@@ -685,10 +674,10 @@ The `intraday_light` branch is the token-economy decision at work. When there's 
 
 A confirmation dialog guards the **🗑 Очистить** button. On confirm, `clear_coin_data(mode="all")` runs:
 
-| Cleared ↕▾ | Kept ↕▾ |
+| Cleared | Kept |
 |---|---|
-| −`last_analysis`, `last_signal`, `last_setup` | `trade_journal.csv` |
-| −All `last_*` timestamps | Archive folder history |
+| `last_analysis`, `last_signal`, `last_setup` | `trade_journal.csv` |
+| All `last_*` timestamps | Archive folder history |
 | `morning_context`, `intraday_context` |  |
 | `indicators`, `indicator_timestamps` |  |
 | `last_key_events` |  |
@@ -699,7 +688,6 @@ A confirmation dialog guards the **🗑 Очистить** button. On confirm, `
 | `strategy_spec` → null |  |
 | `trading_rules_list`, `risk_management_rules_list` |  |
 | `research` |  |
-⚙
 
 Also stops auto mode for the symbol.
 
@@ -753,17 +741,16 @@ Every arrow is a page action. A coin never jumps straight from "the model wrote 
 
 ### 🛡️ Safety properties
 
-| Property ↕▾ | Guarantee ↕▾ |
+| Property | Guarantee |
 |---|---|
-| −**Symbol isolation** | All state per-symbol; a corrupt SOLUSDT cannot affect XRPUSDT |
-| −**Day discipline** | Closing a day requires `open_day` to resume — a hard "I'm done" gate |
-| −**Journal is forever** | 🗑 Clear leaves `trade_journal.csv` untouched |
-| −**Fallback setup** | Model failing to return a setup produces a zero-confidence placeholder, not a blank UI |
-| −**Auto mode is not auto trading** | 🚀 Авторежим produces analysis, never orders — the two are deliberately separate |
-| −**Manual entry is bounded** | SL/TP side validation prevents "long with stop above entry" from ever being submitted |
-| −**Post-close analysis on losses** | Losing trades feed `error_analysis=True` — the model is asked to diagnose itself |
-| −**Explicit cancellation** | Every setup and signal carries `cancel_conditions` — nothing is a forever-thesis |
-⚙
+| **Symbol isolation** | All state per-symbol; a corrupt SOLUSDT cannot affect XRPUSDT |
+| **Day discipline** | Closing a day requires `open_day` to resume — a hard "I'm done" gate |
+| **Journal is forever** | 🗑 Clear leaves `trade_journal.csv` untouched |
+| **Fallback setup** | Model failing to return a setup produces a zero-confidence placeholder, not a blank UI |
+| **Auto mode is not auto trading** | 🚀 Авторежим produces analysis, never orders — the two are deliberately separate |
+| **Manual entry is bounded** | SL/TP side validation prevents "long with stop above entry" from ever being submitted |
+| **Post-close analysis on losses** | Losing trades feed `error_analysis=True` — the model is asked to diagnose itself |
+| **Explicit cancellation** | Every setup and signal carries `cancel_conditions` — nothing is a forever-thesis |
 
 ---
 
@@ -771,18 +758,17 @@ Every arrow is a page action. A coin never jumps straight from "the model wrote 
 
 In rough chronological order, over a coin's life:
 
-| Moment ↕▾ | Action ↕▾ |
+| Moment | Action |
 |---|---|
-| −**New coin** | 🪄 Инициализировать → sanity backtest → accepted |
-| −**Start of day** | 🔓 Открыть день (auto on first refresh) → 🌅 Утренний пакет |
-| −**During day** | ⏱ Внутридневной пакет, or flip 🚀 Авторежим and let the loop drive |
+| **New coin** | 🪄 Инициализировать → sanity backtest → accepted |
+| **Start of day** | 🔓 Открыть день (auto on first refresh) → 🌅 Утренний пакет |
+| **During day** | ⏱ Внутридневной пакет, or flip 🚀 Авторежим and let the loop drive |
 | **Signal fires** | Model writes `last_signal` → 📐 Сетап / Сигнал card shows the setup → you decide to ➕ Войти |
 | **Open position** | 🔴 Активная позиция card shows it → ✏️ Редактировать (adjust SL/TP) or 🔒 Закрыть (exit) |
 | **End of day** | 🔒 Закрыть день → archived |
 | **Next morning** | 🔓 Открыть день → fresh analysis slate |
 | **Underperforming** | Tune rules in 📐 Правила, or clear + re-init |
 | **Wanting a fresh start** | 🗑 Очистить (rules reset, journal preserved) → 🪄 Инициализировать |
-⚙
 
 The coin page is where the human decides *when* and *whether*; the AI decides *what*. Keeping those two decisions in separate hands is why the page has both a *stratégie editor* (Правила tab) and a *strategy executor* (Сетап card) sitting next to each other.
 
@@ -791,7 +777,6 @@ The coin page is where the human decides *when* and *whether*; the AI decides *w
 ```
 
 </
-
 
 
 ---
@@ -859,20 +844,18 @@ for sym in self.memory.get_all_symbols():
 
 Behaviour:
 
-| Case ↕▾ | Result ↕▾ |
+| Case | Result |
 |---|---|
-| −`"что думаешь про SOLUSDT?"` | Match → proceeds with SOLUSDT |
+| `"что думаешь про SOLUSDT?"` | Match → proceeds with SOLUSDT |
 | `"sol"`, `"Sol"`, `"sOlUsDt"` | Match (case-insensitive) — but only if a symbol named exactly `SOL` exists in `TRADING_PAIRS`. `SOLUSDT` will **not** match `sol` — the boundary is on `\bSOLUSDT\b` |
 | No symbol | Returns `None` → user sees `❓ Не удалось определить монету.` |
-⚙
 
 Then two guards:
 
-| Guard ↕▾ | Message ↕▾ |
+| Guard | Message |
 |---|---|
-| −`cm.is_initialized() == False` | `⚠️ Монета {symbol} не инициализирована.` |
+| `cm.is_initialized() == False` | `⚠️ Монета {symbol} не инициализирована.` |
 | Symbol not in `config.TRADING_PAIRS` | Silent return — should not happen |
-⚙
 
 If both pass, the chat fetches a fresh **intraday package** starting from `last_candle_time`, so the model has current data and doesn't re-read candles it already saw.
 
@@ -896,9 +879,9 @@ flowchart TD
 
 Properties of the loop (from `chat_with_tools`):
 
-| Property ↕▾ | Value ↕▾ |
+| Property | Value |
 |---|---|
-| −**Max iterations** | **5** (`max_iterations=5` passed by ChatPage) |
+| **Max iterations** | **5** (`max_iterations=5` passed by ChatPage) |
 | **Tool choice** | `"auto"` — the model decides when to call, when to answer |
 | **Temperature** | 0.5 |
 | **Max tokens** | 2000 |
@@ -906,7 +889,6 @@ Properties of the loop (from `chat_with_tools`):
 | **Exception in call** | Caught, logged, returned as `"Ошибка: ..."` — chat does not hang |
 | **Empty response** | Returns `"Модель не ответила."` |
 | **Iteration limit** | Returns `"Достигнут лимит итераций инструментов."` |
-⚙
 
 Each tool result is appended as a proper `role: "tool"` message with the matching `tool_call_id` — so the model can chain calls: *read rules → read setup → suggest update → verify*. If a tool fails, the model sees the failure and can react.
 
@@ -928,32 +910,29 @@ Declared in `tool_registry.get_tool_definitions()`, dispatched by `ToolExecutor.
 
 #### 🎯 Setup
 
-| Tool ↕▾ | Args ↕▾ | Returns ↕▾ |
+| Tool | Args | Returns |
 |---|---|---|
-| −`get_current_setup` | — | Current signal (if `confidence_pct > 0`) or setup, or *"Сетап отсутствует."* |
+| `get_current_setup` | — | Current signal (if `confidence_pct > 0`) or setup, or *"Сетап отсутствует."* |
 | `update_setup` | `direction`, `entry_price`, `stop_loss`, `take_profit[]`, `conditions[]`, `cancel_conditions[]`, `rationale` | Writes a new `last_setup` into state with `confidence_pct = 0` |
-⚙
 
 `update_setup` deliberately sets `confidence_pct = 0`. A setup written from chat is a *sketch*, not a signal — the UI shows it as 📐 but the auto trading loop will never act on it. Only the analysis pipeline (morning/intraday/auto mode) can raise confidence above zero.
 
 #### 🔴 Position & analysis
 
-| Tool ↕▾ | Args ↕▾ | Returns ↕▾ |
+| Tool | Args | Returns |
 |---|---|---|
-| −`get_market_analysis` | — | Last analysis: price, 24h change, orderbook bias, OI trend, funding, F&G, news impact, summary |
+| `get_market_analysis` | — | Last analysis: price, 24h change, orderbook bias, OI trend, funding, F&G, news impact, summary |
 | `get_active_trade` | — | Open position: direction, entry, SL, TP. Or *"Открытых позиций нет."* |
 | `get_trade_stats` | — | Trade count, win rate, total P&L%, avg win%, avg loss% |
-⚙
 
 These three let the model reason about *"is my existing thesis working?"* without needing the full context blocks re-injected.
 
 #### 📰 News
 
-| Tool ↕▾ | Args ↕▾ | Returns ↕▾ |
+| Tool | Args | Returns |
 |---|---|---|
-| −`get_news` | — | Headlines over the last 24h, formatted |
+| `get_news` | — | Headlines over the last 24h, formatted |
 | `get_news_analysis` | — | **Extended** news: sentiment impact (`positive`/`negative`/`neutral`), positive/negative counts, plus the formatted list |
-⚙
 
 Both are cached in the `ToolExecutor` instance:
 
@@ -1127,29 +1106,27 @@ The chat **informs** the analysis pipeline: the rules you write via chat become 
 
 ### 🧱 The constant that shapes behaviour
 
-| Constant ↕▾ | Value ↕▾ | Why ↕▾ |
+| Constant | Value | Why |
 |---|---|---|
-| −`max_iterations` | **5** | Below 5, complex tool chains fail; above 5, a single stuck query eats a lot of tokens |
+| `max_iterations` | **5** | Below 5, complex tool chains fail; above 5, a single stuck query eats a lot of tokens |
 | `temperature` | **0.5** | More exploratory than analysis (0.3), but not creative-fiction (0.8) |
 | `max_tokens` | **2000** | Enough for a paragraph of reasoning plus a tool call, not enough to ramble |
 | UI refresh | **2 s** | The main event loop for all UI queues — chat messages appear within 2 s of arrival |
 | `hours_back` for news | **24 h** | Wide enough to catch a two-day-old FUD event still being priced in |
-⚙
 
 ---
 
 ### ✅ What makes the chat trustworthy
 
-| Property ↕▾ | How it's achieved ↕▾ |
+| Property | How it's achieved |
 |---|---|
-| −**Stateless and reproducible** | Messages rebuilt per call — no hidden accumulation |
+| **Stateless and reproducible** | Messages rebuilt per call — no hidden accumulation |
 | **Bounded cost** | `max_iterations=5`, `max_tokens=2000`, tool results cached |
 | **Visible side effects** | Every rule write lands in `trading_rules.md` — you can diff it |
 | **Cannot move money** | No tool touches `BybitExecutor` |
 | **Cannot fake a signal** | `update_setup` writes `confidence_pct = 0` |
 | **Survives a slow model** | Background thread + `UiEventQueue` + main-thread drain |
 | **Survives a broken model** | Every exception path returns a visible string |
-⚙
 
 The chat is, in a sentence: **the model's chance to reason freely, walled off from the model's chance to trade**.
 
@@ -1218,32 +1195,30 @@ for sym in self.memory.get_all_symbols():
 
 Behaviour:
 
-| Case ↕▾ | Result ↕▾ |
+| Case | Result |
 |---|---|
-| −`"что думаешь про SOLUSDT?"` | Match → proceeds with SOLUSDT |
+| `"что думаешь про SOLUSDT?"` | Match → proceeds with SOLUSDT |
 | `"sol"`, `"Sol"`, `"sOlUsDt"` | Match (case-insensitive) — but only if a symbol named exactly `SOL` exists in `TRADING_PAIRS`. `SOLUSDT` will **not** match `sol` — the boundary is on `\bSOLUSDT\b` |
 | No symbol | Returns `None` → user sees `❓ Не удалось определить монету.` |
-⚙
 
 Then two guards:
 
-| Guard ↕▾ | Message ↕▾ |
+| Guard | Message |
 |---|---|
-| −`cm.is_initialized() == False` | `⚠️ Монета {symbol} не инициализирована.` |
+| `cm.is_initialized() == False` | `⚠️ Монета {symbol} не инициализирована.` |
 | Symbol not in `config.TRADING_PAIRS` | Silent return — should not happen |
-⚙
 
 If both pass, the chat fetches a fresh **intraday package** starting from `last_candle_time`, so the model has current data and doesn't re-read candles it already saw.
 
 ---
 
 ### 🔁 The tool-calling loop
-This diagram is empty.<svg id="mermaid-svg-14" width="100%" xmlns="http://www.w3.org/2000/svg" class="flowchart mermaid-svg" viewBox="-27.965887451171877 -27.965887451171877 615.2495239257812 1346.473522949219" role="graphics-document document" height="100%" style="max-width: 100%; display: block; transform-origin: 0px 0px; user-select: none;"><style>#mermaid-svg-14{font-family:"trebuchet ms",verdana,arial,sans-serif;font-size:16px;fill:#333;}@keyframes edge-animation-frame{from{stroke-dashoffset:0;}}@keyframes dash{to{stroke-dashoffset:0;}}#mermaid-svg-14 .edge-animation-slow{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 50s linear infinite;stroke-linecap:round;}#mermaid-svg-14 .edge-animation-fast{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 20s linear infinite;stroke-linecap:round;}#mermaid-svg-14 .error-icon{fill:#552222;}#mermaid-svg-14 .error-text{fill:#552222;stroke:#552222;}#mermaid-svg-14 .edge-thickness-normal{stroke-width:1px;}#mermaid-svg-14 .edge-thickness-thick{stroke-width:3.5px;}#mermaid-svg-14 .edge-pattern-solid{stroke-dasharray:0;}#mermaid-svg-14 .edge-thickness-invisible{stroke-width:0;fill:none;}#mermaid-svg-14 .edge-pattern-dashed{stroke-dasharray:3;}#mermaid-svg-14 .edge-pattern-dotted{stroke-dasharray:2;}#mermaid-svg-14 .marker{fill:#333333;stroke:#333333;}#mermaid-svg-14 .marker.cross{stroke:#333333;}#mermaid-svg-14 svg{font-family:"trebuchet ms",verdana,arial,sans-serif;font-size:16px;}#mermaid-svg-14 p{margin:0;}#mermaid-svg-14 .label{font-family:"trebuchet ms",verdana,arial,sans-serif;color:#333;}#mermaid-svg-14 .cluster-label text{fill:#333;}#mermaid-svg-14 .cluster-label span{color:#333;}#mermaid-svg-14 .cluster-label span p{background-color:transparent;}#mermaid-svg-14 .label text,#mermaid-svg-14 span{fill:#333;color:#333;}#mermaid-svg-14 .node rect,#mermaid-svg-14 .node circle,#mermaid-svg-14 .node ellipse,#mermaid-svg-14 .node polygon,#mermaid-svg-14 .node path{fill:#ECECFF;stroke:#9370DB;stroke-width:1px;}#mermaid-svg-14 .rough-node .label text,#mermaid-svg-14 .node .label text,#mermaid-svg-14 .image-shape .label,#mermaid-svg-14 .icon-shape .label{text-anchor:middle;}#mermaid-svg-14 .node .katex path{fill:#000;stroke:#000;stroke-width:1px;}#mermaid-svg-14 .rough-node .label,#mermaid-svg-14 .node .label,#mermaid-svg-14 .image-shape .label,#mermaid-svg-14 .icon-shape .label{text-align:center;}#mermaid-svg-14 .node.clickable{cursor:pointer;}#mermaid-svg-14 .root .anchor path{fill:#333333!important;stroke-width:0;stroke:#333333;}#mermaid-svg-14 .arrowheadPath{fill:#333333;}#mermaid-svg-14 .edgePath .path{stroke:#333333;stroke-width:2.0px;}#mermaid-svg-14 .flowchart-link{stroke:#333333;fill:none;}#mermaid-svg-14 .edgeLabel{background-color:rgba(232,232,232, 0.8);text-align:center;}#mermaid-svg-14 .edgeLabel p{background-color:rgba(232,232,232, 0.8);}#mermaid-svg-14 .edgeLabel rect{opacity:0.5;background-color:rgba(232,232,232, 0.8);fill:rgba(232,232,232, 0.8);}#mermaid-svg-14 .labelBkg{background-color:rgba(232, 232, 232, 0.5);}#mermaid-svg-14 .cluster rect{fill:#ffffde;stroke:#aaaa33;stroke-width:1px;}#mermaid-svg-14 .cluster text{fill:#333;}#mermaid-svg-14 .cluster span{color:#333;}#mermaid-svg-14 div.mermaidTooltip{position:absolute;text-align:center;max-width:200px;padding:2px;font-family:"trebuchet ms",verdana,arial,sans-serif;font-size:12px;background:hsl(80, 100%, 96.2745098039%);border:1px solid #aaaa33;border-radius:2px;pointer-events:none;z-index:100;}#mermaid-svg-14 .flowchartTitleText{text-anchor:middle;font-size:18px;fill:#333;}#mermaid-svg-14 rect.text{fill:none;stroke-width:0;}#mermaid-svg-14 .icon-shape,#mermaid-svg-14 .image-shape{background-color:rgba(232,232,232, 0.8);text-align:center;}#mermaid-svg-14 .icon-shape p,#mermaid-svg-14 .image-shape p{background-color:rgba(232,232,232, 0.8);padding:2px;}#mermaid-svg-14 .icon-shape rect,#mermaid-svg-14 .image-shape rect{opacity:0.5;background-color:rgba(232,232,232, 0.8);fill:rgba(232,232,232, 0.8);}#mermaid-svg-14 .label-icon{display:inline-block;height:1em;overflow:visible;vertical-align:-0.125em;}#mermaid-svg-14 .node .label-icon path{fill:currentColor;stroke:revert;stroke-width:revert;}#mermaid-svg-14 :root{--mermaid-font-family:"trebuchet ms",verdana,arial,sans-serif;}</style><g><marker id="mermaid-svg-14_flowchart-v2-pointEnd" class="marker flowchart-v2" viewBox="0 0 10 10" refX="5" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></path></marker><marker id="mermaid-svg-14_flowchart-v2-pointStart" class="marker flowchart-v2" viewBox="0 0 10 10" refX="4.5" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 5 L 10 10 L 10 0 z" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></path></marker><marker id="mermaid-svg-14_flowchart-v2-circleEnd" class="marker flowchart-v2" viewBox="0 0 10 10" refX="11" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></circle></marker><marker id="mermaid-svg-14_flowchart-v2-circleStart" class="marker flowchart-v2" viewBox="0 0 10 10" refX="-1" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></circle></marker><marker id="mermaid-svg-14_flowchart-v2-crossEnd" class="marker cross flowchart-v2" viewBox="0 0 11 11" refX="12" refY="5.2" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M 1,1 l 9,9 M 10,1 l -9,9" class="arrowMarkerPath" style="stroke-width: 2; stroke-dasharray: 1, 0;"></path></marker><marker id="mermaid-svg-14_flowchart-v2-crossStart" class="marker cross flowchart-v2" viewBox="0 0 11 11" refX="-1" refY="5.2" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M 1,1 l 9,9 M 10,1 l -9,9" class="arrowMarkerPath" style="stroke-width: 2; stroke-dasharray: 1, 0;"></path></marker><g class="root"><g class="clusters"></g><g class="edgePaths"><path d="M335.409,86L335.409,90.167C335.409,94.333,335.409,102.667,335.409,110.333C335.409,118,335.409,125,335.409,128.5L335.409,132" id="L_A_B_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#mermaid-svg-14_flowchart-v2-pointEnd)"></path><path d="M289.889,238L286.17,242.167C282.451,246.333,275.013,254.667,271.365,262.417C267.716,270.167,267.857,277.334,267.927,280.917L267.997,284.501" id="L_B_C_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#mermaid-svg-14_flowchart-v2-pointEnd)"></path><path d="M220.108,428.283L205.228,442.36C190.348,456.438,160.588,484.594,145.708,504.172C130.828,523.75,130.828,534.75,130.828,540.25L130.828,545.75" id="L_C_D_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#mermaid-svg-14_flowchart-v2-pointEnd)"></path><path d="M130.828,627.75L130.828,633.917C130.828,640.083,130.828,652.417,130.828,664.083C130.828,675.75,130.828,686.75,130.828,692.25L130.828,697.75" id="L_D_E_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#mermaid-svg-14_flowchart-v2-pointEnd)"></path><path d="M130.828,779.75L130.828,783.917C130.828,788.083,130.828,796.417,130.828,804.083C130.828,811.75,130.828,818.75,130.828,822.25L130.828,825.75" id="L_E_F_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#mermaid-svg-14_flowchart-v2-pointEnd)"></path><path d="M130.828,907.75L130.828,911.917C130.828,916.083,130.828,924.417,156.064,940.886C181.3,957.356,231.772,981.961,257.008,994.264L282.244,1006.567" id="L_F_G_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#mermaid-svg-14_flowchart-v2-pointEnd)"></path><path d="M385.978,1008.319L411.647,995.725C437.315,983.13,488.653,957.94,514.321,934.678C539.99,911.417,539.99,890.083,539.99,868.75C539.99,847.417,539.99,826.083,539.99,804.75C539.99,783.417,539.99,762.083,539.99,738.75C539.99,715.417,539.99,690.083,539.99,664.75C539.99,639.417,539.99,614.083,539.99,588.75C539.99,563.417,539.99,538.083,539.99,503.604C539.99,469.125,539.99,425.5,539.99,383.875C539.99,342.25,539.99,302.625,527.934,278.334C515.879,254.043,491.769,245.086,479.714,240.608L467.658,236.13" id="L_G_B_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#mermaid-svg-14_flowchart-v2-pointEnd)"></path><path d="M335.909,1107.042L335.826,1113.125C335.742,1119.208,335.576,1131.375,335.492,1142.958C335.409,1154.542,335.409,1165.542,335.409,1171.042L335.409,1176.542" id="L_G_H_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#mermaid-svg-14_flowchart-v2-pointEnd)"></path><path d="M316.043,428.283L330.756,442.36C345.47,456.438,374.896,484.594,389.61,504.172C404.323,523.75,404.323,534.75,404.323,540.25L404.323,545.75" id="L_C_I_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#mermaid-svg-14_flowchart-v2-pointEnd)"></path><path d="M404.323,627.75L404.323,633.917C404.323,640.083,404.323,652.417,404.323,666.083C404.323,679.75,404.323,694.75,404.323,702.25L404.323,709.75" id="L_I_J_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#mermaid-svg-14_flowchart-v2-pointEnd)"></path></g><g class="edgeLabels"><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(130.828125, 512.75)"><g class="label" transform="translate(-11.328125, -12)"><foreignObject width="22.65625" height="24"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"><p>Yes</p></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(539.9895782470703, 664.75)"><g class="label" transform="translate(-11.328125, -12)"><foreignObject width="22.65625" height="24"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"><p>Yes</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(335.40885162353516, 1143.5416717529297)"><g class="label" transform="translate(-9.401041984558105, -12)"><foreignObject width="18.80208396911621" height="24"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"><p>No</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(404.32291412353516, 512.75)"><g class="label" transform="translate(-9.401041984558105, -12)"><foreignObject width="18.80208396911621" height="24"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"><p>No</p></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"></span></div></foreignObject></g></g></g><g class="nodes"><g class="node default" id="flowchart-A-0" transform="translate(335.40885162353516, 47)"><rect class="basic label-container" style="" x="-130" y="-39" width="260" height="78"></rect><g class="label" style="" transform="translate(-100, -24)"><rect></rect><foreignObject width="200" height="48"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;"><span class="nodeLabel"><p>User message + context blocks</p></span></div></foreignObject></g></g><g class="node default" id="flowchart-B-1" transform="translate(335.40885162353516, 187)"><rect class="basic label-container" style="fill:#4D6BFE !important" x="-128.5" y="-51" width="257" height="102"></rect><g class="label" style="color:#fff !important" transform="translate(-98.5, -36)"><rect></rect><foreignObject width="197" height="72"><div style="color: rgb(255, 255, 255) !important; display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;" xmlns="http://www.w3.org/1999/xhtml"><span style="color:#fff !important" class="nodeLabel"><p>POST to DeepSeek<br>tools = get_tool_definitions<br>tool_choice = auto</p></span></div></foreignObject></g></g><g class="node default" id="flowchart-C-3" transform="translate(267.5755195617676, 381.875)"><polygon points="93.875,0 187.75,-93.875 93.875,-187.75 0,-93.875" class="label-container" transform="translate(-93.375, 93.875)"></polygon><g class="label" style="" transform="translate(-54.875, -24)"><rect></rect><foreignObject width="109.75" height="48"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>Model returned<br>tool_calls?</p></span></div></foreignObject></g></g><g class="node default" id="flowchart-D-5" transform="translate(130.828125, 588.75)"><rect class="basic label-container" style="" x="-122.828125" y="-39" width="245.65625" height="78"></rect><g class="label" style="" transform="translate(-92.828125, -24)"><rect></rect><foreignObject width="185.65625" height="48"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>Append assistant message<br>with tool_calls</p></span></div></foreignObject></g></g><g class="node default" id="flowchart-E-7" transform="translate(130.828125, 740.75)"><rect class="basic label-container" style="" x="-119.296875" y="-39" width="238.59375" height="78"></rect><g class="label" style="" transform="translate(-89.296875, -24)"><rect></rect><foreignObject width="178.59375" height="48"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>Execute each tool<br>via ToolExecutor.execute</p></span></div></foreignObject></g></g><g class="node default" id="flowchart-F-9" transform="translate(130.828125, 868.75)"><rect class="basic label-container" style="" x="-107.75" y="-39" width="215.5" height="78"></rect><g class="label" style="" transform="translate(-77.75, -24)"><rect></rect><foreignObject width="155.5" height="48"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>Append role=tool<br>messages with results</p></span></div></foreignObject></g></g><g class="node default" id="flowchart-G-11" transform="translate(335.40885162353516, 1032.1458358764648)"><polygon points="74.39583587646484,0 148.7916717529297,-74.39583587646484 74.39583587646484,-148.7916717529297 0,-74.39583587646484" class="label-container" transform="translate(-73.89583587646484, 74.39583587646484)"></polygon><g class="label" style="" transform="translate(-47.395835876464844, -12)"><rect></rect><foreignObject width="94.79167175292969" height="24"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>iteration &lt; 5?</p></span></div></foreignObject></g></g><g class="node default" id="flowchart-H-15" transform="translate(335.40885162353516, 1231.5416717529297)"><rect class="basic label-container" style="fill:#C62828 !important" x="-130" y="-51" width="260" height="102"></rect><g class="label" style="color:#fff !important" transform="translate(-100, -36)"><rect></rect><foreignObject width="200" height="72"><div style="color: rgb(255, 255, 255) !important; display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;" xmlns="http://www.w3.org/1999/xhtml"><span style="color:#fff !important" class="nodeLabel"><p>Return<br>'Достигнут лимит итераций инструментов.'</p></span></div></foreignObject></g></g><g class="node default" id="flowchart-I-17" transform="translate(404.32291412353516, 588.75)"><rect class="basic label-container" style="fill:#2E7D32 !important" x="-100.66667175292969" y="-39" width="201.33334350585938" height="78"></rect><g class="label" style="color:#fff !important" transform="translate(-70.66667175292969, -24)"><rect></rect><foreignObject width="141.33334350585938" height="48"><div style="color: rgb(255, 255, 255) !important; display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;" xmlns="http://www.w3.org/1999/xhtml"><span style="color:#fff !important" class="nodeLabel"><p>Return msg.content<br>as final answer</p></span></div></foreignObject></g></g><g class="node default" id="flowchart-J-19" transform="translate(404.32291412353516, 740.75)"><rect class="basic label-container" style="" x="-82.57291793823242" y="-27" width="165.14583587646484" height="54"></rect><g class="label" style="" transform="translate(-52.57291793823242, -12)"><rect></rect><foreignObject width="105.14583587646484" height="24"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>Display in chat</p></span></div></foreignObject></g></g></g></g></g></svg>
+
 Properties of the loop (from `chat_with_tools`):
 
-| Property ↕▾ | Value ↕▾ |
+| Property | Value |
 |---|---|
-| −**Max iterations** | **5** (`max_iterations=5` passed by ChatPage) |
+| **Max iterations** | **5** (`max_iterations=5` passed by ChatPage) |
 | **Tool choice** | `"auto"` — the model decides when to call, when to answer |
 | **Temperature** | 0.5 |
 | **Max tokens** | 2000 |
@@ -1251,7 +1226,6 @@ Properties of the loop (from `chat_with_tools`):
 | **Exception in call** | Caught, logged, returned as `"Ошибка: ..."` — chat does not hang |
 | **Empty response** | Returns `"Модель не ответила."` |
 | **Iteration limit** | Returns `"Достигнут лимит итераций инструментов."` |
-⚙
 
 Each tool result is appended as a proper `role: "tool"` message with the matching `tool_call_id` — so the model can chain calls: *read rules → read setup → suggest update → verify*. If a tool fails, the model sees the failure and can react.
 
@@ -1273,32 +1247,29 @@ Declared in `tool_registry.get_tool_definitions()`, dispatched by `ToolExecutor.
 
 #### 🎯 Setup
 
-| Tool ↕▾ | Args ↕▾ | Returns ↕▾ |
+| Tool | Args | Returns |
 |---|---|---|
-| −`get_current_setup` | — | Current signal (if `confidence_pct > 0`) or setup, or *"Сетап отсутствует."* |
+| `get_current_setup` | — | Current signal (if `confidence_pct > 0`) or setup, or *"Сетап отсутствует."* |
 | `update_setup` | `direction`, `entry_price`, `stop_loss`, `take_profit[]`, `conditions[]`, `cancel_conditions[]`, `rationale` | Writes a new `last_setup` into state with `confidence_pct = 0` |
-⚙
 
 `update_setup` deliberately sets `confidence_pct = 0`. A setup written from chat is a *sketch*, not a signal — the UI shows it as 📐 but the auto trading loop will never act on it. Only the analysis pipeline (morning/intraday/auto mode) can raise confidence above zero.
 
 #### 🔴 Position & analysis
 
-| Tool ↕▾ | Args ↕▾ | Returns ↕▾ |
+| Tool | Args | Returns |
 |---|---|---|
-| −`get_market_analysis` | — | Last analysis: price, 24h change, orderbook bias, OI trend, funding, F&G, news impact, summary |
+| `get_market_analysis` | — | Last analysis: price, 24h change, orderbook bias, OI trend, funding, F&G, news impact, summary |
 | `get_active_trade` | — | Open position: direction, entry, SL, TP. Or *"Открытых позиций нет."* |
 | `get_trade_stats` | — | Trade count, win rate, total P&L%, avg win%, avg loss% |
-⚙
 
 These three let the model reason about *"is my existing thesis working?"* without needing the full context blocks re-injected.
 
 #### 📰 News
 
-| Tool ↕▾ | Args ↕▾ | Returns ↕▾ |
+| Tool | Args | Returns |
 |---|---|---|
-| −`get_news` | — | Headlines over the last 24h, formatted |
+| `get_news` | — | Headlines over the last 24h, formatted |
 | `get_news_analysis` | — | **Extended** news: sentiment impact (`positive`/`negative`/`neutral`), positive/negative counts, plus the formatted list |
-⚙
 
 Both are cached in the `ToolExecutor` instance:
 
@@ -1342,7 +1313,7 @@ The design principle: **the chat can write analysis and rules, but it cannot wri
 ### 🧵 Threading and UI
 
 The chat runs in the **same background-thread pattern** as everything else in the app:
-This diagram is empty.<svg id="mermaid-svg-19" width="100%" xmlns="http://www.w3.org/2000/svg" viewBox="-87.05000000000001 -47.050000000000004 1390.1 815.0999999999999" role="graphics-document document" height="100%" class="undefined mermaid-svg" style="max-width: 100%; display: block; transform-origin: 0px 0px; user-select: none;"><g><rect x="1066" y="655" fill="#eaeaea" stroke="#666" width="150" height="65" name="M" rx="3" ry="3" class="actor actor-bottom"></rect><text x="1141" y="687.5" dominant-baseline="central" alignment-baseline="central" class="actor actor-box" style="text-anchor: middle; font-size: 16px; font-weight: 400;"><tspan x="1141" dy="0">UI timer (2s)</tspan></text></g><g><rect x="751" y="655" fill="#eaeaea" stroke="#666" width="150" height="65" name="Q" rx="3" ry="3" class="actor actor-bottom"></rect><text x="826" y="687.5" dominant-baseline="central" alignment-baseline="central" class="actor actor-box" style="text-anchor: middle; font-size: 16px; font-weight: 400;"><tspan x="826" dy="0">UiEventQueue</tspan></text></g><g><rect x="468" y="655" fill="#eaeaea" stroke="#666" width="150" height="65" name="W" rx="3" ry="3" class="actor actor-bottom"></rect><text x="543" y="687.5" dominant-baseline="central" alignment-baseline="central" class="actor actor-box" style="text-anchor: middle; font-size: 16px; font-weight: 400;"><tspan x="543" dy="0">worker thread</tspan></text></g><g><rect x="200" y="655" fill="#eaeaea" stroke="#666" width="150" height="65" name="UI" rx="3" ry="3" class="actor actor-bottom"></rect><text x="275" y="687.5" dominant-baseline="central" alignment-baseline="central" class="actor actor-box" style="text-anchor: middle; font-size: 16px; font-weight: 400;"><tspan x="275" dy="0">ChatPage</tspan></text></g><g><rect x="0" y="655" fill="#eaeaea" stroke="#666" width="150" height="65" name="U" rx="3" ry="3" class="actor actor-bottom"></rect><text x="75" y="687.5" dominant-baseline="central" alignment-baseline="central" class="actor actor-box" style="text-anchor: middle; font-size: 16px; font-weight: 400;"><tspan x="75" dy="0">User</tspan></text></g><g><line id="actor22" x1="1141" y1="65" x2="1141" y2="655" class="actor-line 200" stroke-width="0.5px" stroke="#999" name="M"></line><g id="root-22"><rect x="1066" y="0" fill="#eaeaea" stroke="#666" width="150" height="65" name="M" rx="3" ry="3" class="actor actor-top"></rect><text x="1141" y="32.5" dominant-baseline="central" alignment-baseline="central" class="actor actor-box" style="text-anchor: middle; font-size: 16px; font-weight: 400;"><tspan x="1141" dy="0">UI timer (2s)</tspan></text></g></g><g><line id="actor21" x1="826" y1="65" x2="826" y2="655" class="actor-line 200" stroke-width="0.5px" stroke="#999" name="Q"></line><g id="root-21"><rect x="751" y="0" fill="#eaeaea" stroke="#666" width="150" height="65" name="Q" rx="3" ry="3" class="actor actor-top"></rect><text x="826" y="32.5" dominant-baseline="central" alignment-baseline="central" class="actor actor-box" style="text-anchor: middle; font-size: 16px; font-weight: 400;"><tspan x="826" dy="0">UiEventQueue</tspan></text></g></g><g><line id="actor20" x1="543" y1="65" x2="543" y2="655" class="actor-line 200" stroke-width="0.5px" stroke="#999" name="W"></line><g id="root-20"><rect x="468" y="0" fill="#eaeaea" stroke="#666" width="150" height="65" name="W" rx="3" ry="3" class="actor actor-top"></rect><text x="543" y="32.5" dominant-baseline="central" alignment-baseline="central" class="actor actor-box" style="text-anchor: middle; font-size: 16px; font-weight: 400;"><tspan x="543" dy="0">worker thread</tspan></text></g></g><g><line id="actor19" x1="275" y1="65" x2="275" y2="655" class="actor-line 200" stroke-width="0.5px" stroke="#999" name="UI"></line><g id="root-19"><rect x="200" y="0" fill="#eaeaea" stroke="#666" width="150" height="65" name="UI" rx="3" ry="3" class="actor actor-top"></rect><text x="275" y="32.5" dominant-baseline="central" alignment-baseline="central" class="actor actor-box" style="text-anchor: middle; font-size: 16px; font-weight: 400;"><tspan x="275" dy="0">ChatPage</tspan></text></g></g><g><line id="actor18" x1="75" y1="65" x2="75" y2="655" class="actor-line 200" stroke-width="0.5px" stroke="#999" name="U"></line><g id="root-18"><rect x="0" y="0" fill="#eaeaea" stroke="#666" width="150" height="65" name="U" rx="3" ry="3" class="actor actor-top"></rect><text x="75" y="32.5" dominant-baseline="central" alignment-baseline="central" class="actor actor-box" style="text-anchor: middle; font-size: 16px; font-weight: 400;"><tspan x="75" dy="0">User</tspan></text></g></g><style>#mermaid-svg-19{font-family:"trebuchet ms",verdana,arial,sans-serif;font-size:16px;fill:#333;}@keyframes edge-animation-frame{from{stroke-dashoffset:0;}}@keyframes dash{to{stroke-dashoffset:0;}}#mermaid-svg-19 .edge-animation-slow{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 50s linear infinite;stroke-linecap:round;}#mermaid-svg-19 .edge-animation-fast{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 20s linear infinite;stroke-linecap:round;}#mermaid-svg-19 .error-icon{fill:#552222;}#mermaid-svg-19 .error-text{fill:#552222;stroke:#552222;}#mermaid-svg-19 .edge-thickness-normal{stroke-width:1px;}#mermaid-svg-19 .edge-thickness-thick{stroke-width:3.5px;}#mermaid-svg-19 .edge-pattern-solid{stroke-dasharray:0;}#mermaid-svg-19 .edge-thickness-invisible{stroke-width:0;fill:none;}#mermaid-svg-19 .edge-pattern-dashed{stroke-dasharray:3;}#mermaid-svg-19 .edge-pattern-dotted{stroke-dasharray:2;}#mermaid-svg-19 .marker{fill:#333333;stroke:#333333;}#mermaid-svg-19 .marker.cross{stroke:#333333;}#mermaid-svg-19 svg{font-family:"trebuchet ms",verdana,arial,sans-serif;font-size:16px;}#mermaid-svg-19 p{margin:0;}#mermaid-svg-19 .actor{stroke:hsl(259.6261682243, 59.7765363128%, 87.9019607843%);fill:#ECECFF;}#mermaid-svg-19 text.actor&gt;tspan{fill:black;stroke:none;}#mermaid-svg-19 .actor-line{stroke:hsl(259.6261682243, 59.7765363128%, 87.9019607843%);}#mermaid-svg-19 .messageLine0{stroke-width:1.5;stroke-dasharray:none;stroke:#333;}#mermaid-svg-19 .messageLine1{stroke-width:1.5;stroke-dasharray:2,2;stroke:#333;}#mermaid-svg-19 #arrowhead path{fill:#333;stroke:#333;}#mermaid-svg-19 .sequenceNumber{fill:white;}#mermaid-svg-19 #sequencenumber{fill:#333;}#mermaid-svg-19 #crosshead path{fill:#333;stroke:#333;}#mermaid-svg-19 .messageText{fill:#333;stroke:none;}#mermaid-svg-19 .labelBox{stroke:hsl(259.6261682243, 59.7765363128%, 87.9019607843%);fill:#ECECFF;}#mermaid-svg-19 .labelText,#mermaid-svg-19 .labelText&gt;tspan{fill:black;stroke:none;}#mermaid-svg-19 .loopText,#mermaid-svg-19 .loopText&gt;tspan{fill:black;stroke:none;}#mermaid-svg-19 .loopLine{stroke-width:2px;stroke-dasharray:2,2;stroke:hsl(259.6261682243, 59.7765363128%, 87.9019607843%);fill:hsl(259.6261682243, 59.7765363128%, 87.9019607843%);}#mermaid-svg-19 .note{stroke:#aaaa33;fill:#fff5ad;}#mermaid-svg-19 .noteText,#mermaid-svg-19 .noteText&gt;tspan{fill:black;stroke:none;}#mermaid-svg-19 .activation0{fill:#f4f4f4;stroke:#666;}#mermaid-svg-19 .activation1{fill:#f4f4f4;stroke:#666;}#mermaid-svg-19 .activation2{fill:#f4f4f4;stroke:#666;}#mermaid-svg-19 .actorPopupMenu{position:absolute;}#mermaid-svg-19 .actorPopupMenuPanel{position:absolute;fill:#ECECFF;box-shadow:0px 8px 16px 0px rgba(0,0,0,0.2);filter:drop-shadow(3px 5px 2px rgb(0 0 0 / 0.4));}#mermaid-svg-19 .actor-man line{stroke:hsl(259.6261682243, 59.7765363128%, 87.9019607843%);fill:#ECECFF;}#mermaid-svg-19 .actor-man circle,#mermaid-svg-19 line{stroke:hsl(259.6261682243, 59.7765363128%, 87.9019607843%);fill:#ECECFF;stroke-width:2px;}#mermaid-svg-19 :root{--mermaid-font-family:"trebuchet ms",verdana,arial,sans-serif;}</style><g></g><defs><symbol id="computer" width="24" height="24"><path transform="scale(.5)" d="M2 2v13h20v-13h-20zm18 11h-16v-9h16v9zm-10.228 6l.466-1h3.524l.467 1h-4.457zm14.228 3h-24l2-6h2.104l-1.33 4h18.45l-1.297-4h2.073l2 6zm-5-10h-14v-7h14v7z"></path></symbol></defs><defs><symbol id="database" fill-rule="evenodd" clip-rule="evenodd"><path transform="scale(.5)" d="M12.258.001l.256.004.255.005.253.008.251.01.249.012.247.015.246.016.242.019.241.02.239.023.236.024.233.027.231.028.229.031.225.032.223.034.22.036.217.038.214.04.211.041.208.043.205.045.201.046.198.048.194.05.191.051.187.053.183.054.18.056.175.057.172.059.168.06.163.061.16.063.155.064.15.066.074.033.073.033.071.034.07.034.069.035.068.035.067.035.066.035.064.036.064.036.062.036.06.036.06.037.058.037.058.037.055.038.055.038.053.038.052.038.051.039.05.039.048.039.047.039.045.04.044.04.043.04.041.04.04.041.039.041.037.041.036.041.034.041.033.042.032.042.03.042.029.042.027.042.026.043.024.043.023.043.021.043.02.043.018.044.017.043.015.044.013.044.012.044.011.045.009.044.007.045.006.045.004.045.002.045.001.045v17l-.001.045-.002.045-.004.045-.006.045-.007.045-.009.044-.011.045-.012.044-.013.044-.015.044-.017.043-.018.044-.02.043-.021.043-.023.043-.024.043-.026.043-.027.042-.029.042-.03.042-.032.042-.033.042-.034.041-.036.041-.037.041-.039.041-.04.041-.041.04-.043.04-.044.04-.045.04-.047.039-.048.039-.05.039-.051.039-.052.038-.053.038-.055.038-.055.038-.058.037-.058.037-.06.037-.06.036-.062.036-.064.036-.064.036-.066.035-.067.035-.068.035-.069.035-.07.034-.071.034-.073.033-.074.033-.15.066-.155.064-.16.063-.163.061-.168.06-.172.059-.175.057-.18.056-.183.054-.187.053-.191.051-.194.05-.198.048-.201.046-.205.045-.208.043-.211.041-.214.04-.217.038-.22.036-.223.034-.225.032-.229.031-.231.028-.233.027-.236.024-.239.023-.241.02-.242.019-.246.016-.247.015-.249.012-.251.01-.253.008-.255.005-.256.004-.258.001-.258-.001-.256-.004-.255-.005-.253-.008-.251-.01-.249-.012-.247-.015-.245-.016-.243-.019-.241-.02-.238-.023-.236-.024-.234-.027-.231-.028-.228-.031-.226-.032-.223-.034-.22-.036-.217-.038-.214-.04-.211-.041-.208-.043-.204-.045-.201-.046-.198-.048-.195-.05-.19-.051-.187-.053-.184-.054-.179-.056-.176-.057-.172-.059-.167-.06-.164-.061-.159-.063-.155-.064-.151-.066-.074-.033-.072-.033-.072-.034-.07-.034-.069-.035-.068-.035-.067-.035-.066-.035-.064-.036-.063-.036-.062-.036-.061-.036-.06-.037-.058-.037-.057-.037-.056-.038-.055-.038-.053-.038-.052-.038-.051-.039-.049-.039-.049-.039-.046-.039-.046-.04-.044-.04-.043-.04-.041-.04-.04-.041-.039-.041-.037-.041-.036-.041-.034-.041-.033-.042-.032-.042-.03-.042-.029-.042-.027-.042-.026-.043-.024-.043-.023-.043-.021-.043-.02-.043-.018-.044-.017-.043-.015-.044-.013-.044-.012-.044-.011-.045-.009-.044-.007-.045-.006-.045-.004-.045-.002-.045-.001-.045v-17l.001-.045.002-.045.004-.045.006-.045.007-.045.009-.044.011-.045.012-.044.013-.044.015-.044.017-.043.018-.044.02-.043.021-.043.023-.043.024-.043.026-.043.027-.042.029-.042.03-.042.032-.042.033-.042.034-.041.036-.041.037-.041.039-.041.04-.041.041-.04.043-.04.044-.04.046-.04.046-.039.049-.039.049-.039.051-.039.052-.038.053-.038.055-.038.056-.038.057-.037.058-.037.06-.037.061-.036.062-.036.063-.036.064-.036.066-.035.067-.035.068-.035.069-.035.07-.034.072-.034.072-.033.074-.033.151-.066.155-.064.159-.063.164-.061.167-.06.172-.059.176-.057.179-.056.184-.054.187-.053.19-.051.195-.05.198-.048.201-.046.204-.045.208-.043.211-.041.214-.04.217-.038.22-.036.223-.034.226-.032.228-.031.231-.028.234-.027.236-.024.238-.023.241-.02.243-.019.245-.016.247-.015.249-.012.251-.01.253-.008.255-.005.256-.004.258-.001.258.001zm-9.258 20.499v.01l.001.021.003.021.004.022.005.021.006.022.007.022.009.023.01.022.011.023.012.023.013.023.015.023.016.024.017.023.018.024.019.024.021.024.022.025.023.024.024.025.052.049.056.05.061.051.066.051.07.051.075.051.079.052.084.052.088.052.092.052.097.052.102.051.105.052.11.052.114.051.119.051.123.051.127.05.131.05.135.05.139.048.144.049.147.047.152.047.155.047.16.045.163.045.167.043.171.043.176.041.178.041.183.039.187.039.19.037.194.035.197.035.202.033.204.031.209.03.212.029.216.027.219.025.222.024.226.021.23.02.233.018.236.016.24.015.243.012.246.01.249.008.253.005.256.004.259.001.26-.001.257-.004.254-.005.25-.008.247-.011.244-.012.241-.014.237-.016.233-.018.231-.021.226-.021.224-.024.22-.026.216-.027.212-.028.21-.031.205-.031.202-.034.198-.034.194-.036.191-.037.187-.039.183-.04.179-.04.175-.042.172-.043.168-.044.163-.045.16-.046.155-.046.152-.047.148-.048.143-.049.139-.049.136-.05.131-.05.126-.05.123-.051.118-.052.114-.051.11-.052.106-.052.101-.052.096-.052.092-.052.088-.053.083-.051.079-.052.074-.052.07-.051.065-.051.06-.051.056-.05.051-.05.023-.024.023-.025.021-.024.02-.024.019-.024.018-.024.017-.024.015-.023.014-.024.013-.023.012-.023.01-.023.01-.022.008-.022.006-.022.006-.022.004-.022.004-.021.001-.021.001-.021v-4.127l-.077.055-.08.053-.083.054-.085.053-.087.052-.09.052-.093.051-.095.05-.097.05-.1.049-.102.049-.105.048-.106.047-.109.047-.111.046-.114.045-.115.045-.118.044-.12.043-.122.042-.124.042-.126.041-.128.04-.13.04-.132.038-.134.038-.135.037-.138.037-.139.035-.142.035-.143.034-.144.033-.147.032-.148.031-.15.03-.151.03-.153.029-.154.027-.156.027-.158.026-.159.025-.161.024-.162.023-.163.022-.165.021-.166.02-.167.019-.169.018-.169.017-.171.016-.173.015-.173.014-.175.013-.175.012-.177.011-.178.01-.179.008-.179.008-.181.006-.182.005-.182.004-.184.003-.184.002h-.37l-.184-.002-.184-.003-.182-.004-.182-.005-.181-.006-.179-.008-.179-.008-.178-.01-.176-.011-.176-.012-.175-.013-.173-.014-.172-.015-.171-.016-.17-.017-.169-.018-.167-.019-.166-.02-.165-.021-.163-.022-.162-.023-.161-.024-.159-.025-.157-.026-.156-.027-.155-.027-.153-.029-.151-.03-.15-.03-.148-.031-.146-.032-.145-.033-.143-.034-.141-.035-.14-.035-.137-.037-.136-.037-.134-.038-.132-.038-.13-.04-.128-.04-.126-.041-.124-.042-.122-.042-.12-.044-.117-.043-.116-.045-.113-.045-.112-.046-.109-.047-.106-.047-.105-.048-.102-.049-.1-.049-.097-.05-.095-.05-.093-.052-.09-.051-.087-.052-.085-.053-.083-.054-.08-.054-.077-.054v4.127zm0-5.654v.011l.001.021.003.021.004.021.005.022.006.022.007.022.009.022.01.022.011.023.012.023.013.023.015.024.016.023.017.024.018.024.019.024.021.024.022.024.023.025.024.024.052.05.056.05.061.05.066.051.07.051.075.052.079.051.084.052.088.052.092.052.097.052.102.052.105.052.11.051.114.051.119.052.123.05.127.051.131.05.135.049.139.049.144.048.147.048.152.047.155.046.16.045.163.045.167.044.171.042.176.042.178.04.183.04.187.038.19.037.194.036.197.034.202.033.204.032.209.03.212.028.216.027.219.025.222.024.226.022.23.02.233.018.236.016.24.014.243.012.246.01.249.008.253.006.256.003.259.001.26-.001.257-.003.254-.006.25-.008.247-.01.244-.012.241-.015.237-.016.233-.018.231-.02.226-.022.224-.024.22-.025.216-.027.212-.029.21-.03.205-.032.202-.033.198-.035.194-.036.191-.037.187-.039.183-.039.179-.041.175-.042.172-.043.168-.044.163-.045.16-.045.155-.047.152-.047.148-.048.143-.048.139-.05.136-.049.131-.05.126-.051.123-.051.118-.051.114-.052.11-.052.106-.052.101-.052.096-.052.092-.052.088-.052.083-.052.079-.052.074-.051.07-.052.065-.051.06-.05.056-.051.051-.049.023-.025.023-.024.021-.025.02-.024.019-.024.018-.024.017-.024.015-.023.014-.023.013-.024.012-.022.01-.023.01-.023.008-.022.006-.022.006-.022.004-.021.004-.022.001-.021.001-.021v-4.139l-.077.054-.08.054-.083.054-.085.052-.087.053-.09.051-.093.051-.095.051-.097.05-.1.049-.102.049-.105.048-.106.047-.109.047-.111.046-.114.045-.115.044-.118.044-.12.044-.122.042-.124.042-.126.041-.128.04-.13.039-.132.039-.134.038-.135.037-.138.036-.139.036-.142.035-.143.033-.144.033-.147.033-.148.031-.15.03-.151.03-.153.028-.154.028-.156.027-.158.026-.159.025-.161.024-.162.023-.163.022-.165.021-.166.02-.167.019-.169.018-.169.017-.171.016-.173.015-.173.014-.175.013-.175.012-.177.011-.178.009-.179.009-.179.007-.181.007-.182.005-.182.004-.184.003-.184.002h-.37l-.184-.002-.184-.003-.182-.004-.182-.005-.181-.007-.179-.007-.179-.009-.178-.009-.176-.011-.176-.012-.175-.013-.173-.014-.172-.015-.171-.016-.17-.017-.169-.018-.167-.019-.166-.02-.165-.021-.163-.022-.162-.023-.161-.024-.159-.025-.157-.026-.156-.027-.155-.028-.153-.028-.151-.03-.15-.03-.148-.031-.146-.033-.145-.033-.143-.033-.141-.035-.14-.036-.137-.036-.136-.037-.134-.038-.132-.039-.13-.039-.128-.04-.126-.041-.124-.042-.122-.043-.12-.043-.117-.044-.116-.044-.113-.046-.112-.046-.109-.046-.106-.047-.105-.048-.102-.049-.1-.049-.097-.05-.095-.051-.093-.051-.09-.051-.087-.053-.085-.052-.083-.054-.08-.054-.077-.054v4.139zm0-5.666v.011l.001.02.003.022.004.021.005.022.006.021.007.022.009.023.01.022.011.023.012.023.013.023.015.023.016.024.017.024.018.023.019.024.021.025.022.024.023.024.024.025.052.05.056.05.061.05.066.051.07.051.075.052.079.051.084.052.088.052.092.052.097.052.102.052.105.051.11.052.114.051.119.051.123.051.127.05.131.05.135.05.139.049.144.048.147.048.152.047.155.046.16.045.163.045.167.043.171.043.176.042.178.04.183.04.187.038.19.037.194.036.197.034.202.033.204.032.209.03.212.028.216.027.219.025.222.024.226.021.23.02.233.018.236.017.24.014.243.012.246.01.249.008.253.006.256.003.259.001.26-.001.257-.003.254-.006.25-.008.247-.01.244-.013.241-.014.237-.016.233-.018.231-.02.226-.022.224-.024.22-.025.216-.027.212-.029.21-.03.205-.032.202-.033.198-.035.194-.036.191-.037.187-.039.183-.039.179-.041.175-.042.172-.043.168-.044.163-.045.16-.045.155-.047.152-.047.148-.048.143-.049.139-.049.136-.049.131-.051.126-.05.123-.051.118-.052.114-.051.11-.052.106-.052.101-.052.096-.052.092-.052.088-.052.083-.052.079-.052.074-.052.07-.051.065-.051.06-.051.056-.05.051-.049.023-.025.023-.025.021-.024.02-.024.019-.024.018-.024.017-.024.015-.023.014-.024.013-.023.012-.023.01-.022.01-.023.008-.022.006-.022.006-.022.004-.022.004-.021.001-.021.001-.021v-4.153l-.077.054-.08.054-.083.053-.085.053-.087.053-.09.051-.093.051-.095.051-.097.05-.1.049-.102.048-.105.048-.106.048-.109.046-.111.046-.114.046-.115.044-.118.044-.12.043-.122.043-.124.042-.126.041-.128.04-.13.039-.132.039-.134.038-.135.037-.138.036-.139.036-.142.034-.143.034-.144.033-.147.032-.148.032-.15.03-.151.03-.153.028-.154.028-.156.027-.158.026-.159.024-.161.024-.162.023-.163.023-.165.021-.166.02-.167.019-.169.018-.169.017-.171.016-.173.015-.173.014-.175.013-.175.012-.177.01-.178.01-.179.009-.179.007-.181.006-.182.006-.182.004-.184.003-.184.001-.185.001-.185-.001-.184-.001-.184-.003-.182-.004-.182-.006-.181-.006-.179-.007-.179-.009-.178-.01-.176-.01-.176-.012-.175-.013-.173-.014-.172-.015-.171-.016-.17-.017-.169-.018-.167-.019-.166-.02-.165-.021-.163-.023-.162-.023-.161-.024-.159-.024-.157-.026-.156-.027-.155-.028-.153-.028-.151-.03-.15-.03-.148-.032-.146-.032-.145-.033-.143-.034-.141-.034-.14-.036-.137-.036-.136-.037-.134-.038-.132-.039-.13-.039-.128-.041-.126-.041-.124-.041-.122-.043-.12-.043-.117-.044-.116-.044-.113-.046-.112-.046-.109-.046-.106-.048-.105-.048-.102-.048-.1-.05-.097-.049-.095-.051-.093-.051-.09-.052-.087-.052-.085-.053-.083-.053-.08-.054-.077-.054v4.153zm8.74-8.179l-.257.004-.254.005-.25.008-.247.011-.244.012-.241.014-.237.016-.233.018-.231.021-.226.022-.224.023-.22.026-.216.027-.212.028-.21.031-.205.032-.202.033-.198.034-.194.036-.191.038-.187.038-.183.04-.179.041-.175.042-.172.043-.168.043-.163.045-.16.046-.155.046-.152.048-.148.048-.143.048-.139.049-.136.05-.131.05-.126.051-.123.051-.118.051-.114.052-.11.052-.106.052-.101.052-.096.052-.092.052-.088.052-.083.052-.079.052-.074.051-.07.052-.065.051-.06.05-.056.05-.051.05-.023.025-.023.024-.021.024-.02.025-.019.024-.018.024-.017.023-.015.024-.014.023-.013.023-.012.023-.01.023-.01.022-.008.022-.006.023-.006.021-.004.022-.004.021-.001.021-.001.021.001.021.001.021.004.021.004.022.006.021.006.023.008.022.01.022.01.023.012.023.013.023.014.023.015.024.017.023.018.024.019.024.02.025.021.024.023.024.023.025.051.05.056.05.06.05.065.051.07.052.074.051.079.052.083.052.088.052.092.052.096.052.101.052.106.052.11.052.114.052.118.051.123.051.126.051.131.05.136.05.139.049.143.048.148.048.152.048.155.046.16.046.163.045.168.043.172.043.175.042.179.041.183.04.187.038.191.038.194.036.198.034.202.033.205.032.21.031.212.028.216.027.22.026.224.023.226.022.231.021.233.018.237.016.241.014.244.012.247.011.25.008.254.005.257.004.26.001.26-.001.257-.004.254-.005.25-.008.247-.011.244-.012.241-.014.237-.016.233-.018.231-.021.226-.022.224-.023.22-.026.216-.027.212-.028.21-.031.205-.032.202-.033.198-.034.194-.036.191-.038.187-.038.183-.04.179-.041.175-.042.172-.043.168-.043.163-.045.16-.046.155-.046.152-.048.148-.048.143-.048.139-.049.136-.05.131-.05.126-.051.123-.051.118-.051.114-.052.11-.052.106-.052.101-.052.096-.052.092-.052.088-.052.083-.052.079-.052.074-.051.07-.052.065-.051.06-.05.056-.05.051-.05.023-.025.023-.024.021-.024.02-.025.019-.024.018-.024.017-.023.015-.024.014-.023.013-.023.012-.023.01-.023.01-.022.008-.022.006-.023.006-.021.004-.022.004-.021.001-.021.001-.021-.001-.021-.001-.021-.004-.021-.004-.022-.006-.021-.006-.023-.008-.022-.01-.022-.01-.023-.012-.023-.013-.023-.014-.023-.015-.024-.017-.023-.018-.024-.019-.024-.02-.025-.021-.024-.023-.024-.023-.025-.051-.05-.056-.05-.06-.05-.065-.051-.07-.052-.074-.051-.079-.052-.083-.052-.088-.052-.092-.052-.096-.052-.101-.052-.106-.052-.11-.052-.114-.052-.118-.051-.123-.051-.126-.051-.131-.05-.136-.05-.139-.049-.143-.048-.148-.048-.152-.048-.155-.046-.16-.046-.163-.045-.168-.043-.172-.043-.175-.042-.179-.041-.183-.04-.187-.038-.191-.038-.194-.036-.198-.034-.202-.033-.205-.032-.21-.031-.212-.028-.216-.027-.22-.026-.224-.023-.226-.022-.231-.021-.233-.018-.237-.016-.241-.014-.244-.012-.247-.011-.25-.008-.254-.005-.257-.004-.26-.001-.26.001z"></path></symbol></defs><defs><symbol id="clock" width="24" height="24"><path transform="scale(.5)" d="M12 2c5.514 0 10 4.486 10 10s-4.486 10-10 10-10-4.486-10-10 4.486-10 10-10zm0-2c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm5.848 12.459c.202.038.202.333.001.372-1.907.361-6.045 1.111-6.547 1.111-.719 0-1.301-.582-1.301-1.301 0-.512.77-5.447 1.125-7.445.034-.192.312-.181.343.014l.985 6.238 5.394 1.011z"></path></symbol></defs><defs><marker id="arrowhead" refX="7.9" refY="5" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" orient="auto-start-reverse"><path d="M -1 0 L 10 5 L 0 10 z"></path></marker></defs><defs><marker id="crosshead" markerWidth="15" markerHeight="8" orient="auto" refX="4" refY="4.5"><path fill="none" stroke="#000000" stroke-width="1pt" d="M 1,2 L 6,7 M 6,2 L 1,7" style="stroke-dasharray: 0, 0;"></path></marker></defs><defs><marker id="filled-head" refX="15.5" refY="7" markerWidth="20" markerHeight="28" orient="auto"><path d="M 18,7 L9,13 L14,7 L9,1 Z"></path></marker></defs><defs><marker id="sequencenumber" refX="15" refY="15" markerWidth="60" markerHeight="40" orient="auto"><circle cx="15" cy="15" r="6"></circle></marker></defs><text x="174" y="80" text-anchor="middle" dominant-baseline="middle" alignment-baseline="middle" class="messageText" dy="1em" style="font-size: 16px; font-weight: 400;">Enter message</text><line x1="76" y1="113" x2="271" y2="113" class="messageLine0" stroke-width="2" stroke="none" marker-end="url(#arrowhead)" style="fill: none;"></line><text x="276" y="128" text-anchor="middle" dominant-baseline="middle" alignment-baseline="middle" class="messageText" dy="1em" style="font-size: 16px; font-weight: 400;">Disable input + send btn</text><path d="M 276,161 C 336,151 336,191 276,181" class="messageLine0" stroke-width="2" stroke="none" marker-end="url(#arrowhead)" style="fill: none;"></path><text x="408" y="206" text-anchor="middle" dominant-baseline="middle" alignment-baseline="middle" class="messageText" dy="1em" style="font-size: 16px; font-weight: 400;">asyncio.to_thread(worker)</text><line x1="276" y1="239" x2="539" y2="239" class="messageLine0" stroke-width="2" stroke="none" marker-end="url(#arrowhead)" style="fill: none;"></line><text x="544" y="254" text-anchor="middle" dominant-baseline="middle" alignment-baseline="middle" class="messageText" dy="1em" style="font-size: 16px; font-weight: 400;">detect symbol, fetch package</text><path d="M 544,287 C 604,277 604,317 544,307" class="messageLine0" stroke-width="2" stroke="none" marker-end="url(#arrowhead)" style="fill: none;"></path><text x="544" y="332" text-anchor="middle" dominant-baseline="middle" alignment-baseline="middle" class="messageText" dy="1em" style="font-size: 16px; font-weight: 400;">chat_with_tools()</text><path d="M 544,365 C 604,355 604,395 544,385" class="messageLine0" stroke-width="2" stroke="none" marker-end="url(#arrowhead)" style="fill: none;"></path><text x="683" y="410" text-anchor="middle" dominant-baseline="middle" alignment-baseline="middle" class="messageText" dy="1em" style="font-size: 16px; font-weight: 400;">queue_chat_message(reply)</text><line x1="544" y1="443" x2="822" y2="443" class="messageLine0" stroke-width="2" stroke="none" marker-end="url(#arrowhead)" style="fill: none;"></line><text x="683" y="458" text-anchor="middle" dominant-baseline="middle" alignment-baseline="middle" class="messageText" dy="1em" style="font-size: 16px; font-weight: 400;">queue_chat_loading(False)</text><line x1="544" y1="491" x2="822" y2="491" class="messageLine0" stroke-width="2" stroke="none" marker-end="url(#arrowhead)" style="fill: none;"></line><text x="985" y="506" text-anchor="middle" dominant-baseline="middle" alignment-baseline="middle" class="messageText" dy="1em" style="font-size: 16px; font-weight: 400;">process_chat_queue(chat_page)</text><line x1="1140" y1="539" x2="830" y2="539" class="messageLine0" stroke-width="2" stroke="none" marker-end="url(#arrowhead)" style="fill: none;"></line><text x="552" y="554" text-anchor="middle" dominant-baseline="middle" alignment-baseline="middle" class="messageText" dy="1em" style="font-size: 16px; font-weight: 400;">Add chat bubble</text><line x1="825" y1="587" x2="279" y2="587" class="messageLine0" stroke-width="2" stroke="none" marker-end="url(#arrowhead)" style="fill: none;"></line><text x="552" y="602" text-anchor="middle" dominant-baseline="middle" alignment-baseline="middle" class="messageText" dy="1em" style="font-size: 16px; font-weight: 400;">Re-enable input + send btn</text><line x1="825" y1="635" x2="279" y2="635" class="messageLine0" stroke-width="2" stroke="none" marker-end="url(#arrowhead)" style="fill: none;"></line></svg>
+
 Nothing in the worker thread touches `ui.*` directly. All UI updates flow through `UiEventQueue`, which the main thread drains every 2 seconds via `ui.timer(2.0, check_updates)`. So a slow model response — or a crash mid-response — never freezes the UI.
 
 The `_set_loading_ui(True)` state disables both the input field and the Send button. This is intentional: it prevents the user from queuing a second message while the first is still processing, which would race two `chat_with_tools` loops against the same state.
@@ -1452,29 +1423,27 @@ The chat **informs** the analysis pipeline: the rules you write via chat become 
 
 ### 🧱 The constant that shapes behaviour
 
-| Constant ↕▾ | Value ↕▾ | Why ↕▾ |
+| Constant | Value | Why |
 |---|---|---|
-| −`max_iterations` | **5** | Below 5, complex tool chains fail; above 5, a single stuck query eats a lot of tokens |
+| `max_iterations` | **5** | Below 5, complex tool chains fail; above 5, a single stuck query eats a lot of tokens |
 | `temperature` | **0.5** | More exploratory than analysis (0.3), but not creative-fiction (0.8) |
 | `max_tokens` | **2000** | Enough for a paragraph of reasoning plus a tool call, not enough to ramble |
 | UI refresh | **2 s** | The main event loop for all UI queues — chat messages appear within 2 s of arrival |
 | `hours_back` for news | **24 h** | Wide enough to catch a two-day-old FUD event still being priced in |
-⚙
 
 ---
 
 ### ✅ What makes the chat trustworthy
 
-| Property ↕▾ | How it's achieved ↕▾ |
+| Property | How it's achieved |
 |---|---|
-| −**Stateless and reproducible** | Messages rebuilt per call — no hidden accumulation |
+| **Stateless and reproducible** | Messages rebuilt per call — no hidden accumulation |
 | **Bounded cost** | `max_iterations=5`, `max_tokens=2000`, tool results cached |
 | **Visible side effects** | Every rule write lands in `trading_rules.md` — you can diff it |
 | **Cannot move money** | No tool touches `BybitExecutor` |
 | **Cannot fake a signal** | `update_setup` writes `confidence_pct = 0` |
 | **Survives a slow model** | Background thread + `UiEventQueue` + main-thread drain |
 | **Survives a broken model** | Every exception path returns a visible string |
-⚙
 
 The chat is, in a sentence: **the model's chance to reason freely, walled off from the model's chance to trade**.
 
@@ -1649,15 +1618,14 @@ flowchart TD
 
 #### The no-lookahead contract
 
-| Rule ↕▾ | Implementation ↕▾ |
+| Rule | Implementation |
 |---|---|
-| −**Signal on close of bar *i−1*** | `_entry_signal(side_spec, row, prev)` evaluates conditions against the bar that already closed |
+| **Signal on close of bar *i−1*** | `_entry_signal(side_spec, row, prev)` evaluates conditions against the bar that already closed |
 | **Fill on open of bar *i*** | `entry_fill = raw_open × (1 ± eps)` |
 | **One position at a time** | While `position is not None`, no new signals are evaluated |
 | **End of period** | Force-close at last bar's close with `exit_reason: "end_of_period"` |
 | **First bar skipped** | Loop starts at `i=1` — first bar has no `prev` |
 | **Filters checked before entry** | Global `filters` evaluated on bar *i−1*; `False` short-circuits both sides |
-⚙
 
 This is what separates a real backtest from a curve-fitting exercise. Signalling on a close and filling on that same close is the single most common way backtests lie.
 
@@ -1709,23 +1677,21 @@ Applied only if it tightens the stop. `None` disables it. If both breakeven and 
 
 #### 3. Hard exits — checked by high/low
 
-| Direction ↕▾ | Stop ↕▾ | Take ↕▾ |
+| Direction | Stop | Take |
 |---|---|---|
-| −Long | `low <= stop_loss` | `high >= take_profit` |
+| Long | `low <= stop_loss` | `high >= take_profit` |
 | Short | `high >= stop_loss` | `low <= take_profit` |
-⚙
 
 Intrabar, using the bar's extremes. If both would trigger in the same bar, **the stop wins** (checked first).
 
 #### 4. Soft exits — checked by close
 
-| Exit ↕▾ | Condition (long) ↕▾ | Condition (short) ↕▾ |
+| Exit | Condition (long) | Condition (short) |
 |---|---|---|
-| −`time_stop` | `bars_held >= max_hold_candles` | same |
+| `time_stop` | `bars_held >= max_hold_candles` | same |
 | `level_failure` | `close < level × (1 − buffer)` | `close > level × (1 + buffer)` |
 | `trend_loss` | `close < sma_50` | `close > sma_50` |
 | `macd_flip` | `macd_hist < 0` | `macd_hist > 0` |
-⚙
 
 `level_field` selects which level (`resistance_1` for longs, `support_1` for shorts). `level_failure_buffer_pct` (default 1.0%) prevents the exit on a single wick.
 
@@ -1763,11 +1729,10 @@ Two independent triggers, checked on every close:
 
 When tripped, `cooldown_until_index = i + pause_candles_after_losses` and entry evaluation is skipped until the index catches up. The engine records:
 
-| Stat ↕▾ | Meaning ↕▾ |
+| Stat | Meaning |
 |---|---|
-| −`cooldown_activations` | How many times the cooldown tripped |
-| −`skipped_candles_by_cooldown` | Bars spent in cooldown |
-⚙
+| `cooldown_activations` | How many times the cooldown tripped |
+| `skipped_candles_by_cooldown` | Bars spent in cooldown |
 
 The exact same logic is mirrored in `trading/auto_trader.py` (`_get_risk_controls`, `_should_pause_after_loss`) with identical defaults — a strategy behaves identically live and in backtest.
 
@@ -1804,9 +1769,9 @@ The exact same logic is mirrored in `trading/auto_trader.py` (`_get_risk_control
 
 #### Statistics block
 
-| Metric ↕▾ | Meaning ↕▾ |
+| Metric | Meaning |
 |---|---|
-| −`total_trades` | Count |
+| `total_trades` | Count |
 | `win_rate` | % of trades with `result_pct > 0` |
 | `total_pnl_pct` | Sum of trade returns (reference, not compounded) |
 | `return_pct` | Compounded return on initial capital |
@@ -1819,7 +1784,6 @@ The exact same logic is mirrored in `trading/auto_trader.py` (`_get_risk_control
 | `risk_controls_enabled` | Whether cooldown block was active |
 | `cooldown_activations` | Times tripped |
 | `skipped_candles_by_cooldown` | Bars lost to cooldowns |
-⚙
 
 > ⚠️ **`max_drawdown_pct` is trade-to-trade, not intrabar.** The equity list gains an entry only when a trade closes; an open position's floating drawdown is invisible. A strategy can show 3% max DD while having been 20% underwater intra-position. Read with `avg_loss_pct` and management settings.
 
@@ -1837,11 +1801,10 @@ On every single backtest (not optimization), `export_backtest_to_xlsx()` writes 
 data/backtests/{SYMBOL}_backtest_{start}_{end}.xlsx
 ```
 
-| Sheet ↕▾ | Contents ↕▾ |
+| Sheet | Contents |
 |---|---|
-| −**Статистика** | Header (symbol, spec_source, dates) + all metric rows |
+| **Статистика** | Header (symbol, spec_source, dates) + all metric rows |
 | **Сделки** | Full trade table with `entry_reasons` flattened into one column |
-⚙
 
 The trades sheet has a human-readable `entry_reasons` column: each condition becomes `✓ close > resistance_1 → close=1.234, resistance_1=1.230`. That column alone is worth the export.
 
@@ -1937,13 +1900,12 @@ Optional, triggered by the `Фаза 0` checkbox **or by setting an explicit `se
 
 **Mean-reversion family:**
 
-| Name ↕▾ | Idea ↕▾ | Tunable ↕▾ |
+| Name | Idea | Tunable |
 |---|---|---|
-| −**R1_BB_MEAN_REVERSION** | cross back into BB, RSI range, low ADX | stop, tp, ADX |
+| **R1_BB_MEAN_REVERSION** | cross back into BB, RSI range, low ADX | stop, tp, ADX |
 | **R2_RSI_REVERSION** | RSI extreme vs VWAP, low ADX | stop, tp, ADX, RSI |
 | **R3_RANGE_BOUNDARIES** | close inside support_1 / resistance_1 zone, low ADX | stop, tp, ADX |
 | **R4_VWAP_REVERSION** | close stretched 1-2.5% from VWAP, low ADX | stop, tp, ADX |
-⚙
 
 Each archetype's `grid()` yields 8-36 parameter combinations. `screen_runner.run_screen()` runs every combination of every archetype, records the best per archetype (by `return_pct`, requiring **≥ 10 trades**), and returns a table plus a `by_name` dict.
 
@@ -1954,11 +1916,10 @@ Each archetype's `grid()` yields 8-36 parameter combinations. `screen_runner.run
 
 **Two special mechanics in A6** (`_build_a6_short_momentum`):
 
-| Mechanism ↕▾ | Effect ↕▾ |
+| Mechanism | Effect |
 |---|---|
-| −`frozen_entries: True` | Optimizer's `_enforce_frozen_entries` will force-restore `entry`/`entry_any` from this base spec into any AI candidate |
+| `frozen_entries: True` | Optimizer's `_enforce_frozen_entries` will force-restore `entry`/`entry_any` from this base spec into any AI candidate |
 | `exit_corridor` | `_enforce_exit_corridor` clamps `stop_loss_atr_mult ∈ [1.8, 2.2]`, `take_profit_atr_mult ∈ [1.3, 1.7]`, `max_hold_candles ∈ [6, 12]`; also forces `trailing_atr_mult = None` and `move_to_breakeven_at_tp_pct = None` (laboratory-measured: both hurt this specific signal) |
-⚙
 
 So A6 is a "laboratory-locked" archetype — the optimizer can tune inside the corridor, but cannot leave it, and cannot change the entry conditions.
 
@@ -1966,14 +1927,13 @@ So A6 is a "laboratory-locked" archetype — the optimizer can tune inside the c
 
 `optimizer_data_utils.load_prepared_dataframe()`:
 
-| Step ↕▾ | Behavior ↕▾ |
+| Step | Behavior |
 |---|---|
-| −**Parquet path** | `data/ohlcv_cache/{SYMBOL}_15_{start}_{end}.parquet` |
+| **Parquet path** | `data/ohlcv_cache/{SYMBOL}_15_{start}_{end}.parquet` |
 | **Cache usable** | Only if `end_date < today` — fresh ranges are never trusted from cache |
 | **On miss** | `fetcher.fetch_ohlcv()` → save to parquet (best-effort, failure ignored) |
 | **Min candles** | Returns error if `< 150` |
 | **Indicators** | Computed **once** here via `engine._build_indicator_frame()`, then reused across all iterations |
-⚙
 
 **This is the single biggest performance decision in the optimizer**: fetch once, compute indicators once, then slice the same DataFrame for every TRAIN and TEST window across every iteration. Without it, 10 iterations × 6 folds × 2 (TRAIN+TEST) × 30 local mutations would be 3600+ network requests.
 
@@ -1981,12 +1941,11 @@ So A6 is a "laboratory-locked" archetype — the optimizer can tune inside the c
 
 `split_optimization_and_holdout()` reserves the **last 15%** of history for final validation:
 
-| Parameter ↕▾ | Value ↕▾ |
+| Parameter | Value |
 |---|---|
-| −`holdout_ratio` | **0.15** |
-| −`min_holdout_candles` | **500** (~5 days) |
+| `holdout_ratio` | **0.15** |
+| `min_holdout_candles` | **500** (~5 days) |
 | `min_optimization_candles` | **3000** (~31 days) |
-⚙
 
 If either minimum is not met, **holdout is disabled entirely** and the whole DataFrame goes into optimization. That's honest — you can't validate on data you don't have.
 
@@ -1996,11 +1955,10 @@ The optimizer **never sees** the holdout DataFrame during iteration.
 
 `make_splits()` builds the folds:
 
-| `walk_forward_folds` ↕▾ | Behavior ↕▾ |
+| `walk_forward_folds` | Behavior |
 |---|---|
-| −**1** | One standard split: TRAIN = first `train_ratio`, TEST = rest |
+| **1** | One standard split: TRAIN = first `train_ratio`, TEST = rest |
 | **> 1** | TRAIN always starts at `start_date` and **expands** before each TEST window; TEST windows are sequential non-overlapping slices of the remaining range |
-⚙
 
 `train_ratio` is clamped to `[0.5, 0.9]`.
 
@@ -2042,12 +2000,11 @@ raw_score =
 
 Trade-count bonus:
 
-| `test_trades` ↕▾ | Bonus ↕▾ |
+| `test_trades` | Bonus |
 |---|---|
-| −`< 20` | **−5.0** (flat penalty — overfitting) |
-| −`20..39` | `+0.10 × test_trades` |
+| `< 20` | **−5.0** (flat penalty — overfitting) |
+| `20..39` | `+0.10 × test_trades` |
 | `≥ 40` | `+0.25 × test_trades` |
-⚙
 
 The penalty for `< 20` trades is deliberately brutal. A strategy with PF 3.0 on 8 trades is not better than one with PF 1.3 on 40 trades, and the scoring enforces that.
 
@@ -2065,28 +2022,26 @@ acceptable = test_trades >= min_test_trades     # min = 10
 
 **e. Window robustness** — `OptimizerRobustness.compute_window_robustness()` computes per-window ratios:
 
-| Metric ↕▾ | Meaning ↕▾ |
+| Metric | Meaning |
 |---|---|
-| −`profitable_windows_ratio` | Fraction of TEST windows with `return_pct > 0` |
+| `profitable_windows_ratio` | Fraction of TEST windows with `return_pct > 0` |
 | `positive_expectancy_windows_ratio` | Fraction with `expectancy > 0` |
 | `pf_pass_windows_ratio` | Fraction with `PF > 1` |
 | `median_window_return_pct` | Median across windows |
 | `worst_window_return_pct` | Worst window |
 | `return_std` | Std of returns |
 | `stability_score` | 0..1, computed from the diagnostics above |
-⚙
 
 **f. Robust assessment** — `assess_window_robustness()` with default thresholds (from `optimizer_robustness.py`):
 
-| Threshold ↕▾ | Value ↕▾ |
+| Threshold | Value |
 |---|---|
-| −`min_profitable_windows_ratio` | **2/3** |
-| −`min_positive_expectancy_windows_ratio` | **2/3** |
-| −`min_pf_pass_windows_ratio` | **2/3** |
+| `min_profitable_windows_ratio` | **2/3** |
+| `min_positive_expectancy_windows_ratio` | **2/3** |
+| `min_pf_pass_windows_ratio` | **2/3** |
 | `min_median_window_return_pct` | **0.0** |
 | `max_worst_window_return_pct` | **−5.0** |
 | `min_stability_score` | **0.5** |
-⚙
 
 Status:
 
@@ -2173,15 +2128,14 @@ The holdout summary also records `profit_concentration`, warnings (`мало с�
 
 `save_best_to_memory` writes the winner into `data/{SYMBOL}/state.json` and `trading_rules.md` — **only** if all of these are true:
 
-| Gate ↕▾ | Blocks save if ↕▾ |
+| Gate | Blocks save if |
 |---|---|
-| −`best is not None` | No acceptable candidate ever existed |
+| `best is not None` | No acceptable candidate ever existed |
 | `holdout_meta.enabled` | N/A (holdout disabled → not a blocker) |
 | `holdout_status == "failed"` | **Yes** — holdout failed |
 | `holdout_status == "weak_pass"` AND `not allow_weak_holdout_save` | **Yes** — weak pass without explicit permission |
 | `holdout_status == "passed"` | No block |
 | `holdout disabled` | No block |
-⚙
 
 So `allow_weak_holdout_save=True` is the *only* way a `weak_pass` gets saved. It's an opt-in — the operator decides that 7 trades at PF 1.2 on holdout is "good enough for now."
 
@@ -2191,15 +2145,14 @@ So `allow_weak_holdout_save=True` is the *only* way a `weak_pass` gets saved. It
 
 Full structure saved per run:
 
-| Section ↕▾ | Content ↕▾ |
+| Section | Content |
 |---|---|
-| −Header | Symbol, timestamp, path |
+| Header | Symbol, timestamp, path |
 | Baseline | Buy&hold |
 | Phase 0 | Archetype screen (if run) |
 | Every iteration | Inputs to AI, response from AI, candidate evaluation, robustness verdict, score breakdown, soft warnings |
 | Holdout | Final validation result |
 | History | Every candidate ever evaluated |
-⚙
 
 ---
 
@@ -2249,13 +2202,12 @@ backtest_data/
     └── SOLUSDT_15m_2026.csv
 ```
 
-| Function ↕▾ | Returns ↕▾ |
+| Function | Returns |
 |---|---|
-| −`get_available_symbols()` | `["ADAUSDT", "ARBUSDT", ...]` |
+| `get_available_symbols()` | `["ADAUSDT", "ARBUSDT", ...]` |
 | `get_available_years(symbol)` | `[2023, 2024, 2025, 2026]` |
 | `load_local_data(symbol, year, start_date, end_date)` | Normalized DataFrame |
 | `load_first_available_data(preferred)` | `(symbol, year, df)` |
-⚙
 
 The loader sniffs the delimiter, renames `datetime_utc → timestamp`, coerces numerics, drops unparseable rows, sorts by time, and extracts year from the filename. If a symbol has multiple files for one year, it prefers the `15m` one.
 
@@ -2297,9 +2249,9 @@ Knowing the boundaries matters more than the features. A backtest that says PF 1
 
 ### 🧱 Constants that shape behaviour
 
-| Constant ↕▾ | Value ↕▾ | Source ↕▾ |
+| Constant | Value | Source |
 |---|---|---|
-| −Default commission | **0.055%** per side | `run()` default (taker Bybit) |
+| Default commission | **0.055%** per side | `run()` default (taker Bybit) |
 | Default slippage | **0.05%** | `config.BACKTEST_SLIPPAGE_PCT` |
 | Minimum candles | **60** | `run_on_dataframe()` guard |
 | Minimum backtest period | **15 days** | `_get_common_params()` |
@@ -2323,15 +2275,14 @@ Knowing the boundaries matters more than the features. A backtest that says PF 1
 | Default TRAIN ratio | **70%** | UI |
 | Default walk-forward folds | **6** | UI |
 | UI iteration cap | **30** | `max=30` on the iterations field |
-⚙
 
 ---
 
 ### 🛡️ What makes a backtest here trustworthy
 
-| Property ↕▾ | How it's achieved ↕▾ |
+| Property | How it's achieved |
 |---|---|
-| −**No same-bar cheating** | Signal on close of bar *i−1*, fill on open of bar *i* |
+| **No same-bar cheating** | Signal on close of bar *i−1*, fill on open of bar *i* |
 | **No future leakage in indicators** | Every rolling-window indicator uses `shift(1)`; pivots use yesterday's OHLC |
 | **Realistic costs** | Commission × 2 + slippage against the trade on entry and SL/TP |
 | **Deliberate cost asymmetry** | Soft exits unslipped because they execute on already-observed close |
@@ -2344,10 +2295,8 @@ Knowing the boundaries matters more than the features. A backtest that says PF 1
 | **Rollback on regression** | `if score < best − max(1, |best|×0.3)` → base becomes best, not the last |
 | **Streaming report** | `OptimizationReport` writes to disk on every `emit()`, survives crashes |
 | **Parquet cache is honest** | Only used for complete past periods — a today-end range is always freshly fetched |
-⚙
 
 ---
-
 
 
 ---
@@ -2391,24 +2340,22 @@ Each symbol is simulated **independently** — one position at a time, no cross-
 
 #### Portfolio parameters
 
-| Field ↕▾ | Default ↕▾ | Meaning ↕▾ |
+| Field | Default | Meaning |
 |---|---|---|
-| −**Начальный капитал** | 1000.0 USDT | Total across all symbols |
-| −**Комиссия, % (round-trip)** | 0.11 | Applied per trade on the full position |
-| −**Проскальзывание, %** | 0.05 | Added to commission for total cost |
-| −**Реинвестировать прибыль** | on | If off, each trade uses the *allocated* capital, not current |
-⚙
+| **Начальный капитал** | 1000.0 USDT | Total across all symbols |
+| **Комиссия, % (round-trip)** | 0.11 | Applied per trade on the full position |
+| **Проскальзывание, %** | 0.05 | Added to commission for total cost |
+| **Реинвестировать прибыль** | on | If off, each trade uses the *allocated* capital, not current |
 
 Combined cost = `fee_pct + slippage_pct` — subtracted from each trade's raw return.
 
 #### Exit parameters (shared across symbols)
 
-| Field ↕▾ | Default ↕▾ | Meaning ↕▾ |
+| Field | Default | Meaning |
 |---|---|---|
-| −**Стоп-лосс (×ATR)** | 2.0 | Hard stop distance |
-| −**Тейк-профит (×ATR)** | 1.5 | Take profit distance |
-| −**Макс. удержание (свечей)** | 8 | Time stop (8 × 15m = 2 h) |
-⚙
+| **Стоп-лосс (×ATR)** | 2.0 | Hard stop distance |
+| **Тейк-профит (×ATR)** | 1.5 | Take profit distance |
+| **Макс. удержание (свечей)** | 8 | Time stop (8 × 15m = 2 h) |
 
 Note the **short TP vs wide stop** — payoff < 1 (1.5:2.0 = 0.75). That's not a bug: the momentum-short signals that make up the portfolio tend to hit TP quickly on continuation, and the wide stop protects against the post-dump bounce. The optimality of this asymmetry came directly from `research/exit_lab.py` (see below).
 
@@ -2416,17 +2363,16 @@ Note the **short TP vs wide stop** — payoff < 1 (1.5:2.0 = 0.75). That's not a
 
 The checkbox list is built from `STRATEGY_REGISTRY` in `portfolio_simulator.py`:
 
-| Strategy ↕▾ | Direction ↕▾ | Rule ↕▾ | Source ↕▾ |
+| Strategy | Direction | Rule | Source |
 |---|---|---|---|
-| −**`mom2_short_t2.0`** | short | `vel_2 < −2.0` (drop > 2 ATR in 2 bars) | impulse_lab iter 4 |
-| −**`m2s2_vol1.5`** | short | `mom2` AND `vol_ratio > 1.5` | impulse_lab iter 5 |
-| −**`m2s2_vol2.0`** | short | `mom2` AND `vol_ratio > 2.0` | impulse_lab iter 5 — **best single signal** |
-| −**`act_short`** | short | `activity > 3.0` AND `vel_2 < −1.0` | portfolio_lab iter 1 |
-| −**`act_long`** | long | `activity > 3.0` AND `vel_2 > 1.0` | portfolio_lab iter 1 |
-| −**`cont_long_t2.0`** | long | `vel_2 > 2.0` (up-momentum) | impulse_lab iter 6 |
-| −**`climax_bear`** | short | `range_atr > 1.5` AND `vol_ratio > 2.0` AND `close_position < 0.2` | impulse_lab iter 6 |
-| −**`climax_bull`** | long | `range_atr > 1.5` AND `vol_ratio > 2.0` AND `close_position > 0.8` | impulse_lab iter 6 |
-⚙
+| **`mom2_short_t2.0`** | short | `vel_2 < −2.0` (drop > 2 ATR in 2 bars) | impulse_lab iter 4 |
+| **`m2s2_vol1.5`** | short | `mom2` AND `vol_ratio > 1.5` | impulse_lab iter 5 |
+| **`m2s2_vol2.0`** | short | `mom2` AND `vol_ratio > 2.0` | impulse_lab iter 5 — **best single signal** |
+| **`act_short`** | short | `activity > 3.0` AND `vel_2 < −1.0` | portfolio_lab iter 1 |
+| **`act_long`** | long | `activity > 3.0` AND `vel_2 > 1.0` | portfolio_lab iter 1 |
+| **`cont_long_t2.0`** | long | `vel_2 > 2.0` (up-momentum) | impulse_lab iter 6 |
+| **`climax_bear`** | short | `range_atr > 1.5` AND `vol_ratio > 2.0` AND `close_position < 0.2` | impulse_lab iter 6 |
+| **`climax_bull`** | long | `range_atr > 1.5` AND `vol_ratio > 2.0` AND `close_position > 0.8` | impulse_lab iter 6 |
 
 Default checked: **`m2s2_vol2.0`** only — the single best signal from the labs.
 
@@ -2436,13 +2382,12 @@ Multiple selected strategies are merged as **one signal stream per symbol, prior
 
 Lists symbols from `backtest_data/` (via `get_available_symbols()`). For each:
 
-| Input ↕▾ | Default ↕▾ |
+| Input | Default |
 |---|---|
-| −**Торговать** checkbox | on for `{ARBUSDT, DOGEUSDT, SOLUSDT}`, off for others |
-| −**Доля капитала (%)** | 33.3 for the three defaults |
-| −**Размер позиции (%)** | 50 |
-| −**Плечо** | 1.0 |
-⚙
+| **Торговать** checkbox | on for `{ARBUSDT, DOGEUSDT, SOLUSDT}`, off for others |
+| **Доля капитала (%)** | 33.3 for the three defaults |
+| **Размер позиции (%)** | 50 |
+| **Плечо** | 1.0 |
 
 Effective leverage on capital = `position_size_pct/100 × leverage`. With defaults, 0.5 × 1 = 0.5× — half the allocated capital per trade.
 
@@ -2469,27 +2414,25 @@ Three sections render together:
 
 **1. 📊 Итоги портфеля** — six metric cards:
 
-| Card ↕▾ | Value ↕▾ |
+| Card | Value |
 |---|---|
-| −Начальный капитал | `initial_capital` |
-| −Конечный капитал | sum of symbol finals + unallocated |
-| −Общий P&L | `+` / `−` with $ and % |
-| −Монет / сделок | `len(symbols) / sum(trades)` |
-| −Макс. просадка (монета) | worst per-symbol drawdown |
-| −БАНКРОТСТВО | count of symbols with `bankrupt=True` (only shown when > 0) |
-⚙
+| Начальный капитал | `initial_capital` |
+| Конечный капитал | sum of symbol finals + unallocated |
+| Общий P&L | `+` / `−` with $ and % |
+| Монет / сделок | `len(symbols) / sum(trades)` |
+| Макс. просадка (монета) | worst per-symbol drawdown |
+| БАНКРОТСТВО | count of symbols with `bankrupt=True` (only shown when > 0) |
 
 **2. 🪙 Результаты по монетам** — table with per-symbol rows:
 
-| Column ↕▾ | Meaning ↕▾ |
+| Column | Meaning |
 |---|---|
-| −Сделок | trade count |
-| −Win Rate | % of winning trades |
-| −`exp_mean` | **average trade result in % of entry price**, before position sizing and leverage. This is the "quality of the signal itself" |
-| −Конечный капитал | final capital for this symbol |
-| −P&L | `$` delta |
-| −P&L % | `%` return on allocated capital |
-⚙
+| Сделок | trade count |
+| Win Rate | % of winning trades |
+| `exp_mean` | **average trade result in % of entry price**, before position sizing and leverage. This is the "quality of the signal itself" |
+| Конечный капитал | final capital for this symbol |
+| P&L | `$` delta |
+| P&L % | `%` return on allocated capital |
 
 The `exp_mean` column is deliberately surfaced with an explanatory caption: *"exp_mean — средний результат одной сделки в % от цены входа (до учёта размера позиции и плеча). Показывает качество сигнала самого по себе."*
 
@@ -2497,11 +2440,10 @@ The `exp_mean` column is deliberately surfaced with an explanatory caption: *"ex
 
 **4. 📈 Кривые доходности** — an ECharts line chart:
 
-| Series ↕▾ | Colour ↕▾ | Style ↕▾ |
+| Series | Colour | Style |
 |---|---|---|
-| −Each symbol | one colour from palette | thin line |
-| −Портфель | `#222` (dark) | **3px** line |
-⚙
+| Each symbol | one colour from palette | thin line |
+| Портфель | `#222` (dark) | **3px** line |
 
 `dataZoom` slider at the bottom, `time` x-axis, `value` y-axis, scaled. Time axis means you can see exactly when a symbol went bankrupt if it did.
 
@@ -2515,18 +2457,17 @@ research/lab_runs/lab_{YYYYMMDD_HHMMSS}.txt
 
 `save_simulation_report()` writes a structured text file with nine sections:
 
-| Section ↕▾ | Content ↕▾ |
+| Section | Content |
 |---|---|
-| −Header | Timestamp, all portfolio parameters, all coin configurations |
-| −Итоги портфеля | Final capital, P&L, all trades, mean `exp_mean`, win rate, best/worst trade |
-| −Диагностика реализма | Total cost per trade, warning about Bybit taker (0.20% round-trip), unallocated cash |
-| −Результаты по монетам | Table with trades, win rate, exp_mean, capital, P&L |
-| −Разбивка по годам | Year × {trades, mean exp, sum} |
-| −Разбивка по монетам и годам | `(symbol, year)` × {trades, mean exp, sum} |
-| −Статистика причин выхода | Per symbol: SL / TP / time counts |
-| −Предупреждения | Errors list |
-| −**Список сделок** | Every single trade: symbol, strategy, entry/exit times, direction, prices, result, bars held, exit reason |
-⚙
+| Header | Timestamp, all portfolio parameters, all coin configurations |
+| Итоги портфеля | Final capital, P&L, all trades, mean `exp_mean`, win rate, best/worst trade |
+| Диагностика реализма | Total cost per trade, warning about Bybit taker (0.20% round-trip), unallocated cash |
+| Результаты по монетам | Table with trades, win rate, exp_mean, capital, P&L |
+| Разбивка по годам | Year × {trades, mean exp, sum} |
+| Разбивка по монетам и годам | `(symbol, year)` × {trades, mean exp, sum} |
+| Статистика причин выхода | Per symbol: SL / TP / time counts |
+| Предупреждения | Errors list |
+| **Список сделок** | Every single trade: symbol, strategy, entry/exit times, direction, prices, result, bars held, exit reason |
 
 The trade list is the debugging gold — you can trace any losing streak back to the exact strategy and entry that produced it.
 
@@ -2549,22 +2490,21 @@ This is not a lab in the sense of "run one backtest." It is:
 
 Key features in `add_features`:
 
-| Group ↕▾ | Series ↕▾ |
+| Group | Series |
 |---|---|
-| −Position in range | `pos_in_range` (0..1 within 96-bar range) |
-| −Efficiency | `er_96` (Efficiency Ratio) |
-| −Volume momentum | `pos_vol_ratio` (4-bar avg / 96-bar avg) |
-| −Momentum | `vel_2`, `vel_4`, `vel_8` (close.diff(k) / atr_14) |
-| −Intra-bar | `close_position`, `strong_bullish_close`, `strong_bearish_close` |
-| −Breakout | `brk32_long`, `brk32_short`, `brk32_vol_short`, `brk32_strong_short` |
-| −BB state | `bb_width_pct`, `keltner_squeeze`, `squeeze_recent` |
-| −Streak | `streak_up`, `streak_dn` (5+ consecutive bars) |
-| −Spike | `spike_up`, `spike_dn` (>3 ATR over 8 bars) |
-| −Distance | `dist_ema8_atr` |
-| −Range | `range_atr` |
-| −Activity | `activity` = `vol_ratio × atr_ratio` |
-| −Positioning | `fund_z`, `oi_d4`, `ls_z` (from `positioning.py`) |
-⚙
+| Position in range | `pos_in_range` (0..1 within 96-bar range) |
+| Efficiency | `er_96` (Efficiency Ratio) |
+| Volume momentum | `pos_vol_ratio` (4-bar avg / 96-bar avg) |
+| Momentum | `vel_2`, `vel_4`, `vel_8` (close.diff(k) / atr_14) |
+| Intra-bar | `close_position`, `strong_bullish_close`, `strong_bearish_close` |
+| Breakout | `brk32_long`, `brk32_short`, `brk32_vol_short`, `brk32_strong_short` |
+| BB state | `bb_width_pct`, `keltner_squeeze`, `squeeze_recent` |
+| Streak | `streak_up`, `streak_dn` (5+ consecutive bars) |
+| Spike | `spike_up`, `spike_dn` (>3 ATR over 8 bars) |
+| Distance | `dist_ema8_atr` |
+| Range | `range_atr` |
+| Activity | `activity` = `vol_ratio × atr_ratio` |
+| Positioning | `fund_z`, `oi_d4`, `ls_z` (from `positioning.py`) |
 
 `_simulate_fixed` signature:
 
@@ -2597,12 +2537,11 @@ Holds: 1h → 72 bars (3 days), 4h → 30 bars (5 days). Both taker (0.28%) and 
 
 Produces three series that are merged into the 15m frame via `merge_asof(direction="backward")`:
 
-| Feature ↕▾ | Source ↕▾ | Formula ↕▾ |
+| Feature | Source | Formula |
 |---|---|---|
-| −`fund_z` | `funding/funding_rate` | 96-period rolling z-score of funding rate |
-| −`oi_d4` | `open_interest/open_interest` | `log(OI).diff(4)` — 4-hour OI change in log units |
-| −`ls_z` | `long_short/long_short_ratio` | 96-period rolling z-score of `log(L/S ratio)` |
-⚙
+| `fund_z` | `funding/funding_rate` | 96-period rolling z-score of funding rate |
+| `oi_d4` | `open_interest/open_interest` | `log(OI).diff(4)` — 4-hour OI change in log units |
+| `ls_z` | `long_short/long_short_ratio` | 96-period rolling z-score of `log(L/S ratio)` |
 
 **Critical rule:** every feature must use only records with `timestamp <= T`. Enforced by:
 
@@ -2620,13 +2559,12 @@ The input signal is **frozen**: `m2s2_vol2.0` (short, `vel_2 < −2.0` AND `vol_
 
 Three-stage grid:
 
-| Stage ↕▾ | Parameters ↕▾ | Combos ↕▾ |
+| Stage | Parameters | Combos |
 |---|---|---|
-| −1 | `sl ∈ {0.75, 1.0, 1.5, 2.0}` × `tp ∈ {1.5, 2.0, 3.0, 4.0}` × `hold ∈ {8, 16, 32, 64}` | 64 |
-| −2 | Stage 1 + `trail ∈ {1.0, 1.5, 2.0}` (hold=16 fixed) | 45 |
-| −3 | Stage 2 + `be ∈ {0.5, 0.75, 1.0}` | 36 |
-| −**Total** |  | **145** |
-⚙
+| 1 | `sl ∈ {0.75, 1.0, 1.5, 2.0}` × `tp ∈ {1.5, 2.0, 3.0, 4.0}` × `hold ∈ {8, 16, 32, 64}` | 64 |
+| 2 | Stage 1 + `trail ∈ {1.0, 1.5, 2.0}` (hold=16 fixed) | 45 |
+| 3 | Stage 2 + `be ∈ {0.5, 0.75, 1.0}` | 36 |
+| **Total** |  | **145** |
 
 Each combo evaluated across **every (symbol, year) dataset**. Aggregate metrics: `n_datasets`, `trades_total`, `exp_mean`, `frac_pos`, `pf_mean`.
 
@@ -2650,15 +2588,14 @@ A second, subtler finding from the lab went into production as well: **trailing 
 
 Frozen signal: `momentum_any_long` on 4H. Grid:
 
-| Parameter ↕▾ | Values ↕▾ | Count ↕▾ |
+| Parameter | Values | Count |
 |---|---|---|
-| −`sl_atr` | 1.5, 2.0, 2.5, 3.0 | 4 |
-| −`tp_atr` | 2.0, 3.0, 4.0, 6.0, 8.0 | 5 |
-| −`max_hold` | 20, 30, 45, 60 bars 4H | 4 |
-| −`trail_atr` | None, 2.0, 3.0 | 3 |
-| −`be_atr` | None, 1.5 | 2 |
-| −**Total** |  | **480** |
-⚙
+| `sl_atr` | 1.5, 2.0, 2.5, 3.0 | 4 |
+| `tp_atr` | 2.0, 3.0, 4.0, 6.0, 8.0 | 5 |
+| `max_hold` | 20, 30, 45, 60 bars 4H | 4 |
+| `trail_atr` | None, 2.0, 3.0 | 3 |
+| `be_atr` | None, 1.5 | 2 |
+| **Total** |  | **480** |
 
 Data is split **60% train / 30-bar buffer / 40% test** — the buffer prevents trades opened in the train split from straddling into the test window and contaminating evaluation. Top 15 combos from train are re-run on test. A combo is "stable" only if it has `train_exp > 0` **and** `test_exp > 0`.
 
@@ -2670,12 +2607,11 @@ These two form a two-step process — first check if the data has the raw materi
 
 Three independent measurements on 15m and 1h data:
 
-| Measurement ↕▾ | What it computes ↕▾ | Interpretation ↕▾ |
+| Measurement | What it computes | Interpretation |
 |---|---|---|
-| −**Autocorrelation** (`acf_1..16`) | Log-return autocorrelation at lags 1, 2, 4, 8, 16 | `acf < 0` → mean-reversion, grid has raw material. `acf > 0` → trending, grid bleeds |
-| −**Efficiency Ratio** (`er_*`) | `|Δnet| / path_length` over 6h/24h/72h/7d windows | `ER → 0` = chop (good for grid), `ER → 1` = trend (bad) |
-| −**Zigzag capacity** | Completed reversals ≥ g% amplitude; max amplitude = inventory risk | Number of round-trips = grid's potential; max amplitude = how many levels you'd accumulate in the worst case |
-⚙
+| **Autocorrelation** (`acf_1..16`) | Log-return autocorrelation at lags 1, 2, 4, 8, 16 | `acf < 0` → mean-reversion, grid has raw material. `acf > 0` → trending, grid bleeds |
+| **Efficiency Ratio** (`er_*`) | `|Δnet| / path_length` over 6h/24h/72h/7d windows | `ER → 0` = chop (good for grid), `ER → 1` = trend (bad) |
+| **Zigzag capacity** | Completed reversals ≥ g% amplitude; max amplitude = inventory risk | Number of round-trips = grid's potential; max amplitude = how many levels you'd accumulate in the worst case |
 
 The verdict per timeframe:
 
@@ -2689,12 +2625,11 @@ The lab explicitly warns: *"net_per_year_pct — ВЕРХНЯЯ граница. 
 
 Three modes compared on the same data:
 
-| Mode ↕▾ | Behavior ↕▾ |
+| Mode | Behavior |
 |---|---|
-| −**A. naive_grid** | Grid always active — maximum upside, maximum inventory risk |
-| −**B. flat_only** | Grid only in flat regime (ER < 0.15); in trend → cash |
-| −**C. hybrid** | Grid in flat; in trend → long/short follow with 3 ATR stop |
-⚙
+| **A. naive_grid** | Grid always active — maximum upside, maximum inventory risk |
+| **B. flat_only** | Grid only in flat regime (ER < 0.15); in trend → cash |
+| **C. hybrid** | Grid in flat; in trend → long/short follow with 3 ATR stop |
 
 **Regime detection** is via Efficiency Ratio with hysteresis:
 
@@ -2730,14 +2665,13 @@ Model: short perp + long spot = delta-neutral. Price moves cancel. Income = fund
 
 Five strategies evaluated:
 
-| Strategy ↕▾ | Logic ↕▾ |
+| Strategy | Logic |
 |---|---|
-| −`always_in` | Always in position, collect all funding |
-| −`threshold_001` | Enter when funding > 0.01%, exit when < 0 |
-| −`threshold_003` | Enter when funding > 0.03%, exit when < 0.01% |
-| −`rolling_mean` | Enter when funding > 30-day rolling mean |
-| −`percentile_75` | Enter when funding > 75th percentile of last 30 days |
-⚙
+| `always_in` | Always in position, collect all funding |
+| `threshold_001` | Enter when funding > 0.01%, exit when < 0 |
+| `threshold_003` | Enter when funding > 0.03%, exit when < 0.01% |
+| `rolling_mean` | Enter when funding > 30-day rolling mean |
+| `percentile_75` | Enter when funding > 75th percentile of last 30 days |
 
 Costs: taker (0.31% round-trip) vs maker (0.04% round-trip). Leverage fixed at 5× (`CAPITAL_EFFICIENCY = 5/6 = 83.3%`).
 
@@ -2758,16 +2692,15 @@ Adds to v1:
 
 Output is a **distribution** of outcomes per symbol:
 
-| Metric ↕▾ | Meaning ↕▾ |
+| Metric | Meaning |
 |---|---|
-| −`mean_return_pct` | Average final return |
-| −`p5_return_pct` | 5th percentile — worst realistic case |
-| −`p95_return_pct` | 95th percentile — best case |
-| −`prob_loss` | Fraction of sims with negative return |
-| −`mean_max_dd_pct` | Average drawdown across sims |
-| −`p95_max_dd_pct` | 95th percentile drawdown |
-| −`liquidation_rate` | Fraction of sims where at least one liquidation occurred |
-⚙
+| `mean_return_pct` | Average final return |
+| `p5_return_pct` | 5th percentile — worst realistic case |
+| `p95_return_pct` | 95th percentile — best case |
+| `prob_loss` | Fraction of sims with negative return |
+| `mean_max_dd_pct` | Average drawdown across sims |
+| `p95_max_dd_pct` | 95th percentile drawdown |
+| `liquidation_rate` | Fraction of sims where at least one liquidation occurred |
 
 The comparison shows **degradation** vs v1 (ideal) — how much of the theoretical funding yield the basis risk eats.
 
@@ -2781,13 +2714,12 @@ Verdict:
 
 Different idea entirely. Hypothesizes price moves around the funding moment (00:00, 08:00, 16:00 UTC) due to position opening/closing:
 
-| Strategy ↕▾ | When ↕▾ | Direction ↕▾ | Reasoning ↕▾ |
+| Strategy | When | Direction | Reasoning |
 |---|---|---|---|
-| −`pre_short` | Before payment, positive funding | short | Longs close to avoid paying → downward pressure |
-| −`pre_long` | Before payment, negative funding | long | Shorts close to avoid paying → upward pressure |
-| −`post_long` | After payment, positive funding | long | Pressure lifted → longs re-enter → reload up |
-| −`post_short` | After payment, negative funding | short | Pressure lifted → shorts re-enter → reload down |
-⚙
+| `pre_short` | Before payment, positive funding | short | Longs close to avoid paying → downward pressure |
+| `pre_long` | Before payment, negative funding | long | Shorts close to avoid paying → upward pressure |
+| `post_long` | After payment, positive funding | long | Pressure lifted → longs re-enter → reload up |
+| `post_short` | After payment, negative funding | short | Pressure lifted → shorts re-enter → reload down |
 
 Timing (aligned with `_simulate_fixed`'s next-open fill):
 
@@ -2883,20 +2815,19 @@ The point of this lab is to answer a specific question: *does the signal still w
 ### 🔄 How lab discoveries become production strategies
 
 This is the most important narrative arc in the whole system. The labs are not isolated research — they **feed directly into the archetypes and portfolio strategies** that drive production trading.
-Rendering diagram...
+
 Concrete traces:
 
-| Lab finding ↕▾ | Where it lives in production ↕▾ |
+| Lab finding | Where it lives in production |
 |---|---|
-| −`m2s2_vol2.0` (impulse_lab iter 5) — best single short signal | **`A6_SHORT_MOMENTUM`** archetype, signal `drop_2_atr < −2.0 AND volume > 2.0×` |
-| −`low_32 / high_32` from impulse_lab iter 3 | **`A5_STRONG_VOL_BREAKOUT`** archetype + added to `backtest_engine._build_indicator_frame` |
-| −`drop_2_atr` from impulse_lab iter 5 | **`A6_SHORT_MOMENTUM`** signal + added to `backtest_engine._build_indicator_frame` |
-| −`activity = vol_ratio × atr_ratio` from portfolio_lab | Added to `backtest_engine._build_indicator_frame` + exposed in `strategy_spec.AVAILABLE_SERIES` |
-| −Exit optimum `sl=2.0, tp=1.5, hold=8` from exit_lab | **`A6.exit_corridor`**: `{[1.8, 2.2], [1.3, 1.7], [6, 12]}` |
-| −Trailing + breakeven are harmful for momentum-short | `A6.management.trailing_atr_mult = None` + `_enforce_exit_corridor` forces `None` even if AI tries to set it |
-| −`m2s2_vol2.0`, `act_short`, `mom2_short_t2.0` — the 3-signal portfolio | **Default strategy registry** in `research_lab_page.py` (m2s2_vol2.0 checked by default) |
-| −A6 SHORT-ONLY (long momentum is never profitable) | Empirical finding from impulse_lab iter 4 — A6 has **only** a `short` block, no `long` |
-⚙
+| `m2s2_vol2.0` (impulse_lab iter 5) — best single short signal | **`A6_SHORT_MOMENTUM`** archetype, signal `drop_2_atr < −2.0 AND volume > 2.0×` |
+| `low_32 / high_32` from impulse_lab iter 3 | **`A5_STRONG_VOL_BREAKOUT`** archetype + added to `backtest_engine._build_indicator_frame` |
+| `drop_2_atr` from impulse_lab iter 5 | **`A6_SHORT_MOMENTUM`** signal + added to `backtest_engine._build_indicator_frame` |
+| `activity = vol_ratio × atr_ratio` from portfolio_lab | Added to `backtest_engine._build_indicator_frame` + exposed in `strategy_spec.AVAILABLE_SERIES` |
+| Exit optimum `sl=2.0, tp=1.5, hold=8` from exit_lab | **`A6.exit_corridor`**: `{[1.8, 2.2], [1.3, 1.7], [6, 12]}` |
+| Trailing + breakeven are harmful for momentum-short | `A6.management.trailing_atr_mult = None` + `_enforce_exit_corridor` forces `None` even if AI tries to set it |
+| `m2s2_vol2.0`, `act_short`, `mom2_short_t2.0` — the 3-signal portfolio | **Default strategy registry** in `research_lab_page.py` (m2s2_vol2.0 checked by default) |
+| A6 SHORT-ONLY (long momentum is never profitable) | Empirical finding from impulse_lab iter 4 — A6 has **only** a `short` block, no `long` |
 
 This traceability is the whole point: **every production archetype has a documented lab origin**. If the strategy starts failing live, the traceback path is:
 
@@ -2910,36 +2841,35 @@ Without the labs, "why did we build the strategy this way?" becomes folklore. Wi
 
 ### 🧱 Constants that shape Lab behaviour
 
-| Constant ↕▾ | Value ↕▾ | Source ↕▾ |
+| Constant | Value | Source |
 |---|---|---|
-| −Default commission (UI) | **0.11%** round-trip | `SimConfig.fee_pct` |
-| −Default slippage (UI) | **0.05%** round-trip | `SimConfig.slippage_pct` |
-| −Default SL / TP / hold (UI) | **2.0 / 1.5 / 8** | Lab optimum from `exit_lab.py` |
-| −Default checked strategy | `m2s2_vol2.0` only | Best single signal |
-| −Default portfolio symbols | `ARB, DOGE, SOL` | `SymbolConfig` defaults |
-| −Default capital share | **33.3%** per symbol | Same |
-| −Default position size | **50%** of allocated | Same |
-| −Default leverage | **1.0×** | Same |
-| −Lab report directory | `research/lab_runs/` | `LAB_RUNS_DIR` |
-| −`impulse_lab.FEE_PCT` | **0.2%** round-trip | Module default |
-| −`impulse_lab.SLIPPAGE_PCT` | **0.08%** round-trip | Stress default |
-| −`impulse_lab.H_DEFAULT` | **8 bars** | 2 h |
-| −`impulse_lab.MOVE_ATR` | **2.5** | Oracle threshold |
-| −`impulse_lab.ER_MIN` | **0.45** | Oracle efficiency threshold |
-| −`exit_lab` grid | **145 combos** | 3 stages |
-| −`swing_exit_lab` grid | **480 combos** | 4×5×4×3×2 |
-| −`grid_lab.SPACING_PCT` | **0.4%** | Best from Step 1 |
-| −`grid_lab.FLAT_THRESHOLD` | **0.15** (ER) | Regime boundary |
-| −`grid_lab.TREND_THRESHOLD` | **0.25** (ER) | Regime boundary (hysteresis) |
-| −`funding_arb_lab.LEVERAGE` | **5×** | Capital efficiency 83.3% |
-| −`funding_arb_risk_lab.N_SIMULATIONS` | **1000** | Monte Carlo |
-| −`funding_arb_risk_lab.BASIS_VOL_DAILY` | **0.8%** | Basis vol assumption |
-| −`pairs_arb_lab.COINT_PVALUE_THRESHOLD` | **0.05** | Engle-Granger |
-| −`pairs_arb_lab.ENTRY_Z / EXIT_Z / STOP_Z` | **2.0 / 0.5 / 4.0** | Z-score thresholds |
-| −`portfolio_lab.SLIPS` | **0.0 / 0.03 / 0.05 / 0.10** | Stress levels |
-| −`portfolio_lab.STRESS_PASS_EXP` | **+0.05%** | Pass at slip=0.05% |
-| −`portfolio_trios.SYMBOLS` | **6 altcoins** | Excludes BTC, BNB, HYPE |
-⚙
+| Default commission (UI) | **0.11%** round-trip | `SimConfig.fee_pct` |
+| Default slippage (UI) | **0.05%** round-trip | `SimConfig.slippage_pct` |
+| Default SL / TP / hold (UI) | **2.0 / 1.5 / 8** | Lab optimum from `exit_lab.py` |
+| Default checked strategy | `m2s2_vol2.0` only | Best single signal |
+| Default portfolio symbols | `ARB, DOGE, SOL` | `SymbolConfig` defaults |
+| Default capital share | **33.3%** per symbol | Same |
+| Default position size | **50%** of allocated | Same |
+| Default leverage | **1.0×** | Same |
+| Lab report directory | `research/lab_runs/` | `LAB_RUNS_DIR` |
+| `impulse_lab.FEE_PCT` | **0.2%** round-trip | Module default |
+| `impulse_lab.SLIPPAGE_PCT` | **0.08%** round-trip | Stress default |
+| `impulse_lab.H_DEFAULT` | **8 bars** | 2 h |
+| `impulse_lab.MOVE_ATR` | **2.5** | Oracle threshold |
+| `impulse_lab.ER_MIN` | **0.45** | Oracle efficiency threshold |
+| `exit_lab` grid | **145 combos** | 3 stages |
+| `swing_exit_lab` grid | **480 combos** | 4×5×4×3×2 |
+| `grid_lab.SPACING_PCT` | **0.4%** | Best from Step 1 |
+| `grid_lab.FLAT_THRESHOLD` | **0.15** (ER) | Regime boundary |
+| `grid_lab.TREND_THRESHOLD` | **0.25** (ER) | Regime boundary (hysteresis) |
+| `funding_arb_lab.LEVERAGE` | **5×** | Capital efficiency 83.3% |
+| `funding_arb_risk_lab.N_SIMULATIONS` | **1000** | Monte Carlo |
+| `funding_arb_risk_lab.BASIS_VOL_DAILY` | **0.8%** | Basis vol assumption |
+| `pairs_arb_lab.COINT_PVALUE_THRESHOLD` | **0.05** | Engle-Granger |
+| `pairs_arb_lab.ENTRY_Z / EXIT_Z / STOP_Z` | **2.0 / 0.5 / 4.0** | Z-score thresholds |
+| `portfolio_lab.SLIPS` | **0.0 / 0.03 / 0.05 / 0.10** | Stress levels |
+| `portfolio_lab.STRESS_PASS_EXP` | **+0.05%** | Pass at slip=0.05% |
+| `portfolio_trios.SYMBOLS` | **6 altcoins** | Excludes BTC, BNB, HYPE |
 
 ---
 
@@ -2961,21 +2891,20 @@ The last one matters. The UI Lab will happily report two symbols as independent 
 
 ### 🎯 When to use the Lab vs Backtest vs Optimization
 
-| Question ↕▾ | Tool ↕▾ |
+| Question | Tool |
 |---|---|
-| −*"Does this specific strategy I already have work on this data?"* | **Section 4 — Backtest page** (single run, one strategy) |
-| −*"Can I improve this strategy?"* | **Section 4 — Optimization** (iterative search) |
-| −*"What happens if I trade 3 symbols with this strategy portfolio simultaneously?"* | **Section 5 — Lab page** (portfolio simulation) |
-| −*"Is there any edge in momentum shorts on this coin at all?"* | **`impulse_lab.py`** (CLI) |
-| −*"What's the best exit for this specific signal?"* | **`exit_lab.py`** (CLI) |
-| −*"Does the signal survive realistic slippage?"* | **`stress_slippage.py`** (CLI) |
-| −*"Can I collect funding risk-free?"* | **`funding_arb_lab.py`** (CLI) |
-| −*"What's the realistic funding yield after basis risk?"* | **`funding_arb_risk_lab.py`** (CLI) |
-| −*"Is there any cointegrated pair I can trade?"* | **`pairs_arb_lab.py`** (CLI) |
-| −*"Which 3 of these 6 coins form the best portfolio?"* | **`portfolio_trios.py`** (CLI) |
-| −*"Should I run a grid strategy?"* | **`grid_feasibility_lab.py`** then `grid_lab.py` (CLI) |
-| −*"Do higher timeframes have better signal-to-noise?"* | **`swing_lab.py`** (CLI) |
-⚙
+| *"Does this specific strategy I already have work on this data?"* | **Section 4 — Backtest page** (single run, one strategy) |
+| *"Can I improve this strategy?"* | **Section 4 — Optimization** (iterative search) |
+| *"What happens if I trade 3 symbols with this strategy portfolio simultaneously?"* | **Section 5 — Lab page** (portfolio simulation) |
+| *"Is there any edge in momentum shorts on this coin at all?"* | **`impulse_lab.py`** (CLI) |
+| *"What's the best exit for this specific signal?"* | **`exit_lab.py`** (CLI) |
+| *"Does the signal survive realistic slippage?"* | **`stress_slippage.py`** (CLI) |
+| *"Can I collect funding risk-free?"* | **`funding_arb_lab.py`** (CLI) |
+| *"What's the realistic funding yield after basis risk?"* | **`funding_arb_risk_lab.py`** (CLI) |
+| *"Is there any cointegrated pair I can trade?"* | **`pairs_arb_lab.py`** (CLI) |
+| *"Which 3 of these 6 coins form the best portfolio?"* | **`portfolio_trios.py`** (CLI) |
+| *"Should I run a grid strategy?"* | **`grid_feasibility_lab.py`** then `grid_lab.py` (CLI) |
+| *"Do higher timeframes have better signal-to-noise?"* | **`swing_lab.py`** (CLI) |
 
 The decision matrix is not arbitrary: the UI Lab is for **portfolio-level validation**, all CLI labs are for **component research**. They answer different questions and you should not confuse them.
 
@@ -2983,24 +2912,22 @@ The decision matrix is not arbitrary: the UI Lab is for **portfolio-level valida
 
 ### 🧱 What makes the Lab trustworthy
 
-| Property ↕▾ | How it's achieved ↕▾ |
+| Property | How it's achieved |
 |---|---|
-| −**No single-dataset conclusions** | Every lab aggregates `exp_mean`, `frac_pos`, `pf_mean` across many (symbol, year) datasets |
-| −**No lookahead in positioning** | `merge_asof(direction="backward")` + `MAX_AGE` staleness check on naive-UTC arrays |
-| −**Exit parameters frozen** | In `exit_lab` and `swing_exit_lab`, the entry signal is fixed and only exits vary |
-| −**Signal discovery separated from exit tuning** | Different scripts — you cannot accidentally conflate the two |
-| −**Realistic costs in every test** | Taker and maker scenarios run separately; stress levels go up to 0.10% |
-| −**Regime independence tested** | Year-by-year breakdown required to be all-positive for portfolio verdicts |
-| −**Bankrupt is explicit, not silent** | `bankrupt=True` per symbol when capital hits zero |
-| −**Reports persist** | Every simulation writes a structured text file with full trade log |
-| −**Empirical findings frozen into archetypes** | Lab optimums become `exit_corridor` in production specs, not just documentation |
-| −**Findings traceable to specific iterations** | Comments in `archetypes.py` reference `impulse_lab iter N` |
-⚙
+| **No single-dataset conclusions** | Every lab aggregates `exp_mean`, `frac_pos`, `pf_mean` across many (symbol, year) datasets |
+| **No lookahead in positioning** | `merge_asof(direction="backward")` + `MAX_AGE` staleness check on naive-UTC arrays |
+| **Exit parameters frozen** | In `exit_lab` and `swing_exit_lab`, the entry signal is fixed and only exits vary |
+| **Signal discovery separated from exit tuning** | Different scripts — you cannot accidentally conflate the two |
+| **Realistic costs in every test** | Taker and maker scenarios run separately; stress levels go up to 0.10% |
+| **Regime independence tested** | Year-by-year breakdown required to be all-positive for portfolio verdicts |
+| **Bankrupt is explicit, not silent** | `bankrupt=True` per symbol when capital hits zero |
+| **Reports persist** | Every simulation writes a structured text file with full trade log |
+| **Empirical findings frozen into archetypes** | Lab optimums become `exit_corridor` in production specs, not just documentation |
+| **Findings traceable to specific iterations** | Comments in `archetypes.py` reference `impulse_lab iter N` |
 
 The Lab is where the system is allowed to be wrong. Every idea starts here as a hypothesis, dies or survives on numbers, and only then gets to influence the strategy that trades real money.
 
 ---
-
 
 
 ---
@@ -3080,13 +3007,12 @@ flowchart LR
 
 Starting a trader is not a button that flips a boolean. `AutoTraderSymbol.start()` runs **four** checks before a single thread is spawned:
 
-| # ↕▾ | Check ↕▾ | Failure behavior ↕▾ |
+| # | Check | Failure behavior |
 |---|---|---|
-| −1 | **No AutoMode running** for this symbol | Reject with warning — two loops fighting over one symbol would produce duplicate orders |
+| 1 | **No AutoMode running** for this symbol | Reject with warning — two loops fighting over one symbol would produce duplicate orders |
 | 2 | **Spec sanitization** — fill `max_hold_candles`, `trailing_atr_mult` if missing | Log the exception, continue — sanitization is a nice-to-have, not a gate |
 | 3 | **`validate_symbol_settings()`** — will the calculated notional actually clear Bybit's `minNotionalValue` at this leverage? | **Reject the start** — do not spin a loop that will reject every order |
 | 4 | **Not already running** | Silent `False` |
-⚙
 
 Only after all four pass does `is_running = True`, the config get written to `active_traders.json`, and the daemon thread start.
 
@@ -3210,11 +3136,10 @@ These land in `trade.entry_snapshot` — the same diagnostic gold as the backtes
 
 `_compute_tp_sl()` prefers ATR (specifically `atr_14_4h` for swing strategies, `atr_14` otherwise), falls back to percentages, but then applies **two hard limits**:
 
-| Cap ↕▾ | Value ↕▾ | Why ↕▾ |
+| Cap | Value | Why |
 |---|---|---|
-| −**`MAX_STOP_PCT`** | **2.5%** from entry | ATR can spike 10-20× on OHLCV outliers (especially testnet); an uncapped SL would be absurd |
+| **`MAX_STOP_PCT`** | **2.5%** from entry | ATR can spike 10-20× on OHLCV outliers (especially testnet); an uncapped SL would be absurd |
 | **`MAX_TAKE_PCT`** | **10.0%** from entry | Same reason, opposite side |
-⚙
 
 Both caps preserve the direction (long SL still below entry, etc.) — they just clamp the distance. The computation then rounds to `tickSize` via `executor.round_price()`. Without rounding, Bybit would reject `set_trading_stop` and the position would be left **without any protection at all**.
 
@@ -3295,11 +3220,10 @@ Atomic write via `tmp.replace(STATE_FILE)`.
 
 #### Two flags, one reset each
 
-| Flag ↕▾ | Set when ↕▾ | Reset when ↕▾ |
+| Flag | Set when | Reset when |
 |---|---|---|
-| −`daily_stop_triggered` | `should_stop_daily()` fires | New UTC day (in `_check_rollover`) |
+| `daily_stop_triggered` | `should_stop_daily()` fires | New UTC day (in `_check_rollover`) |
 | `monthly_optimization_triggered` | `should_optimize_monthly()` fires | New month (in `_check_rollover`), or `reset_monthly_optimization_flag()` |
-⚙
 
 The flags prevent the same trigger from firing on every loop iteration. `reset_monthly_optimization_flag` exists so a *second* optimization in the same month can trigger if the loss continues after the first — the auto-trader's `_run_optimization` doesn't reset it, but it can be reset externally if the situation demands.
 
@@ -3409,11 +3333,10 @@ Then rounded to `qtyStep` **down** (never up — rounding up would exceed the in
 
 `_should_use_limit_entry()` reads the current ATR as a percentage of price:
 
-| Condition ↕▾ | Entry type ↕▾ | Fee ↕▾ |
+| Condition | Entry type | Fee |
 |---|---|---|
-| −`atr / close × 100 > 0.8%` | **Post-only limit** | Maker (~0.02%) |
+| `atr / close × 100 > 0.8%` | **Post-only limit** | Maker (~0.02%) |
 | else | **Market** | Taker (~0.055%) |
-⚙
 
 The 0.8% threshold is a heuristic for volatility regime: on slow 15m strategies, a limit order placed near the current price is likely to fill and saves meaningful fees. On volatile moves, an unfilled limit order is just a missed trade — so market is safer.
 
@@ -3421,13 +3344,12 @@ The 0.8% threshold is a heuristic for volatility regime: on slow 15m strategies,
 
 Every open limit order lives in `_pending_limit_orders` and is polled each loop iteration:
 
-| Exchange status ↕▾ | Action ↕▾ |
+| Exchange status | Action |
 |---|---|
-| −`New`, `PartiallyFilled` | Keep waiting |
+| `New`, `PartiallyFilled` | Keep waiting |
 | `Filled` | Call `finalize_limit_entry()` with the actual filled qty and `avgPrice`, then place TP/SL |
 | `Cancelled` | Drop the order, log `ORDER_CANCELLED` |
 | **Age > 900 s** | Cancel via `executor.cancel_order()`, log `ORDER_TIMEOUT` |
-⚙
 
 At app restart, **any** pending limit orders in state are automatically cancelled — the code does not trust that the market context or spec are still the same after a restart, and would rather miss a trade than reopen one on stale reasoning.
 
@@ -3456,13 +3378,12 @@ Applied only if it tightens the stop (long: raises it; short: lowers it). `None`
 
 These are not decorative — each one corresponds to a real Bybit failure mode:
 
-| Guard ↕▾ | Reason ↕▾ |
+| Guard | Reason |
 |---|---|
-| −**`tickSize` must be available** | If missing, we skip the bar rather than send an unrounded SL that Bybit will reject — better to try again on the next candle than to lie in the UI that the SL was updated |
+| **`tickSize` must be available** | If missing, we skip the bar rather than send an unrounded SL that Bybit will reject — better to try again on the next candle than to lie in the UI that the SL was updated |
 | **Round first, then compare** | Comparing raw `88.8798` against `88.88` before rounding caused Bybit to see no change on the rounded value and respond `34040` every bar. Now we compare the rounded value |
 | **SL must be on the correct side of price** | `10001` is Bybit's "wrong side" error. We check `new_sl < close` (long) / `new_sl > close` (short) using the candle's close as a price proxy — no extra ticker request |
 | **TP is untouched** | Only the stop is updated; the take profit set at entry stays fixed |
-⚙
 
 Every successful stop update is written to `sl_updates` CSV with a `position_id` and a `reason` field (`breakeven`, `trailing`, or `breakeven+trailing`) — so a post-mortem can unambiguously link every SL move to a specific trade.
 
@@ -3495,13 +3416,12 @@ The taker fee itself is not hardcoded — `_setup_leverage()` calls `executor.ge
 
 When the exchange reports a position gone (size < 50% of the local qty), `_register_closed_position()` finds the matching Closed-PnL record:
 
-| Filter ↕▾ | Rule ↕▾ |
+| Filter | Rule |
 |---|---|
-| −**Side** | `Buy` for a long, `Sell` for a short |
-| −**Qty ratio** | Within ±50% of the local qty |
-| −**Timestamp** | Not earlier than `entry_time − 60s` |
+| **Side** | `Buy` for a long, `Sell` for a short |
+| **Qty ratio** | Within ±50% of the local qty |
+| **Timestamp** | Not earlier than `entry_time − 60s` |
 | **Dedup** | `orderId` must not already be in `_consumed_closed_pnl_ids` |
-⚙
 
 If the best match is found, real `closedPnl`, `avgExitPrice` and `avgEntryPrice` are used. If not, the code falls back to ticker price — a degraded but honest result, reflected in the log.
 
@@ -3511,13 +3431,12 @@ The `_consumed_closed_pnl_ids` set is **persisted** across restarts. Otherwise a
 
 The exchange does not say *why* a position closed. `_infer_exit_reason()` compares the exit price to known levels:
 
-| Exit price ≈ ↕▾ | Reason ↕▾ |
+| Exit price ≈ | Reason |
 |---|---|
-| −Current `stop_loss`, and ≈ entry (±0.2%) | `breakeven` |
-| −Current `stop_loss`, not ≈ entry | `stop_loss` |
+| Current `stop_loss`, and ≈ entry (±0.2%) | `breakeven` |
+| Current `stop_loss`, not ≈ entry | `stop_loss` |
 | Current `take_profit` | `take_profit` |
 | Neither | `manual_or_other` |
-⚙
 
 The 0.2% tolerance for breakeven detection matters: when trailing raises SL to exactly `entry × (1 + 0.001)`, an exit there looks like `stop_loss` to a naive comparison. The tolerance makes it classify as `breakeven`, which is what the user expects to see.
 
@@ -3585,14 +3504,13 @@ data/auto_trading/positions/SOLUSDT.json
 
 Contents:
 
-| Key ↕▾ | Purpose ↕▾ |
+| Key | Purpose |
 |---|---|
-| −`positions` | Full position list with all management state, SL/TP, entry snapshots |
-| −`pending_limit_orders` | Open limit orders (auto-cancelled on load) |
-| −`consumed_closed_pnl_ids` | Dedup set for Closed-PnL matching |
-| −`risk_controls_state` | `consecutive_losses`, `recent_loss_flags`, `cooldown_remaining` |
+| `positions` | Full position list with all management state, SL/TP, entry snapshots |
+| `pending_limit_orders` | Open limit orders (auto-cancelled on load) |
+| `consumed_closed_pnl_ids` | Dedup set for Closed-PnL matching |
+| `risk_controls_state` | `consecutive_losses`, `recent_loss_flags`, `cooldown_remaining` |
 | `saved_at` | ISO timestamp — drives the staleness check |
-⚙
 
 The write is atomic: `.json.tmp` → `os.replace()`. A crash mid-write cannot leave a corrupt state file.
 
@@ -3614,25 +3532,23 @@ The loop distinguishes two kinds of failures and treats them completely differen
 
 #### `ConnectionError` — network failure
 
-| Behavior ↕▾ |
+| Behavior |
 |---|
-| −Trading does **not** stop |
-| −Exponential backoff: 15 → 30 → 60 → 120 → 240 → 300 → 300 s cap |
+| Trading does **not** stop |
+| Exponential backoff: 15 → 30 → 60 → 120 → 240 → 300 → 300 s cap |
 | `_non_network_errors` reset to 0 (so a network blip doesn't "count" toward the bug threshold) |
 | Existing positions continue to be managed whenever the connection returns |
-⚙
 
 The logic: a network failure is not a bug in your strategy — it's the internet being the internet. Stopping the trader because Binance had a hiccup would be worse than useless, because the open positions would then be unattended. The trader should keep trying forever, backoff politely, and recover.
 
 #### Any other `Exception` — a bug
 
-| Behavior ↕▾ |
+| Behavior |
 |---|
-| −`_non_network_errors += 1` |
-| −Logged with full traceback |
-| −Sleep 60 s, retry |
-| −**After 60 consecutive non-network errors**, the trader stops itself with a red notification |
-⚙
+| `_non_network_errors += 1` |
+| Logged with full traceback |
+| Sleep 60 s, retry |
+| **After 60 consecutive non-network errors**, the trader stops itself with a red notification |
 
 The logic: if the code is broken, retrying forever will just fill the log. Sixty errors gives ample time for a transient issue to resolve (a payload shape change, a one-off parse error) while still catching a real bug within about an hour.
 
@@ -3644,15 +3560,14 @@ This is the difference between a resilient system and an annoying one.
 
 `get_state()` returns everything the Auto Trading page renders:
 
-| Group ↕▾ | Fields ↕▾ |
+| Group | Fields |
 |---|---|
-| −Lifecycle | `is_running`, `is_optimizing`, `status_message` |
+| Lifecycle | `is_running`, `is_optimizing`, `status_message` |
 | Heartbeat | `last_iteration_utc`, `last_candle_time`, `last_price`, `last_indicators_summary`, `candles_processed`, `_last_iteration_ts` |
 | Positions | `open_positions`, `allocated_capital`, `current_capital` |
 | PnL | `daily_pnl`, `daily_pnl_pct`, `monthly_pnl`, `monthly_pnl_pct` |
 | Limits | `daily_loss_limit`, `monthly_loss_limit` |
 | Log | `log_lines[-20:]` |
-⚙
 
 The **`_last_iteration_ts`** field is what the UI uses for its stale-check: if a trader shows `is_running = True` but `now − _last_iteration_ts > 120 s`, the UI flips the status to 🟡 *"Нет данных (ошибка сети?)"* — because a live trader that hasn't ticked in two minutes is not healthy, no matter what the boolean says.
 
@@ -3703,9 +3618,9 @@ So an orphan does not go unmanaged forever *by accident* — it goes unmanaged *
 
 ### 🧱 Constants that shape behavior
 
-| Constant ↕▾ | Value ↕▾ | Source ↕▾ | Why this number ↕▾ |
+| Constant | Value | Source | Why this number |
 |---|---|---|---|
-| −`MAX_POSITIONS_PER_SYMBOL` | **1** | `auto_trader.py` | No pyramiding; one thesis per coin |
+| `MAX_POSITIONS_PER_SYMBOL` | **1** | `auto_trader.py` | No pyramiding; one thesis per coin |
 | `NETWORK_RETRY_LIMIT` | **60** | `auto_trader.py` | Bug threshold — below this, transient noise; above, unfixable loop |
 | `DATA_FETCH_MIN_INTERVAL_SEC` | **240 s** | `auto_trader.py` | Below Bybit rate limit with margin |
 | `DEFAULT_TRAILING_ATR_MULT` | **2.0** | `auto_trader.py` | Standard trend-follow distance |
@@ -3720,7 +3635,6 @@ So an orphan does not go unmanaged forever *by accident* — it goes unmanaged *
 | `get_instruments_info` retries | **3** with 1s/2s backoff | `executor.py` | Testnet transient errors |
 | Default taker fee | **0.055%** | `executor.py` | Fallback if `get_fee_rates` fails |
 | Default `minNotionalValue` | **5.0 USDT** | `executor.py` | Bybit default for linear |
-⚙
 
 ---
 
@@ -3810,7 +3724,6 @@ sequenceDiagram
 Every arrow in that diagram is a place where something could go wrong. The value of `trading/` being five focused modules instead of one 2500-line file is that each arrow has exactly one owner, and when something fails, you know exactly which module to look at.
 
 ---
-
 
 
 ---
