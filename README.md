@@ -4,7 +4,7 @@ Your comments and suggestions always welcome.
 
 ## ⚠️ Disclaimer
 
-**Last updated: [date]**
+**Last updated: 04.11.2026**
 
 This software ("the Bot", "the Software") is provided for informational and technical purposes only.
 By cloning, running, configuring, or otherwise using the Software, you fully accept this Disclaimer
