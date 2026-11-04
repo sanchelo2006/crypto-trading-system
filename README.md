@@ -1,33 +1,6 @@
-⚠️ **Disclaimer:** This project is a technical tool, **not financial advice**. Trading cryptocurrencies
-> involves substantial risk, including the **total loss of your funds**. Past performance and backtests
-> do **not** guarantee future results. Use at your own risk, only with funds you can afford to lose,
-> and always review the code before connecting real API keys.
-
 This is trading system for manual and automatic trading on cryptomarket. I build short and in details descriptions (2 files PROJECT_OVERVIEW(SHORT).md and PROJECT_OVERVIEW.md).
 In very short: this system use AI for advices and optimization trading strategies. Have very good instrument - strategy_spec (logic - AI build strategy and convert it to commands which can work without AI). Project on Russian language, if somebody interest i can translate it to English.
 Your comments and suggestions always welcome.
-
-## 📄 License
-
-This project is licensed under the **Business Source License 1.1 (BSL-1.1)**.
-
-### What you CAN do:
-- ✅ Read, study, and learn from the code
-- ✅ Fork the repository for educational purposes
-- ✅ Use the code for personal, non-commercial experimentation
-- ✅ Modify the code for your own learning
-
-### What you CANNOT do:
-- ❌ Use the software for live cryptocurrency trading
-- ❌ Use the software to provide trading services to others
-- ❌ Sell, sublicense, or commercially exploit the software
-- ❌ Deploy the software as a service (SaaS)
-
-The Licensed Work will become available under the Apache License 2.0 on **January 1, 2029**.
-
-For commercial licensing inquiries, contact: sanchelo2006@yandex.ru
-
-Full license text: [LICENSE](LICENSE)
 
 ## ⚠️ Disclaimer
 
@@ -121,3 +94,25 @@ Continued use of the Software after changes are published constitutes your accep
 
 By running the Software, connecting API keys, or otherwise using it, you confirm that you have read
 and understood this Disclaimer and accept all associated risks in full.
+
+## 📄 License
+
+This project is licensed under the **Business Source License 1.1 (BSL-1.1)**.
+
+### What you CAN do:
+- ✅ Read, study, and learn from the code
+- ✅ Fork the repository for educational purposes
+- ✅ Use the code for personal, non-commercial experimentation
+- ✅ Modify the code for your own learning
+
+### What you CANNOT do:
+- ❌ Use the software for live cryptocurrency trading
+- ❌ Use the software to provide trading services to others
+- ❌ Sell, sublicense, or commercially exploit the software
+- ❌ Deploy the software as a service (SaaS)
+
+The Licensed Work will become available under the Apache License 2.0 on **January 1, 2029**.
+
+For commercial licensing inquiries, contact: sanchelo2006@yandex.ru
+
+Full license text: [LICENSE](LICENSE)
