@@ -1,120 +1,120 @@
-This is trading system for manual and automatic trading on cryptomarket. I build short and in details descriptions (2 files PROJECT_OVERVIEW(SHORT).md and PROJECT_OVERVIEW.md).
-In very short: this system use AI for advices and optimization trading strategies. Have very good instrument - strategy_spec (logic - AI build strategy and convert it to commands which can work without AI). Project on Russian language, if somebody interest i can translate it to English.
-Your comments and suggestions always welcome.
+Это торговая система для ручной и автоматической торговли на крипторынке. Я подготовил краткое и подробное описание (2 файла PROJECT_OVERVIEW(SHORT).md и PROJECT_OVERVIEW.md).
+В очень кратком виде: данная система использует ИИ для консультаций и оптимизации торговых стратегий. Обладает очень хорошим инструментом — strategy_spec (логика: ИИ строит стратегию и преобразует её в команды, которые могут работать без ИИ). Проект на русском языке; если кому-то интересно, я могу перевести его на английский.
+Ваши комментарии и предложения всегда приветствуются.
 
-## ⚠️ Disclaimer
+## ⚠️ Отказ от ответственности
 
-**Last updated: 04.11.2026**
+**Последнее обновление: 04.11.2026**
 
-users must disable withdrawal permissions on their API keys !!!!!
+пользователи должны отключить разрешение на вывод средств в своих API-ключах !!!!!
 
-This software ("the Bot", "the Software") is provided for informational and technical purposes only.
-By cloning, running, configuring, or otherwise using the Software, you fully accept this Disclaimer
-and the terms of the [LICENSE](LICENSE) file. If you do not agree, do not use the Software.
+Данное программное обеспечение («Бот», «Программное обеспечение») предоставляется исключительно в информационных и технических целях.
+Клонируя, запуская, настраивая или иным образом используя Программное обеспечение, вы полностью принимаете настоящий Отказ от ответственности
+и условия файла [LICENSE](LICENSE). Если вы не согласны, не используйте Программное обеспечение.
 
-### Not financial advice
+### Не является финансовой консультацией
 
-Nothing in this repository — including source code, documentation, comments, issues, pull requests,
-configuration examples, strategy parameters, logs, or communications with the maintainers — constitutes:
+Ничто в данном репозитории — включая исходный код, документацию, комментарии, issues, pull requests,
+примеры конфигурации, параметры стратегий, журналы или переписку с сопровождающими — не является:
 
-- investment, financial, legal, or tax advice;
-- a recommendation or solicitation to buy, sell, or hold any asset;
-- a guarantee or prediction of profit;
-- an invitation to enter into any transaction.
+- инвестиционной, финансовой, юридической или налоговой консультацией;
+- рекомендацией или предложением купить, продать или удерживать какой-либо актив;
+- гарантией или прогнозом прибыли;
+- приглашением к заключению какой-либо сделки.
 
-All trading decisions are made **by you, and you alone**. The maintainers are not registered as
-investment advisors or brokers in any jurisdiction.
+Все торговые решения принимаете **вы и только вы**. Сопровождающие не зарегистрированы в качестве
+инвестиционных советников или брокеров ни в одной юрисдикции.
 
-### No guarantee of profitability
+### Отсутствие гарантии доходности
 
-Backtests, historical results, optimization output, paper-trading metrics, and any performance figures
-shown in this repository are **illustrative only**. They were produced under conditions that may differ
-from yours — different fees, spreads, liquidity, latency, slippage, exchange rules, and market regimes.
-Past performance does **not** guarantee future results. The Software may be unprofitable, may contain
-bugs, and may not be suitable for your goals.
+Бэктесты, исторические результаты, результаты оптимизации, метрики бумажной торговли и любые показатели эффективности,
+приведённые в данном репозитории, носят **исключительно иллюстративный характер**. Они получены в условиях, которые могут отличаться
+от ваших — иные комиссии, спреды, ликвидность, задержки, проскальзывание, правила биржи и рыночные режимы.
+Прошлые результаты **не гарантируют** будущих результатов. Программное обеспечение может быть убыточным, может содержать
+ошибки и может не соответствовать вашим целям.
 
-### Risks
+### Риски
 
-Trading digital assets carries a high level of risk, including the **risk of losing your entire
-deposit**. By using the Software you acknowledge, among others:
+Торговля цифровыми активами сопряжена с высоким уровнем риска, включая **риск потери всего
+депозита**. Используя Программное обеспечение, вы признаёте, среди прочего:
 
-- **Volatility** — crypto prices can move tens of percent within minutes.
-- **Leverage and liquidation** — when margin or futures are used, losses can exceed the initial
-  deposit and positions may be forcibly liquidated.
-- **Liquidity and slippage** — execution at the expected price is not guaranteed, especially on thin
-  markets or during sharp moves.
-- **Technical failures** — bugs in the code, network latency, exchange outages, API rate limits,
-  endpoint changes, symbol delistings, token forks/migrations, and hosting or provider downtime.
-- **Security** — leakage or compromise of API keys, account takeover, phishing, and malware.
-  You are solely responsible for storing keys securely and for restricting their permissions
-  (e.g. **disable withdrawal rights**).
-- **Fees and funding** — trading fees, network fees, and perpetual funding rates can materially
-  affect results.
-- **Regulatory risk** — changes in law, exchange access restrictions, and tax consequences.
-- **Human error** — misconfiguration, running multiple instances, or choosing the wrong instrument
-  or position size.
+- **Волатильность** — цены на криптоактивы могут изменяться на десятки процентов за минуты.
+- **Кредитное плечо и ликвидация** — при использовании маржи или фьючерсов убытки могут превышать первоначальный
+  депозит, а позиции могут быть принудительно ликвидированы.
+- **Ликвидность и проскальзывание** — исполнение по ожидаемой цене не гарантируется, особенно на тонких
+  рынках или при резких движениях.
+- **Технические сбои** — ошибки в коде, задержки сети, сбои биржи, ограничения скорости API,
+  изменения эндпоинтов, делистинг символов, форки/миграции токенов, а также простои хостинга или провайдера.
+- **Безопасность** — утечка или компрометация API-ключей, захват аккаунта, фишинг и вредоносное ПО.
+  Вы несёте исключительную ответственность за безопасное хранение ключей и ограничение их прав
+  (например, **отключение права на вывод средств**).
+- **Комиссии и финансирование** — торговые комиссии, сетевые комиссии и ставки финансирования бессрочных контрактов могут существенно
+  влиять на результаты.
+- **Регуляторный риск** — изменения в законодательстве, ограничения доступа к биржам и налоговые последствия.
+- **Человеческий фактор** — ошибки конфигурации, запуск нескольких экземпляров или выбор неверного инструмента
+  либо размера позиции.
 
-### Your responsibilities
+### Ваша ответственность
 
-You are solely responsible for:
+Вы несёте исключительную ответственность за:
 
-- assessing whether the Software fits your objectives, experience, and risk tolerance;
-- determining your trading capital and never risking funds whose loss would be critical to you;
-- ensuring that using the Software is legal in your jurisdiction and paying any applicable taxes;
-- safeguarding your API keys, passwords, and device access;
-- testing the Software on a testnet or demo account **before** running it with real funds.
+- оценку того, соответствует ли Программное обеспечение вашим целям, опыту и толерантности к риску;
+- определение вашего торгового капитала и недопущение риска средствами, потеря которых была бы для вас критичной;
+- обеспечение законности использования Программного обеспечения в вашей юрисдикции и уплату применимых налогов;
+- защиту ваших API-ключей, паролей и доступа к устройствам;
+- тестирование Программного обеспечения на тестовой сети или демо-счёте **до** запуска с реальными средствами.
 
-### Limitation of liability
+### Ограничение ответственности
 
-To the maximum extent permitted by applicable law, the authors and maintainers of the Software shall
-not be liable for any direct, indirect, incidental, special, consequential, or punitive damages —
-including lost profits, lost deposits, lost opportunity, downtime, or data loss — arising out of or in
-connection with the use of, or inability to use, the Software, even if advised of the possibility of
-such damages.
+В максимальной степени, допускаемой применимым законодательством, авторы и сопровождающие Программного обеспечения
+не несут ответственности за любые прямые, косвенные, случайные, специальные, последующие или штрафные убытки —
+включая упущенную прибыль, потерянные депозиты, упущенную выгоду, простои или потерю данных — возникшие в связи с использованием
+или невозможностью использования Программного обеспечения, даже если им сообщали о возможности
+таких убытков.
 
-The Software is provided **"as is"** and **"as available"**, without warranty of any kind, express or
-implied, including but not limited to the warranties of merchantability, fitness for a particular
-purpose, and non-infringement.
+Программное обеспечение предоставляется **«как есть»** и **«как доступно»**, без каких-либо гарантий, явных или
+подразумеваемых, включая, помимо прочего, гарантии товарной пригодности, пригодности для конкретной
+цели и ненарушения прав.
 
-### No fiduciary relationship
+### Отсутствие фидуциарных отношений
 
-Using the Software does not create any fiduciary, advisory, brokerage, or agency relationship between
-you and the authors or maintainers. The maintainers do not hold, manage, or have access to your funds.
+Использование Программного обеспечения не создаёт каких-либо фидуциарных, консультационных, брокерских или агентских отношений между
+вами и авторами или сопровождающими. Сопровождающие не хранят, не управляют вашими средствами и не имеют к ним доступа.
 
-### Eligibility
+### Допустимость использования
 
-The Software is intended for adults of legal age. You confirm that you are not subject to sanctions or
-regulatory restrictions that prohibit you from using digital assets or automated trading, and that such
-use is not prohibited in your jurisdiction.
+Программное обеспечение предназначено для совершеннолетних лиц, достигших установленного законом возраста. Вы подтверждаете, что не находитесь под действием санкций или
+регуляторных ограничений, запрещающих вам использование цифровых активов или автоматизированной торговли, и что такое
+использование не запрещено в вашей юрисдикции.
 
-### Changes
+### Изменения
 
-This Disclaimer may be updated at any time. The current version is always available in this repository.
-Continued use of the Software after changes are published constitutes your acceptance of them.
+Настоящий Отказ от ответственности может быть обновлён в любое время. Актуальная версия всегда доступна в данном репозитории.
+Продолжение использования Программного обеспечения после публикации изменений означает ваше согласие с ними.
 
-### Acceptance
+### Принятие условий
 
-By running the Software, connecting API keys, or otherwise using it, you confirm that you have read
-and understood this Disclaimer and accept all associated risks in full.
+Запуская Программное обеспечение, подключая API-ключи или иным образом используя его, вы подтверждаете, что прочитали
+и поняли настоящий Отказ от ответственности и в полной мере принимаете все связанные с ним риски.
 
-## 📄 License
+## 📄 Лицензия
 
-This project is licensed under the **Business Source License 1.1 (BSL-1.1)**.
+Данный проект лицензирован в соответствии с **Business Source License 1.1 (BSL-1.1)**.
 
-### What you CAN do:
-- ✅ Read, study, and learn from the code
-- ✅ Fork the repository for educational purposes
-- ✅ Use the code for personal, non-commercial experimentation
-- ✅ Modify the code for your own learning
+### Что вы МОЖЕТЕ делать:
+- ✅ Читать, изучать и учиться на исходном коде
+- ✅ Форкать репозиторий в образовательных целях
+- ✅ Использовать код для личных некоммерческих экспериментов
+- ✅ Изменять код для собственного обучения
 
-### What you CANNOT do:
-- ❌ Use the software for live cryptocurrency trading
-- ❌ Use the software to provide trading services to others
-- ❌ Sell, sublicense, or commercially exploit the software
-- ❌ Deploy the software as a service (SaaS)
+### Что вы НЕ МОЖЕТЕ делать:
+- ❌ Использовать программное обеспечение для реальной торговли криптовалютами
+- ❌ Использовать программное обеспечение для предоставления торговых услуг другим лицам
+- ❌ Продавать, сублицензировать или коммерчески эксплуатировать программное обеспечение
+- ❌ Развёртывать программное обеспечение как сервис (SaaS)
 
-The Licensed Work will become available under the Apache License 2.0 on **January 1, 2029**.
+Лицензируемая работа станет доступной на условиях Apache License 2.0 с **1 января 2029 года**.
 
-For commercial licensing inquiries, contact: sanchelo2006@yandex.ru
+По вопросам коммерческого лицензирования обращайтесь: sanchelo2006@yandex.ru
 
-Full license text: [LICENSE](LICENSE)
+Полный текст лицензии: [LICENSE](LICENSE)
