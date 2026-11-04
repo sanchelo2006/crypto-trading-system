@@ -6,6 +6,8 @@ Your comments and suggestions always welcome.
 
 **Last updated: 04.11.2026**
 
+users must disable withdrawal permissions on their API keys !!!!!
+
 This software ("the Bot", "the Software") is provided for informational and technical purposes only.
 By cloning, running, configuring, or otherwise using the Software, you fully accept this Disclaimer
 and the terms of the [LICENSE](LICENSE) file. If you do not agree, do not use the Software.
