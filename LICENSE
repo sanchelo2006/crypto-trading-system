@@ -1,51 +1,51 @@
 Business Source License 1.1
 
-License text copyright (c) 2017 MariaDB Corporation Ab, All Rights Reserved.
-"Business Source License" is a trademark of MariaDB Corporation Ab.
+Текст лицензии, copyright (c) 2017 MariaDB Corporation Ab, All Rights Reserved.
+"Business Source License" является товарным знаком MariaDB Corporation Ab.
 
 --------------------------------------------------------------------------
 
-Parameters
+Параметры
 
-Licensor:             Alexander Surkov
-Licensed Work:        Crypto Trading System
-                      The Licensed Work is (c) 2026 Alexander Surkov.
-Additional Use Grant: You may make use of the Licensed Work, provided that
-                      you do not use the Licensed Work for a Production
-                      Purpose that involves live cryptocurrency trading or
-                      providing trading services to third parties.
-Change Date:          2029-01-01
-Change License:       Apache License, Version 2.0
+Лицензиар:            Александр Сурков
+Лицензируемая работа: Крипто-торговая система
+                      Лицензируемая работа является (c) 2026 Александр Сурков.
+Дополнительное разрешение на использование:
+                      Вы можете использовать Лицензируемую работу при условии,
+                      что вы не используете Лицензируемую работу в Производственных
+                      целях, связанных с реальной торговлей криптовалютами или
+                      предоставлением торговых услуг третьим лицам.
+Дата изменения:       2029-01-01
+Лицензия после изменения: Apache License, Version 2.0
 
-For information about alternative licensing arrangements for the Software,
-please contact sanchelo2006@yandex.ru.
+Для получения информации об альтернативных лицензионных соглашениях на Программное обеспечение
+обращайтесь по адресу: sanchelo2006@yandex.ru.
 
 --------------------------------------------------------------------------
 
-Terms
+Условия
 
-The Licensor hereby grants you the right to copy, modify, create derivative
-works, redistribute, and make non-production use of the Licensed Work.
+Настоящим Лицензиар предоставляет вам право копировать, изменять, создавать производные
+произведения, распространять и использовать Лицензируемую работу в непроизводственных целях.
 
-Effective on the Change Date, or the fourth anniversary of the first
-publicly available distribution of a specific version of the Licensed Work
-under this License, whichever comes first, the Licensor hereby grants you
-rights under the terms of the Change License, and the rights granted in
-the paragraph above terminate.
+С даты вступления в силу Даты изменения или с четвёртой годовщины первого
+публично доступного распространения конкретной версии Лицензируемой работы
+по настоящей Лицензии — в зависимости от того, что наступит раньше, — Лицензиар настоящим предоставляет вам
+права на условиях Лицензии после изменения, а права, предоставленные
+в предыдущем абзаце, прекращаются.
 
-If your use of the Licensed Work does not comply with the requirements
-currently in effect as described in this License, you must purchase a
-commercial license from the Licensor, its affiliated entities, or
-authorized resellers, or you must refrain from using the Licensed Work.
+Если ваше использование Лицензируемой работы не соответствует требованиям,
+действующим на текущий момент в соответствии с настоящей Лицензией, вы обязаны приобрести
+коммерческую лицензию у Лицензиара, его аффилированных лиц или
+уполномоченных реселлеров, либо вы обязаны воздержаться от использования Лицензируемой работы.
 
-All copies of the original and modified Licensed Work, and derivative
-works of the Licensed Work, are subject to this License. This License
-applies separately to each version of the Licensed Work and the Change
-Date may vary for each version.
+Все копии оригинальной и изменённой Лицензируемой работы, а также производные
+произведения Лицензируемой работы подпадают под действие настоящей Лицензии. Настоящая Лицензия
+применяется отдельно к каждой версии Лицензируемой работы, и Дата изменения может различаться для каждой версии.
 
-You must conspicuously display this License on each original or modified
-copy of the Licensed Work. If you receive the Licensed Work in original
-form from a third party, the terms and conditions provided by the third
-party shall prevail.
+Вы обязаны явно отображать настоящую Лицензию на каждой оригинальной или изменённой
+копии Лицензируемой работы. Если вы получаете Лицензируемую работу в оригинальной
+форме от третьей стороны, преимущественную силу имеют условия и положения, предоставленные третьей
+стороной.
 
-THE LICENSED WORK IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
+ЛИЦЕНЗИРУЕМАЯ РАБОТА ПРЕДОСТАВЛЯЕТСЯ «КАК ЕСТЬ», БЕЗ КАКИХ-ЛИБО ГАРАНТИЙ.
