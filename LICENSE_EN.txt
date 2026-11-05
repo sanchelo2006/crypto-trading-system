@@ -1,0 +1,51 @@
+Business Source License 1.1
+
+License text copyright (c) 2017 MariaDB Corporation Ab, All Rights Reserved.
+"Business Source License" is a trademark of MariaDB Corporation Ab.
+
+--------------------------------------------------------------------------
+
+Parameters
+
+Licensor:             Alexander Surkov
+Licensed Work:        Crypto Trading System
+                      The Licensed Work is (c) 2026 Alexander Surkov.
+Additional Use Grant:
+                      You may use the Licensed Work provided
+                      that you do not use the Licensed Work for Production
+                      purposes related to real cryptocurrency trading or
+                      the provision of trading services to third parties.
+Change Date:          2029-01-01
+Change License:       Apache License, Version 2.0
+
+For information about alternative licensing arrangements for the Software,
+please contact: sanchelo2006@yandex.ru.
+
+--------------------------------------------------------------------------
+
+Terms
+
+The Licensor hereby grants you the right to copy, modify, create derivative
+works, redistribute, and make non-production use of the Licensed Work.
+
+Effective on the Change Date, or the fourth anniversary of the first
+publicly available distribution of a specific version of the Licensed Work
+under this License, whichever comes first, the Licensor hereby grants you
+rights under the terms of the Change License, and the rights granted
+in the paragraph above terminate.
+
+If your use of the Licensed Work does not comply with the requirements
+currently in effect under this License, you must purchase
+a commercial license from the Licensor, its affiliated entities or
+authorized resellers, or you must refrain from using the Licensed Work.
+
+All copies of the original and modified Licensed Work, as well as derivative
+works of the Licensed Work, are subject to this License. This License
+applies separately to each version of the Licensed Work, and the Change Date may differ for each version.
+
+You must conspicuously display this License on each original or modified
+copy of the Licensed Work. If you receive the Licensed Work in original
+form from a third party, the terms and conditions provided by the third
+party shall prevail.
+
+THE LICENSED WORK IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND.
