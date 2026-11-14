@@ -1,16 +1,16 @@
 """
-Агрегация исторического P&L по месяцам из trade-логов автоторговли.
+Aggregation of historical monthly P&L from auto-trading trade logs.
 
-Источник данных — CSV-файлы data/auto_trading/logs/{SYMBOL}_trades_YYYY_MM.csv,
-которые ведёт TradeLogger. Они содержат колонки pnl_usdt и result_pct по
-каждой закрытой сделке. Отдельного файла истории не нужно.
+Data source: CSV files data/auto_trading/logs/{SYMBOL}_trades_YYYY_MM.csv
+maintained by TradeLogger. They contain the pnl_usdt and result_pct columns
+for every closed trade. No separate history file is needed.
 
-Модуль read-only: ничего не пишет, только читает и агрегирует.
+The module is read-only: it writes nothing, only reads and aggregates.
 
-Капитал на конец месяца (вариант a): current_capital из risk_state.json —
-это капитал СЕЙЧАС (на конец последнего месяца с данными). Идём с конца,
-вычитая P&L более поздних месяцев. Если были пополнения/выводы — значение
-приблизительное.
+Capital at month end (option a): current_capital from risk_state.json is
+the capital NOW (at the end of the latest month with data). We walk backwards,
+subtracting the P&L of later months. If there were deposits or withdrawals,
+the value is approximate.
 """
 import csv
 import json
@@ -27,7 +27,7 @@ RISK_STATE_FILE = config.DATA_DIR / "auto_trading" / "risk_state.json"
 
 
 def _iter_trade_csvs(symbol: str) -> List[Path]:
-    """Список CSV-файлов сделок монеты, отсортированный по имени (=месяц)."""
+    """List of the coin's trade CSV files, sorted by name (= month)."""
     if not LOGS_DIR.exists():
         return []
     pattern = f"{symbol}_trades_*.csv"
@@ -35,7 +35,7 @@ def _iter_trade_csvs(symbol: str) -> List[Path]:
 
 
 def _month_from_filename(path: Path, symbol: str) -> Optional[str]:
-    """Извлекает YYYY-MM из имени {SYMBOL}_trades_YYYY_MM.csv."""
+    """Extracts YYYY-MM from the name {SYMBOL}_trades_YYYY_MM.csv."""
     stem = path.stem
     prefix = f"{symbol}_trades_"
     if not stem.startswith(prefix):
@@ -55,10 +55,9 @@ def _safe_float(value, default: float = 0.0) -> float:
 
 
 def _read_month_csv(path: Path) -> Dict:
-    """Читает один месячный CSV. Возвращает {"trades": int, "pnl_usdt": float}."""
+    """Reads one monthly CSV. Returns {"trades": int, "pnl_usdt": float}."""
     trades = 0
     pnl_sum = 0.0
-
     try:
         with open(path, "r", encoding="utf-8-sig", newline="") as f:
             reader = csv.DictReader(f)
@@ -66,14 +65,13 @@ def _read_month_csv(path: Path) -> Dict:
                 trades += 1
                 pnl_sum += _safe_float(row.get("pnl_usdt", 0.0))
     except Exception:
-        logger.exception(f"Не удалось прочитать trade-лог {path}")
+        logger.exception(f"Failed to read trade log {path}")
         return {"trades": 0, "pnl_usdt": 0.0}
-
     return {"trades": trades, "pnl_usdt": pnl_sum}
 
 
 def _load_current_capital(symbol: str) -> Optional[float]:
-    """current_capital монеты из risk_state.json (None, если нет)."""
+    """The coin's current_capital from risk_state.json (None if absent)."""
     if not RISK_STATE_FILE.exists():
         return None
     try:
@@ -85,15 +83,15 @@ def _load_current_capital(symbol: str) -> Optional[float]:
         cap = entry.get("current_capital")
         return float(cap) if cap is not None else None
     except Exception:
-        logger.exception(f"Не удалось прочитать risk_state для {symbol}")
+        logger.exception(f"Failed to read risk_state for {symbol}")
         return None
 
 
 def get_monthly_pnl(symbol: str) -> List[Dict]:
     """
-    Месячные записи для одной монеты, отсортированные по возрастанию месяца:
-      [{"month": "2026-09", "pnl_usdt": -1.23, "trades": 5, "capital_end": 24.5}, ...]
-    capital_end = None, если данных о капитале нет.
+    Monthly records for one coin, sorted by month ascending:
+    [{"month": "2026-09", "pnl_usdt": -1.23, "trades": 5, "capital_end": 24.5}, ...]
+    capital_end = None if there is no capital data.
     """
     files = _iter_trade_csvs(symbol)
     if not files:
@@ -131,8 +129,8 @@ def get_monthly_pnl(symbol: str) -> List[Dict]:
 
 def get_all_symbols_monthly(symbols: List[str]) -> List[Dict]:
     """
-    Сводные месячные P&L по списку монет.
-    capital_end — сумма капиталов монет на конец месяца.
+    Aggregated monthly P&L for a list of coins.
+    capital_end is the sum of the coins' capital at month end.
     """
     per_symbol = {s: get_monthly_pnl(s) for s in symbols}
 

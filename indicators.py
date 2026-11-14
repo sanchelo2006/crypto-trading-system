@@ -1,6 +1,6 @@
 """
-Расчёт технических индикаторов с использованием TA-Lib.
-Добавлены MACD, объёмный профиль (адаптивные бины) и ADX.
+Technical indicator calculation using TA-Lib.
+Includes MACD, volume profile (adaptive bins) and ADX.
 """
 import pandas as pd
 import numpy as np
@@ -10,11 +10,12 @@ try:
     import talib
 except ImportError:
     raise ImportError(
-        "TA-Lib не установлен. Установите его:\n"
-        "  Windows (рекомендуется): скачайте wheel с https://github.com/cgohlke/talib-build/releases\n"
-        "  Или: conda install -c conda-forge ta-lib\n"
-        "  Или: pip install TA-Lib (требуется C-библиотека)"
+        "TA-Lib is not installed. Install it:\n"
+        "  Windows (recommended): download a wheel from https://github.com/cgohlke/talib-build/releases\n"
+        "  Or: conda install -c conda-forge ta-lib\n"
+        "  Or: pip install TA-Lib (requires the C library)"
     )
+
 
 def calculate_volume_profile(
     df: pd.DataFrame,
@@ -24,31 +25,31 @@ def calculate_volume_profile(
     bin_width_atr_mult: float = 0.3
 ) -> List[Tuple[float, float]]:
     """
-    Рассчитывает объёмный профиль: топ-N ценовых уровней с наибольшим объёмом.
+    Calculates the volume profile: top-N price levels with the highest volume.
+    If num_bins is not set, the number of bins is determined adaptively:
+    bin width = ATR * bin_width_atr_mult, but no fewer than 10 and no more than 40 bins.
 
-    Если num_bins не задан, количество бинов определяется адаптивно:
-    ширина бина = ATR * bin_width_atr_mult, но не менее 10 и не более 40 бинов.
+    Parameters:
+        df: DataFrame with high, low, close, volume columns (and optionally timestamp)
+        num_bins: fixed number of bins (None = adaptive)
+        top_n: how many levels to return
+        atr_period: period for ATR calculation (if num_bins=None)
+        bin_width_atr_mult: ATR multiplier for the bin width
 
-    Параметры:
-        df: DataFrame с колонками high, low, close, volume (и опционально timestamp)
-        num_bins: фиксированное количество бинов (None = адаптивно)
-        top_n: сколько уровней вернуть
-        atr_period: период для расчёта ATR (если num_bins=None)
-        bin_width_atr_mult: множитель ATR для ширины бина
-
-    Возвращает:
-        Список кортежей (price_level, volume), отсортированный по убыванию объёма.
+    Returns:
+        List of tuples (price_level, volume), sorted by volume descending.
     """
     if df.empty or 'volume' not in df.columns:
         return []
 
     price_high = df['high'].max()
     price_low = df['low'].min()
+
     if price_high == price_low:
         return [(price_high, df['volume'].sum())]
 
     if num_bins is None:
-        # Адаптивный расчёт количества бинов на основе ATR
+        # Adaptive bin count based on ATR
         high_arr = df['high'].values.astype(np.float64)
         low_arr = df['low'].values.astype(np.float64)
         close_arr = df['close'].values.astype(np.float64)
@@ -67,6 +68,7 @@ def calculate_volume_profile(
         candle_low = row['low']
         candle_high = row['high']
         vol = row['volume']
+
         if candle_high == candle_low:
             bin_idx = np.digitize(candle_low, bins) - 1
             if 0 <= bin_idx < num_bins:
@@ -88,6 +90,7 @@ def calculate_volume_profile(
 
     return result
 
+
 def calculate_indicators(
     df_15m: pd.DataFrame,
     df_1h_for_pivot: pd.DataFrame = None,
@@ -97,23 +100,24 @@ def calculate_indicators(
     volume_profile_bins: Optional[int] = None
 ) -> Dict[str, Any] | Tuple[Dict[str, Any], list]:
     """
-    Рассчитывает технические индикаторы с помощью TA-Lib на основе 15-минутных свечей.
-    VWAP сбрасывается каждый день в 00:00 UTC.
-    Pivot Points рассчитываются по дневным свечам.
-    Добавлены MACD, ADX и опционально объёмный профиль (адаптивные бины, если bins=None).
+    Calculates technical indicators with TA-Lib based on 15-minute candles.
+    VWAP resets every day at 00:00 UTC.
+    Pivot Points are calculated from daily candles.
+    Includes MACD, ADX and optionally the volume profile (adaptive bins if bins=None).
 
-    Параметры:
-        df_15m: DataFrame со свечами 15m
-        df_1h_for_pivot: DataFrame со свечами 1h или дневными за 5 дней (опционально)
-        num_latest: количество последних значений индикаторов для возврата
-        return_timestamps: если True, возвращает также список временных меток
-        include_volume_profile: если True, рассчитывает и добавляет объёмный профиль
-        volume_profile_bins: количество бинов (None = адаптивно)
+    Parameters:
+        df_15m: DataFrame with 15m candles
+        df_1h_for_pivot: DataFrame with 1h or daily candles for 5 days (optional)
+        num_latest: number of latest indicator values to return
+        return_timestamps: if True, also returns a list of timestamps
+        include_volume_profile: if True, calculates and adds the volume profile
+        volume_profile_bins: number of bins (None = adaptive)
     """
     if df_15m.empty or len(df_15m) < 20:
         return ({}, []) if return_timestamps else {}
 
     df = df_15m.copy()
+
     if 'open' not in df.columns:
         if len(df.columns) >= 5:
             df.columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume'][:len(df.columns)]
@@ -145,12 +149,13 @@ def calculate_indicators(
     # --- ADX ---
     adx_14 = talib.ADX(high, low, close, timeperiod=14)
 
-    # --- VWAP с ресетом каждый день в 00:00 UTC ---
+    # --- VWAP with a daily reset at 00:00 UTC ---
     typical = (high + low + close) / 3.0
     vwap_values = []
     cum_vol = 0.0
     cum_typical_vol = 0.0
     last_date = None
+
     for i in range(len(df)):
         current_date = None
         if 'timestamp' in df.columns:
@@ -159,19 +164,22 @@ def calculate_indicators(
                 current_date = ts.date()
             elif isinstance(ts, str):
                 current_date = ts[:10]
+
         if last_date is not None and current_date != last_date:
             cum_vol = 0.0
             cum_typical_vol = 0.0
+
         last_date = current_date
         cum_vol += volume[i]
         cum_typical_vol += typical[i] * volume[i]
         vwap_values.append(cum_typical_vol / cum_vol if cum_vol > 0 else 0.0)
+
     vwap = np.array(vwap_values)
 
     if 'timestamp' in df.columns:
         df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
 
-    # --- Pivot Points на основе дневных свечей ---
+    # --- Pivot Points based on daily candles ---
     pivot_df = None
     if df_1h_for_pivot is not None and not df_1h_for_pivot.empty:
         if 'timestamp' in df_1h_for_pivot.columns and len(df_1h_for_pivot) >= 2:
@@ -200,8 +208,8 @@ def calculate_indicators(
             pivot_df = daily.tail(5)
 
     if pivot_df is not None and not pivot_df.empty:
-        # Синхронизировано с backtest_engine._add_daily_pivots:
-        # уровни строятся по ПРЕДЫДУЩЕМУ дню, а не по максимуму/минимуму окна.
+        # Synchronized with backtest_engine._add_daily_pivots:
+        # levels are built from the PREVIOUS day, not from the window's high/low.
         if len(pivot_df) >= 2:
             prev_day = pivot_df.iloc[-2]
         else:
@@ -222,7 +230,7 @@ def calculate_indicators(
     s2 = pivot - (high_pivot - low_pivot)
     s3 = low_pivot - 2 * (high_pivot - pivot)
 
-    # --- Берём последние num_latest значений ---
+    # --- Take the last num_latest values ---
     def safe_tail(arr, n):
         arr = np.array(arr)
         if len(arr) == 0:
@@ -251,12 +259,12 @@ def calculate_indicators(
         'support_3': float(s3),
     }
 
-    # Объёмный профиль (адаптивные бины, если volume_profile_bins не задан)
+    # Volume profile (adaptive bins if volume_profile_bins is not set)
     if include_volume_profile:
         vp = calculate_volume_profile(df, num_bins=volume_profile_bins, top_n=5)
         result['volume_profile'] = vp
 
-    # Очищаем от пустых списков и NaN
+    # Drop empty lists and NaN values
     cleaned = {}
     for k, v in result.items():
         if k == 'volume_profile':
@@ -278,19 +286,21 @@ def calculate_indicators(
     else:
         return cleaned
 
+
 def calculate_indicators_morning(
     df_15m: pd.DataFrame,
     df_1h: pd.DataFrame,
     num_latest: int = 50,
     return_timestamps: bool = False
 ) -> Dict[str, Any] | Tuple[Dict[str, Any], list]:
-    """Утренний пакет – больше значений."""
+    """Morning package - more values."""
     return calculate_indicators(df_15m, df_1h, num_latest, return_timestamps, include_volume_profile=True)
+
 
 def resample_15m_to_1h(df_15m: pd.DataFrame) -> pd.DataFrame:
     """
-    Преобразует 15m свечи в 1h свечи.
-    Возвращает DataFrame с колонками:
+    Converts 15m candles into 1h candles.
+    Returns a DataFrame with columns:
     timestamp, open, high, low, close, volume
     """
     if df_15m is None or df_15m.empty:
@@ -318,13 +328,12 @@ def resample_15m_to_1h(df_15m: pd.DataFrame) -> pd.DataFrame:
 
 def compute_1h_indicators(df_1h: pd.DataFrame, talib=None) -> pd.DataFrame:
     """
-    Считает индикаторы на 1h свечах.
+    Calculates indicators on 1h candles.
     """
     if df_1h is None or df_1h.empty:
         return pd.DataFrame()
-
     if talib is None:
-        raise RuntimeError("TA-Lib не установлен")
+        raise RuntimeError("TA-Lib is not installed")
 
     df = df_1h.copy().reset_index(drop=True)
 
@@ -360,7 +369,7 @@ def compute_1h_indicators(df_1h: pd.DataFrame, talib=None) -> pd.DataFrame:
 
 def _compute_vwap_1h(df: pd.DataFrame) -> pd.Series:
     """
-    VWAP для 1h-данных с дневным сбросом.
+    VWAP for 1h data with a daily reset.
     """
     typical = (df["high"] + df["low"] + df["close"]) / 3.0
     day = pd.to_datetime(df["timestamp"], utc=True, errors="coerce").dt.date
@@ -371,16 +380,14 @@ def _compute_vwap_1h(df: pd.DataFrame) -> pd.Series:
 
 def _add_daily_pivots_1h(df: pd.DataFrame) -> None:
     """
-    Добавляет pivot_1h, resistance_1_1h..3, support_1_1h..3 на основе предыдущего дня.
+    Adds pivot_1h, resistance_1_1h..3, support_1_1h..3 based on the previous day.
     """
     df["_date"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce").dt.date
-
     daily = df.groupby("_date").agg(
         high=("high", "max"),
         low=("low", "min"),
         close=("close", "last"),
     )
-
     prev = daily.shift(1)
     piv = (prev["high"] + prev["low"] + prev["close"]) / 3.0
 
@@ -401,20 +408,18 @@ def _add_daily_pivots_1h(df: pd.DataFrame) -> None:
 
 def merge_1h_features_to_15m(df_15m: pd.DataFrame, df_1h_features: pd.DataFrame) -> pd.DataFrame:
     """
-    Маппит 1h-признаки обратно на 15m через merge_asof.
+    Maps 1h features back onto 15m via merge_asof.
 
-    ВАЖНО: right (1h) содержит собственные OHLCV-колонки от
-    resample_15m_to_1h (open/high/low/close/volume). Если их не отфильтровать,
-    merge_asof затирает 15m OHLCV часовыми значениями: timestamp остаётся
-    15-минутным, а close/high/low «замирают» внутри часа. Из-за этого
-    сигналы, trailing-стоп и мягкие выходы принимали решения по устаревшей
-    цене.
+    IMPORTANT: right (1h) contains its own OHLCV columns from
+    resample_15m_to_1h (open/high/low/close/volume). If they are not filtered out,
+    merge_asof overwrites the 15m OHLCV with hourly values: timestamp stays
+    15-minute, while close/high/low "freeze" inside the hour. Because of that,
+    signals, the trailing stop and soft exits made decisions on a stale price.
 
-    Оставляем в right только признаки с суффиксом "_1h".
+    We keep only the features with the "_1h" suffix in right.
     """
     if df_15m is None or df_15m.empty:
         return df_15m
-
     if df_1h_features is None or df_1h_features.empty:
         return df_15m
 
@@ -427,8 +432,8 @@ def merge_1h_features_to_15m(df_15m: pd.DataFrame, df_1h_features: pd.DataFrame)
     left = left.sort_values("timestamp").reset_index(drop=True)
     right = right.sort_values("timestamp").reset_index(drop=True)
 
-    # Только признаки старшего таймфрейма. OHLCV часовых свечей
-    # НЕ мержим — иначе затираем 15m OHLCV.
+    # Higher-timeframe features only. We do NOT merge the hourly OHLCV —
+    # otherwise we overwrite the 15m OHLCV.
     feature_cols = [
         c for c in right.columns
         if c != "timestamp" and c.endswith("_1h")
@@ -437,6 +442,7 @@ def merge_1h_features_to_15m(df_15m: pd.DataFrame, df_1h_features: pd.DataFrame)
         return left
 
     right = right[["timestamp"] + feature_cols]
+
     left = left.drop(
         columns=[c for c in feature_cols if c in left.columns],
         errors="ignore",

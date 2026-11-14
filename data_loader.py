@@ -1,16 +1,16 @@
 """
-Загрузка локальных исторических данных из папки backtest_data.
+Loading local historical data from the backtest_data folder.
 
-Структура:
-    backtest_data/
-        XRPUSDT/
-            XRPUSDT_15min_2024.csv
-            XRPUSDT_15min_2025.csv
-        SOLUSDT/
-            SOLUSDT_15min_2024.csv
-            ...
+Structure:
+backtest_data/
+    XRPUSDT/
+        XRPUSDT_15min_2024.csv
+        XRPUSDT_15min_2025.csv
+    SOLUSDT/
+        SOLUSDT_15min_2024.csv
+    ...
 
-Формат CSV: timestamp, open, high, low, close, volume
+CSV format: timestamp, open, high, low, close, volume
 """
 from __future__ import annotations
 
@@ -24,43 +24,42 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-# Корневая папка проекта
+# Project root folder
 PROJECT_ROOT = Path(__file__).parent
 BACKTEST_DATA_DIR = PROJECT_ROOT / "backtest_data"
 
-# Ожидаемые колонки ПОСЛЕ нормализации.
-# В файлах backtest_data колонка времени называется datetime_utc —
-# переименовываем её в timestamp на границе загрузки, чтобы весь
-# остальной код (движок, тесты) работал с единым именем.
+# Expected columns AFTER normalization.
+# In backtest_data files the time column is named datetime_utc —
+# we rename it to timestamp at the loading boundary so that all the rest
+# of the code (engine, tests) works with a single name.
 REQUIRED_COLUMNS = {"timestamp", "open", "high", "low", "close", "volume"}
 TIME_COLUMN_ALIASES = {"datetime_utc": "timestamp"}
 
 
 def get_available_symbols() -> List[str]:
     """
-    Возвращает список доступных символов (подпапки в backtest_data).
-    
+    Returns the list of available symbols (subfolders in backtest_data).
+
     Returns:
-        Список имён монет, например ["XRPUSDT", "SOLUSDT", "HYPEUSDT"]
+        List of coin names, e.g. ["XRPUSDT", "SOLUSDT", "HYPEUSDT"]
     """
     if not BACKTEST_DATA_DIR.exists():
-        logger.warning(f"Папка {BACKTEST_DATA_DIR} не найдена")
+        logger.warning(f"Folder {BACKTEST_DATA_DIR} not found")
         return []
-    
+
     symbols = []
     for item in BACKTEST_DATA_DIR.iterdir():
         if item.is_dir():
             symbols.append(item.name)
-    
     return sorted(symbols)
 
 
-# Год в имени файла — это последние 4 цифры: XRPUSDT_15m_2023.csv -> 2023
+# The year in the file name is the last 4 digits: XRPUSDT_15m_2023.csv -> 2023
 _YEAR_RE = re.compile(r"_(\d{4})$")
 
 
 def _iter_symbol_files(symbol: str) -> List[Path]:
-    """Все csv-файлы монеты, отсортированные по имени."""
+    """All csv files of the coin, sorted by name."""
     symbol_dir = BACKTEST_DATA_DIR / symbol
     if not symbol_dir.exists():
         return []
@@ -68,22 +67,23 @@ def _iter_symbol_files(symbol: str) -> List[Path]:
 
 
 def _year_from_file(file: Path) -> Optional[int]:
-    """Извлекает год из имени файла или None."""
+    """Extracts the year from the file name, or None."""
     m = _YEAR_RE.search(file.stem)
     return int(m.group(1)) if m else None
 
 
 def _find_symbol_file(symbol: str, year: int) -> Optional[Path]:
     """
-    Находит csv-файл монеты за указанный год.
-    Не зависит от токена интервала в имени (15m / 15min / ...).
-    При нескольких кандидатах предпочитает 15-минутные файлы.
+    Finds the coin's csv file for the given year.
+    Does not depend on the interval token in the name (15m / 15min / ...).
+    If there are several candidates, prefers 15-minute files.
     """
     candidates = [
         f for f in _iter_symbol_files(symbol) if _year_from_file(f) == year
     ]
     if not candidates:
         return None
+
     for f in candidates:
         if "15m" in f.stem or "15min" in f.stem:
             return f
@@ -92,13 +92,13 @@ def _find_symbol_file(symbol: str, year: int) -> Optional[Path]:
 
 def get_available_years(symbol: str) -> List[int]:
     """
-    Возвращает список доступных лет для монеты.
-    
+    Returns the list of available years for the coin.
+
     Args:
-        symbol: Имя монеты, например "XRPUSDT"
-        
+        symbol: Coin name, e.g. "XRPUSDT"
+
     Returns:
-        Список годов, например [2023, 2024, 2025]
+        List of years, e.g. [2023, 2024, 2025]
     """
     years = [_year_from_file(f) for f in _iter_symbol_files(symbol)]
     return sorted({y for y in years if y is not None})
@@ -111,41 +111,40 @@ def load_local_data(
     end_date: Optional[str] = None,
 ) -> pd.DataFrame:
     """
-    Загружает локальные данные монеты за указанный год.
-    
+    Loads local data of the coin for the given year.
+
     Args:
-        symbol: Имя монеты, например "XRPUSDT"
-        year: Год данных, например 2025
-        start_date: Опциональная дата начала (формат "2025-01-01")
-        end_date: Опциональная дата конца (формат "2025-12-31")
-        
+        symbol: Coin name, e.g. "XRPUSDT"
+        year: Data year, e.g. 2025
+        start_date: Optional start date (format "2025-01-01")
+        end_date: Optional end date (format "2025-12-31")
+
     Returns:
-        DataFrame с колонками: timestamp, open, high, low, close, volume
-        
+        DataFrame with columns: timestamp, open, high, low, close, volume
+
     Raises:
-        FileNotFoundError: Если файл не найден
-        ValueError: Если формат данных некорректен
+        FileNotFoundError: If the file is not found
+        ValueError: If the data format is invalid
     """
     file_path = _find_symbol_file(symbol, year)
-    
     if file_path is None:
         raise FileNotFoundError(
-            f"Не найден csv-файл {symbol} за {year} год в "
+            f"No csv file found for {symbol} for year {year} in "
             f"{BACKTEST_DATA_DIR / symbol}"
         )
-    
-    logger.info(f"Загрузка данных: {file_path}")
-    
-    # Определяем разделитель по первой строке (csv может быть
-    # как с запятой, так и с табуляцией).
+
+    logger.info(f"Loading data: {file_path}")
+
+    # Detect the delimiter from the first line (csv can use
+    # either a comma or a tab).
     with open(file_path, "r", encoding="utf-8") as f:
         first_line = f.readline()
     sep = "\t" if "\t" in first_line else ","
 
-    # Читаем CSV
+    # Read the CSV
     df = pd.read_csv(file_path, sep=sep)
 
-    # Нормализуем имена колонок времени (datetime_utc -> timestamp)
+    # Normalize time column names (datetime_utc -> timestamp)
     df = df.rename(
         columns={
             old: new
@@ -154,33 +153,33 @@ def load_local_data(
         }
     )
 
-    # Проверяем наличие необходимых колонок
+    # Check that all required columns are present
     missing = REQUIRED_COLUMNS - set(df.columns)
     if missing:
-        raise ValueError(f"Отсутствуют колонки в {file_path}: {missing}")
+        raise ValueError(f"Missing columns in {file_path}: {missing}")
 
-    # Парсим временные метки (формат 2023-01-01T00:00:00+00:00)
+    # Parse timestamps (format 2023-01-01T00:00:00+00:00)
     df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
     df = df.dropna(subset=["timestamp"])
-    
-    # Приводим числовые колонки
+
+    # Cast numeric columns
     numeric_cols = ["open", "high", "low", "close", "volume"]
     for col in numeric_cols:
         df[col] = pd.to_numeric(df[col], errors="coerce")
-    
-    # Удаляем строки с NaN
+
+    # Drop rows with NaN
     df = df.dropna(subset=numeric_cols)
-    
-    # Сортируем по времени
+
+    # Sort by time
     df = df.sort_values("timestamp").reset_index(drop=True)
-    
-    # Фильтруем по датам, если указаны
+
+    # Filter by dates if provided
     if start_date:
         df = df[df["timestamp"] >= pd.to_datetime(start_date)]
     if end_date:
         df = df[df["timestamp"] <= pd.to_datetime(end_date)]
-    
-    logger.info(f"Загружено {len(df)} строк для {symbol} за {year} год")
+
+    logger.info(f"Loaded {len(df)} rows for {symbol} for year {year}")
     return df
 
 
@@ -188,26 +187,25 @@ def load_first_available_data(
     preferred_symbols: Optional[List[str]] = None,
 ) -> Tuple[str, int, pd.DataFrame]:
     """
-    Загружает первые доступные данные.
-    
+    Loads the first available data.
+
     Args:
-        preferred_symbols: Приоритетный список монет
-        
+        preferred_symbols: Priority list of coins
+
     Returns:
-        Кортеж (символ, год, DataFrame)
-        
+        Tuple (symbol, year, DataFrame)
+
     Raises:
-        RuntimeError: Если данные не найдены
+        RuntimeError: If no data is found
     """
     symbols = get_available_symbols()
-    
     if not symbols:
         raise RuntimeError(
-            f"Нет данных в {BACKTEST_DATA_DIR}. "
-            "Создайте подпапки с монетами и CSV-файлы."
+            f"No data in {BACKTEST_DATA_DIR}. "
+            "Create subfolders with coins and CSV files."
         )
-    
-    # Если есть приоритетные монеты, ищем их первыми
+
+    # If there are preferred coins, look for them first
     if preferred_symbols:
         for sym in preferred_symbols:
             if sym in symbols:
@@ -215,12 +213,12 @@ def load_first_available_data(
                 if years:
                     df = load_local_data(sym, years[0])
                     return sym, years[0], df
-    
-    # Иначе берём первую доступную монету
+
+    # Otherwise take the first available coin
     for sym in symbols:
         years = get_available_years(sym)
         if years:
             df = load_local_data(sym, years[0])
             return sym, years[0], df
-    
-    raise RuntimeError("Не удалось загрузить данные из доступных монет")
+
+    raise RuntimeError("Failed to load data from the available coins")

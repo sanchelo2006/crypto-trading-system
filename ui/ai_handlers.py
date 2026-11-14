@@ -1,8 +1,8 @@
 """
-Обработка ответов AI-модели и применение их к памяти монеты.
+Processing AI model responses and applying them to coin memory.
 
-Этот модуль не создаёт UI-компоненты и не зависит от страниц NiceGUI.
-Он преобразует ответ модели в обновление состояния CoinMemory.
+This module creates no UI components and does not depend on NiceGUI pages.
+It converts a model response into a CoinMemory state update.
 """
 
 from __future__ import annotations
@@ -26,10 +26,10 @@ def _ensure_safe_setup_fallback(
     has_active_trade: bool = False,
 ) -> None:
     """
-    Если модель не вернула ни setup, ни signal, ни position_update, создаём
-    безопасный fallback-setup, чтобы UI не остался без структуры данных.
+    If the model returned neither setup, nor signal, nor position_update,
+    create a safe fallback setup so the UI is not left without a data structure.
 
-    Логика полностью сохранена из прежнего nicegui_app.py.
+    Logic fully preserved from the previous nicegui_app.py.
     """
     action = response.get("action", "ANALYSIS")
 
@@ -41,7 +41,7 @@ def _ensure_safe_setup_fallback(
         and not has_active_trade
     ):
         logger.warning(
-            "[%s] Ответ модели без setup/signal. Создаю пустой setup для безопасности.",
+            "[%s] Model response without setup/signal. Creating an empty setup for safety.",
             symbol,
         )
         response["setup"] = {
@@ -51,10 +51,10 @@ def _ensure_safe_setup_fallback(
             "stop_loss": 0.0,
             "take_profit": [],
             "conditions": [
-                "Модель не сформировала условия — перегрузка контекста или неопределённость рынка"
+                "The model produced no conditions — context overload or market uncertainty"
             ],
-            "cancel_conditions": ["Ручное управление"],
-            "rationale": "Автоматический fallback: модель не вернула сетап.",
+            "cancel_conditions": ["Manual control"],
+            "rationale": "Automatic fallback: the model returned no setup.",
         }
 
 
@@ -64,10 +64,10 @@ def _process_init_response(
     symbol: str,
 ) -> str:
     """
-    Обрабатывает INIT-ответ:
-    - сохраняет research;
-    - сохраняет strategy_spec;
-    - сохраняет текстовые правила и списки правил.
+    Handles an INIT response:
+    - saves research;
+    - saves strategy_spec;
+    - saves text rules and rule lists.
     """
     if response.get("research"):
         coin_memory.update_state({"research": response["research"]})
@@ -83,18 +83,18 @@ def _process_init_response(
                     {"strategy_spec": ensure_engine_defaults(spec)}
                 )
                 logger.info(
-                    "[%s] strategy_spec сохранён (с дефолтами движка)",
+                    "[%s] strategy_spec saved (with engine defaults)",
                     symbol,
                 )
             else:
                 logger.warning(
-                    "[%s] strategy_spec от AI невалиден: %s",
+                    "[%s] strategy_spec from AI is invalid: %s",
                     symbol,
                     err,
                 )
         except Exception as e:
             logger.warning(
-                "[%s] Ошибка валидации strategy_spec: %s",
+                "[%s] strategy_spec validation error: %s",
                 symbol,
                 e,
             )
@@ -110,9 +110,9 @@ def _process_init_response(
             }
         )
 
-        rules_text = "## Правила торговли\n" + "\n".join(f"- {r}" for r in trading)
+        rules_text = "## Trading Rules\n" + "\n".join(f"- {r}" for r in trading)
         if risk:
-            rules_text += "\n\n## Риск-менеджмент\n" + "\n".join(f"- {r}" for r in risk)
+            rules_text += "\n\n## Risk Management\n" + "\n".join(f"- {r}" for r in risk)
 
         coin_memory.update_rules(rules_text)
 
@@ -127,8 +127,8 @@ def _process_init_response(
         )
     else:
         coin_memory.update_rules(
-            f"# Базовые правила {symbol}\n\n"
-            f"Повторите инициализацию или создайте правила вручную."
+            f"# Basic rules for {symbol}\n\n"
+            f"Run initialization again or create the rules manually."
         )
 
     coin_memory.save()
@@ -141,14 +141,14 @@ def _save_data_package_state(
     data_package: Optional[Dict],
 ) -> None:
     """
-    Сохраняет в память монеты данные, пришедшие вместе с пакетом:
-    - индикаторы;
-    - временные метки индикаторов;
+    Saves into coin memory the data that came with the package:
+    - indicators;
+    - indicator timestamps;
     - market_stats;
-    - ключевые события.
+    - key events.
     """
     if not data_package:
-        logger.info("[%s] Нет data_package для сохранения индикаторов", symbol)
+        logger.info("[%s] No data_package to save indicators", symbol)
         return
 
     data = data_package.get("data", {})
@@ -171,7 +171,7 @@ def _save_data_package_state(
                 }
             )
             logger.info(
-                "[%s] Индикаторы сохранены: %s индикаторов, %s временных меток",
+                "[%s] Indicators saved: %s indicators, %s timestamps",
                 symbol,
                 len(indicators),
                 len(indicators_timestamps or []),
@@ -197,12 +197,12 @@ def _save_data_package_state(
 
         if new_events != old_events:
             key_logger.info(
-                "[%s] Ключевые события обновлены (уникальных строк: %s)",
+                "[%s] Key events updated (unique lines: %s)",
                 symbol,
                 len(new_events.splitlines()),
             )
         else:
-            logger.debug("[%s] Ключевые события не изменились", symbol)
+            logger.debug("[%s] Key events unchanged", symbol)
 
 
 def process_ai_response(
@@ -213,29 +213,29 @@ def process_ai_response(
     data_package: Optional[Dict] = None,
 ) -> str:
     """
-    Главный обработчик ответа AI.
+    Main AI response handler.
 
     Parameters
     ----------
     response:
-        JSON-ответ модели.
+        JSON response from the model.
 
     coin_memory:
-        Память конкретной монеты.
+        Memory of the specific coin.
 
     symbol:
-        Символ монеты.
+        Coin symbol.
 
     has_active_trade:
-        Флаг, указывающий, есть ли открытая позиция в момент обработки.
+        Flag indicating whether a position is open at processing time.
 
     data_package:
-        Пакет рыночных данных, на основе которого AI сформировал ответ.
+        Market data package the AI based its response on.
 
     Returns
     -------
     str:
-        Значение поля action из ответа модели.
+        Value of the action field from the model response.
     """
     _ensure_safe_setup_fallback(
         response=response,
@@ -303,7 +303,7 @@ def process_ai_response(
         coin_memory.update_state({"last_signal": None})
 
     if analysis and analysis.get("summary"):
-        coin_memory.set_morning_context(f"Утренний анализ: {analysis['summary']}")
+        coin_memory.set_morning_context(f"Morning analysis: {analysis['summary']}")
 
     _save_data_package_state(
         coin_memory=coin_memory,

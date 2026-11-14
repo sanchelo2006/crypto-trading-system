@@ -1,1 +1,1 @@
-"""Утилиты торговой системы."""
+"""Trading system utilities."""

@@ -5,14 +5,22 @@
 """
 import logging
 import re
+import time
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Tuple
 from difflib import SequenceMatcher
 
 import feedparser
 import pandas as pd
+import requests
 
 logger = logging.getLogger(__name__)
+
+# Таймаут на один RSS-источник (сек) и общий бюджет на весь обход лент.
+# feedparser.parse(url) не умеет таймаут и может висеть бесконечно,
+# поэтому качаем контент через requests, а feedparser отдаём уже байты.
+RSS_TIMEOUT_SEC = 8
+RSS_TOTAL_BUDGET_SEC = 45
 
 # ==================== Вспомогательные функции ====================
 def _similar(a: str, b: str) -> float:
@@ -190,10 +198,23 @@ class NewsAggregator:
 
     def fetch_articles_from_feeds(self, limit: int = 50) -> List[Dict]:
         articles = []
+        started = time.monotonic()
         for source_name, feed_url in self.RSS_FEEDS.items():
+            if time.monotonic() - started > RSS_TOTAL_BUDGET_SEC:
+                logger.warning(
+                    f"RSS: бюджет {RSS_TOTAL_BUDGET_SEC}с исчерпан, "
+                    f"остальные ленты пропущены (не дошли до: {source_name})"
+                )
+                break
             try:
                 logger.debug(f"Парсинг RSS: {source_name}")
-                feed = feedparser.parse(feed_url)
+                resp = requests.get(
+                    feed_url,
+                    timeout=RSS_TIMEOUT_SEC,
+                    headers={"User-Agent": "Mozilla/5.0 (compatible; TradingSystem/1.0)"},
+                )
+                resp.raise_for_status()
+                feed = feedparser.parse(resp.content)
                 for entry in feed.entries[:limit]:
                     articles.append({
                         "date": entry.get("published", datetime.now().isoformat()),

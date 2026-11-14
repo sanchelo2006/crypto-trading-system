@@ -1,7 +1,7 @@
 """
-Менеджер памяти для каждой торгуемой монеты.
-Добавлена умная группировка ключевых событий (компрессия) с фильтрацией по времени и дедупликацией.
-last_key_events теперь хранится как список словарей.
+Memory manager for each traded coin.
+Includes smart grouping of key events (compression) with time filtering
+and deduplication. last_key_events is stored as a list of dicts.
 """
 import os
 import shutil
@@ -11,11 +11,13 @@ import re
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, List, Tuple
+
 import pandas as pd
 
 import config
 
 logger = logging.getLogger(__name__)
+
 
 class CoinMemory:
     def __init__(self, symbol: str):
@@ -38,6 +40,7 @@ class CoinMemory:
                 self.journal = self._empty_journal()
         else:
             self.journal = self._empty_journal()
+
         if self.rules_path.exists():
             try:
                 with open(self.rules_path, "r", encoding="utf-8") as f:
@@ -46,6 +49,7 @@ class CoinMemory:
                 self.rules = ""
         else:
             self.rules = ""
+
         if self.behavior_path.exists():
             try:
                 with open(self.behavior_path, "r", encoding="utf-8") as f:
@@ -54,6 +58,7 @@ class CoinMemory:
                 self.behavior_rules = ""
         else:
             self.behavior_rules = ""
+
         if self.state_path.exists():
             try:
                 with open(self.state_path, "r", encoding="utf-8") as f:
@@ -63,11 +68,10 @@ class CoinMemory:
                         raw["last_candle_time"] = datetime.fromisoformat(raw["last_candle_time"])
                     except Exception:
                         raw["last_candle_time"] = None
-                # Миграция строки в список
+                # Migration: string -> list
                 if isinstance(raw.get("last_key_events"), str):
                     raw["last_key_events"] = []
                 self.state = raw
-                
             except Exception:
                 self.state = self._default_state()
         else:
@@ -107,17 +111,20 @@ class CoinMemory:
         try:
             self.journal.to_csv(self.journal_path, index=False)
         except Exception as e:
-            logger.error(f"Ошибка сохранения журнала {self.symbol}: {e}")
+            logger.error(f"Failed to save journal for {self.symbol}: {e}")
+
         try:
             with open(self.rules_path, "w", encoding="utf-8") as f:
                 f.write(self.rules)
         except Exception as e:
-            logger.error(f"Ошибка сохранения правил {self.symbol}: {e}")
+            logger.error(f"Failed to save rules for {self.symbol}: {e}")
+
         try:
             with open(self.behavior_path, "w", encoding="utf-8") as f:
                 f.write(self.behavior_rules)
         except Exception as e:
-            logger.error(f"Ошибка сохранения поведенческих правил {self.symbol}: {e}")
+            logger.error(f"Failed to save behavior rules for {self.symbol}: {e}")
+
         try:
             state_copy = dict(self.state)
             if state_copy.get("last_candle_time") and isinstance(state_copy["last_candle_time"], datetime):
@@ -125,29 +132,29 @@ class CoinMemory:
             with open(self.state_path, "w", encoding="utf-8") as f:
                 json.dump(state_copy, f, ensure_ascii=False, indent=2, default=str)
         except Exception as e:
-            logger.error(f"Ошибка сохранения состояния {self.symbol}: {e}")
+            logger.error(f"Failed to save state for {self.symbol}: {e}")
 
     # ========================
-    # Управление ключевыми событиями
+    # Key events management
     # ========================
     def add_key_events(self, new_events_str: str):
         if not new_events_str:
             return
 
-        # Загружаем существующие события как список словарей
+        # Load existing events as a list of dicts
         existing = self.state.get("last_key_events", [])
         if isinstance(existing, str):
             existing = []
         if not isinstance(existing, list):
             existing = []
 
-        # Парсим новые события в структуры
+        # Parse new events into structures
         pattern = (
             r'^• (\d{4}-\d{2}-\d{2} \d{2}:\d{2}) UTC — '
-            r'(касание|пробой|аномальный объём|широкий диапазон|консолидация вокруг)'
+            r'(touch|breakout|abnormal volume|wide range|consolidation around)'
             r'(?: (\w+))?'
             r'(?: \(([\d.]+)\))?'
-            r'(?: (вверх|вниз))?'
+            r'(?: (up|down))?'
             r'(?: \((.*)\))?'
         )
 
@@ -159,6 +166,7 @@ class CoinMemory:
             match = re.match(pattern, line)
             if not match:
                 continue
+
             time_str = match.group(1)
             event_type = match.group(2)
             level = match.group(3)
@@ -175,7 +183,7 @@ class CoinMemory:
                 "extra": extra,
             })
 
-        # Дедупликация: ключ — (time, type, level)
+        # Deduplication: key is (time, type, level)
         existing_map = {}
         for evt in existing:
             key = (evt.get("time"), evt.get("type"), evt.get("level"))
@@ -190,14 +198,14 @@ class CoinMemory:
                 if evt.get("extra"):
                     existing_map[key]["extra"] = evt["extra"]
 
-        # Сортировка по времени
+        # Sort by time
         existing.sort(key=lambda e: e.get("time", ""))
 
-        # --- ФИЛЬТР 1: Дедупликация по уровням (для пробоев/касаний) ---
+        # --- FILTER 1: Deduplication by level (for breakouts/touches) ---
         filtered = []
         seen_levels = {}
         for evt in existing:
-            if evt["type"] in ("касание", "пробой", "консолидация вокруг"):
+            if evt["type"] in ("touch", "breakout", "consolidation around"):
                 level = evt.get("level")
                 if not level:
                     filtered.append(evt)
@@ -206,11 +214,11 @@ class CoinMemory:
                     prev = seen_levels[level]
                     prev_type = prev["type"]
                     curr_type = evt["type"]
-                    if curr_type == "пробой" and prev_type == "касание":
+                    if curr_type == "breakout" and prev_type == "touch":
                         filtered.remove(prev)
                         seen_levels[level] = evt
                         filtered.append(evt)
-                    elif curr_type == "касание" and prev_type == "пробой":
+                    elif curr_type == "touch" and prev_type == "breakout":
                         pass
                     elif evt["time"] > prev["time"]:
                         filtered.remove(prev)
@@ -223,7 +231,7 @@ class CoinMemory:
                 filtered.append(evt)
         existing = filtered
 
-        # --- ФИЛЬТР 2: Только за последние 24 часа ---
+        # --- FILTER 2: Last 24 hours only ---
         now = datetime.now(timezone.utc)
         cutoff_24h = now - timedelta(hours=24)
         recent = []
@@ -236,13 +244,13 @@ class CoinMemory:
                 recent.append(evt)
         existing = recent
 
-        # --- ФИЛЬТР 3: Лимит 25 событий ---
+        # --- FILTER 3: Limit of 25 events ---
         if len(existing) > 25:
             existing = existing[-25:]
 
         self.state["last_key_events"] = existing
 
-        # Формируем строковое представление для intraday_context
+        # Build the string representation for intraday_context
         lines = []
         for evt in existing:
             line = f"• {evt['time']} UTC — {evt['type']}"
@@ -257,7 +265,7 @@ class CoinMemory:
             lines.append(line)
 
         if lines:
-            self.state["intraday_context"] = "Ключевые события за период:\n" + "\n".join(lines)
+            self.state["intraday_context"] = "Key events for the period:\n" + "\n".join(lines)
         else:
             self.state["intraday_context"] = ""
 
@@ -267,7 +275,7 @@ class CoinMemory:
         if not events:
             return []
 
-        pattern = r'^• (\d{4}-\d{2}-\d{2} \d{2}:\d{2}) UTC — (касание|пробой|аномальный объём|широкий диапазон)(?: (\w+))?(?: \(([\d.]+)\))?(?: (вверх|вниз))?(?: \((.*)\))?'
+        pattern = r'^• (\d{4}-\d{2}-\d{2} \d{2}:\d{2}) UTC — (touch|breakout|abnormal volume|wide range)(?: (\w+))?(?: \(([\d.]+)\))?(?: (up|down))?(?: \((.*)\))?'
 
         parsed = []
         for line in events:
@@ -275,17 +283,20 @@ class CoinMemory:
             if not match:
                 parsed.append({'raw': line})
                 continue
+
             dt_str = match.group(1)
             action = match.group(2)
             level_name = match.group(3)
             level_value = match.group(4)
             direction = match.group(5)
             extra = match.group(6)
+
             try:
                 dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
             except ValueError:
                 parsed.append({'raw': line})
                 continue
+
             parsed.append({
                 'dt': dt,
                 'action': action,
@@ -300,7 +311,8 @@ class CoinMemory:
         i = 0
         while i < len(parsed):
             event = parsed[i]
-            if event.get('action') in ('аномальный объём', 'широкий диапазон') or 'raw' in event and not event.get('action'):
+
+            if event.get('action') in ('abnormal volume', 'wide range') or 'raw' in event and not event.get('action'):
                 compressed.append(event.get('raw', ''))
                 i += 1
                 continue
@@ -309,7 +321,7 @@ class CoinMemory:
             j = i + 1
             while j < len(parsed):
                 next_event = parsed[j]
-                if (next_event.get('action') not in ('касание', 'пробой') or
+                if (next_event.get('action') not in ('touch', 'breakout') or
                     next_event.get('level') != event.get('level') or
                     next_event.get('value') != event.get('value')):
                     break
@@ -326,23 +338,24 @@ class CoinMemory:
                 end_time = group[-1]['dt'].strftime('%H:%M')
                 level_str = f"{event['level']} ({event['value']:.4f})" if event['value'] is not None else event['level']
 
-                touches = sum(1 for e in group if e['action'] == 'касание')
-                breakups = sum(1 for e in group if e['action'] == 'пробой' and e['direction'] == 'вверх')
-                breakdowns = sum(1 for e in group if e['action'] == 'пробой' and e['direction'] == 'вниз')
+                touches = sum(1 for e in group if e['action'] == 'touch')
+                breakups = sum(1 for e in group if e['action'] == 'breakout' and e['direction'] == 'up')
+                breakdowns = sum(1 for e in group if e['action'] == 'breakout' and e['direction'] == 'down')
 
-                parts = [f"{start_time}–{end_time} UTC — консолидация вокруг {level_str}"]
+                parts = [f"{start_time}–{end_time} UTC — consolidation around {level_str}"]
                 if touches:
-                    parts.append(f"{touches} касаний")
+                    parts.append(f"{touches} touches")
                 if breakups:
-                    parts.append(f"{breakups} пробоев вверх")
+                    parts.append(f"{breakups} breakouts up")
                 if breakdowns:
-                    parts.append(f"{breakdowns} пробоев вниз")
+                    parts.append(f"{breakdowns} breakouts down")
+
                 if breakups > breakdowns:
-                    parts.append("(давление вверх)")
+                    parts.append("(upward pressure)")
                 elif breakdowns > breakups:
-                    parts.append("(давление вниз)")
+                    parts.append("(downward pressure)")
                 else:
-                    parts.append("(цена топчется)")
+                    parts.append("(price stalling)")
 
                 compressed.append("• " + ", ".join(parts))
 
@@ -365,7 +378,7 @@ class CoinMemory:
                 if evt.get("extra"):
                     line += f" ({evt['extra']})"
                 lines.append(line)
-            return "Ключевые события за период:\n" + "\n".join(lines) if lines else ""
+            return "Key events for the period:\n" + "\n".join(lines) if lines else ""
         return str(events)
 
     def set_last_key_events(self, events):
@@ -373,17 +386,17 @@ class CoinMemory:
         self.save()
 
     # ========================
-    # Архивация дня
+    # Day archiving
     # ========================
     def archive_day(self) -> bool:
         date_str = self.state.get("date")
         if not date_str:
-            logger.warning(f"[{self.symbol}] Не удалось архивировать: дата не задана в state")
+            logger.warning(f"[{self.symbol}] Cannot archive: date is not set in state")
             return False
 
         day_archive_dir = self.archive_dir / date_str
         if day_archive_dir.exists():
-            logger.info(f"[{self.symbol}] День {date_str} уже архивирован")
+            logger.info(f"[{self.symbol}] Day {date_str} is already archived")
             return False
 
         day_archive_dir.mkdir(parents=True, exist_ok=True)
@@ -391,6 +404,7 @@ class CoinMemory:
         state_copy = dict(self.state)
         if state_copy.get("last_candle_time") and isinstance(state_copy["last_candle_time"], datetime):
             state_copy["last_candle_time"] = state_copy["last_candle_time"].isoformat()
+
         with open(day_archive_dir / "state.json", "w", encoding="utf-8") as f:
             json.dump(state_copy, f, ensure_ascii=False, indent=2, default=str)
 
@@ -403,7 +417,7 @@ class CoinMemory:
             if not day_trades.empty:
                 day_trades.to_csv(day_archive_dir / "trades.csv", index=False)
 
-        logger.info(f"[{self.symbol}] День {date_str} архивирован в {day_archive_dir}")
+        logger.info(f"[{self.symbol}] Day {date_str} archived to {day_archive_dir}")
         return True
 
     def get_archive_dates(self) -> List[str]:
@@ -422,23 +436,26 @@ class CoinMemory:
             return None
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
+
         trades_path = self.archive_dir / date_str / "trades.csv"
         if trades_path.exists():
             data["day_trades"] = pd.read_csv(trades_path).to_dict(orient="records")
         else:
             data["day_trades"] = []
+
         for file_key, field in [("morning_context.md", "morning_context"),
                                 ("intraday_context.md", "intraday_context"),
                                 ("key_events.md", "key_events")]:
             fpath = self.archive_dir / date_str / file_key
             if fpath.exists():
                 data[field] = fpath.read_text(encoding="utf-8")
+
         return data
 
-    # --- Управление днём ---
+    # --- Day management ---
     def close_day(self):
         if self.is_day_closed():
-            logger.info(f"[{self.symbol}] День уже закрыт")
+            logger.info(f"[{self.symbol}] Day is already closed")
             return
         self.archive_day()
         self.state["day_closed"] = True
@@ -447,11 +464,13 @@ class CoinMemory:
     def open_new_day(self):
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         if self.state.get("date") == today and not self.is_day_closed():
-            logger.info(f"[{self.symbol}] День {today} уже активен")
+            logger.info(f"[{self.symbol}] Day {today} is already active")
             return
+
         if self.state.get("date") and self.state["date"] != today:
             if not self.is_day_closed():
                 self.archive_day()
+
         self.state.update({
             "date": today,
             "day_closed": False,
@@ -473,7 +492,7 @@ class CoinMemory:
     def is_day_closed(self) -> bool:
         return self.state.get("day_closed", False)
 
-    # --- Остальные методы ---
+    # --- Other methods ---
     def add_trade_entry(self, entry: Dict):
         now = datetime.now(timezone.utc)
         row = {
@@ -517,26 +536,37 @@ class CoinMemory:
         return day_trades["result_pct"].sum() if not day_trades.empty else 0.0
 
     def get_rules(self) -> str: return self.rules
+
     def update_rules(self, new_rules: str): self.rules = new_rules; self.save()
+
     def append_rule(self, new_rule: str):
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-        self.rules += f"\n\n### Правило добавлено {timestamp}\n{new_rule}"
+        self.rules += f"\n\n### Rule added {timestamp}\n{new_rule}"
         self.save()
 
     def get_behavior_rules(self) -> str: return self.behavior_rules
+
     def update_behavior_rules(self, text: str): self.behavior_rules = text; self.save()
+
     def append_behavior_rule(self, text: str):
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-        self.behavior_rules += f"\n\n### Записано {timestamp}\n{text}"
+        self.behavior_rules += f"\n\n### Recorded {timestamp}\n{text}"
         self.save()
 
     def set_morning_context(self, context: str): self.state["morning_context"] = context; self.save()
+
     def get_morning_context(self) -> str: return self.state.get("morning_context", "")
+
     def set_intraday_context(self, context: str): self.state["intraday_context"] = context; self.save()
+
     def get_intraday_context(self) -> str: return self.state.get("intraday_context", "")
+
     def set_last_analysis(self, analysis: Optional[Dict]): self.state["last_analysis"] = analysis; self.save()
+
     def get_last_analysis(self) -> Optional[Dict]: return self.state.get("last_analysis")
+
     def set_last_candle_time(self, dt: Optional[datetime]): self.state["last_candle_time"] = dt; self.save()
+
     def get_last_candle_time(self) -> Optional[datetime]:
         val = self.state.get("last_candle_time")
         if val is None: return None
@@ -547,15 +577,20 @@ class CoinMemory:
         return None
 
     def get_state(self) -> Dict: return self.state.copy()
-    def update_state(self, updates: Dict): self.state.update(updates); self.save()
-    def set_active_trade(self, trade: Optional[Dict]): self.state["active_trade"] = trade; self.save()
-    def get_active_trade(self) -> Optional[Dict]: return self.state.get("active_trade")
-    def is_initialized(self) -> bool: return self.state.get("is_initialized", False)
-    def mark_initialized(self): self.state["is_initialized"] = True; self.save()
 
+    def update_state(self, updates: Dict): self.state.update(updates); self.save()
+
+    def set_active_trade(self, trade: Optional[Dict]): self.state["active_trade"] = trade; self.save()
+
+    def get_active_trade(self) -> Optional[Dict]: return self.state.get("active_trade")
+
+    def is_initialized(self) -> bool: return self.state.get("is_initialized", False)
+
+    def mark_initialized(self): self.state["is_initialized"] = True; self.save()
 
     def reload(self):
         self._load()
+
 
 class MemoryManager:
     def __init__(self):

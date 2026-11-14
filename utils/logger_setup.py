@@ -1,17 +1,17 @@
 """
-Настройка логирования с устойчивой к Windows и OneDrive ротацией.
+Logging setup with rotation that is robust on Windows and OneDrive.
 
-Проблема: TimedRotatingFileHandler на Windows падает с WinError 32,
-если лог-файл занят другим процессом (синхронизация OneDrive или повторный
-запуск скрипта NiceGUI через runpy при обработке 404).
+Problem: TimedRotatingFileHandler on Windows fails with WinError 32
+if the log file is locked by another process (OneDrive sync or a repeated
+NiceGUI script launch via runpy while handling 404).
 
-Решение:
-  - SafeTimedRotatingFileHandler глушит ошибки ротации, не роняя приложение
-    и не засоряя вывод повторяющимися трейсбэками;
-  - опциональный вынос логов из синхронизируемой папки OneDrive
-    (через переменную окружения LOGS_DIR или автоматически в LOCALAPPDATA).
+Solution:
+- SafeTimedRotatingFileHandler suppresses rotation errors without crashing
+  the app and without spamming repeated tracebacks;
+- optional relocation of logs out of the OneDrive-synced folder
+  (via the LOGS_DIR environment variable or automatically into LOCALAPPDATA).
 
-setup_logging() идемпотентна (защита от повторной инициализации).
+setup_logging() is idempotent (protected against repeated initialization).
 """
 
 import os
@@ -27,12 +27,10 @@ _logging_initialized = False
 
 def _make_utc_formatter(fmt: str) -> logging.Formatter:
     """
-    Форматтер, который пишет asctime в UTC.
-
-    По умолчанию logging.Formatter.formatTime использует
-    time.localtime (локальный пояс сервера). Переопределяем converter
-    на time.gmtime — получаем UTC-время без tzinfo, а суффикс 'UTC'
-    добавляем прямо в fmt.
+    Formatter that writes asctime in UTC.
+    By default logging.Formatter.formatTime uses time.localtime
+    (the server's local timezone). We override converter with time.gmtime
+    to get UTC time without tzinfo, and add the 'UTC' suffix directly in fmt.
     """
     formatter = logging.Formatter(fmt, datefmt="%Y-%m-%d %H:%M:%S")
     formatter.converter = time.gmtime
@@ -41,11 +39,9 @@ def _make_utc_formatter(fmt: str) -> logging.Formatter:
 
 class SafeTimedRotatingFileHandler(TimedRotatingFileHandler):
     """
-    Ротация логов, устойчивая к WinError 32 (файл занят другим процессом).
-
-    Если переименование файла не удалось, приложение не падает:
-    продолжаем писать в текущий файл и переносим попытку ротации
-    на следующий интервал.
+    Log rotation robust to WinError 32 (file locked by another process).
+    If renaming the file fails, the app does not crash: we keep writing
+    to the current file and postpone the rotation to the next interval.
     """
 
     _warned_once = False
@@ -54,22 +50,22 @@ class SafeTimedRotatingFileHandler(TimedRotatingFileHandler):
         try:
             super().doRollover()
         except (PermissionError, OSError) as e:
-            # Файл занят. Сдвигаем время следующей ротации, чтобы не пытаться
-            # ротировать на каждой записи.
+            # File is busy. Shift the next rotation time so we do not retry
+            # rotation on every record.
             try:
                 current_time = int(self.rolloverAt)
                 self.rolloverAt = self.computeRollover(current_time)
             except Exception:
                 pass
 
-            # Гарантируем, что поток открыт для дальнейшей записи.
+            # Make sure the stream is open for further writing.
             if self.stream is None:
                 try:
                     self.stream = self._open()
                 except Exception:
                     pass
 
-            # Предупреждаем один раз, без спама в консоль.
+            # Warn once, without spamming the console.
             if not SafeTimedRotatingFileHandler._warned_once:
                 SafeTimedRotatingFileHandler._warned_once = True
                 sys.stderr.write(
@@ -84,15 +80,14 @@ class SafeTimedRotatingFileHandler(TimedRotatingFileHandler):
 
 def _resolve_logs_dir() -> Path:
     """
-    Определяет папку для логов.
-
-    Приоритет:
-      1. переменная окружения LOGS_DIR, если задана явно;
-      2. если config.LOGS_DIR находится внутри OneDrive, переносим логи
-         в подпапку внутри LOCALAPPDATA (вне синхронизации);
-      3. иначе используем config.LOGS_DIR как есть.
+    Determines the logs folder.
+    Priority:
+    1. the LOGS_DIR environment variable, if set explicitly;
+    2. if config.LOGS_DIR is inside OneDrive, move logs to a subfolder
+       inside LOCALAPPDATA (outside sync);
+    3. otherwise use config.LOGS_DIR as is.
     """
-    # 1. Явно заданная переменная окружения
+    # 1. Explicitly set environment variable
     env_dir = os.getenv("LOGS_DIR")
     if env_dir:
         p = Path(env_dir)
@@ -101,7 +96,7 @@ def _resolve_logs_dir() -> Path:
 
     base = Path(config.LOGS_DIR)
 
-    # 2. Проверяем, не лежит ли папка внутри OneDrive
+    # 2. Check whether the folder is inside OneDrive
     try:
         in_onedrive = "onedrive" in str(base).lower()
     except Exception:
@@ -124,13 +119,13 @@ def _resolve_logs_dir() -> Path:
                     + str(e) + "), using original: " + str(base) + "\n"
                 )
 
-    # 3. Fallback - исходная папка
+    # 3. Fallback - original folder
     base.mkdir(parents=True, exist_ok=True)
     return base
 
 
 def setup_logging():
-    """Настройка корневого логгера с безопасной ротацией. Вызывать ОДИН раз."""
+    """Set up the root logger with safe rotation. Call ONCE."""
     global _logging_initialized
     if _logging_initialized:
         return
@@ -138,8 +133,8 @@ def setup_logging():
 
     logs_dir = _resolve_logs_dir()
 
-    # Подавляем шум от библиотек. Логи httpx, httpcore, openai при закрытии
-    # HTTP-сессий провоцировали трейсбэки ротации, поэтому поднимаем их уровень.
+    # Suppress library noise. httpx, httpcore and openai logs triggered
+    # rotation tracebacks when closing HTTP sessions, so we raise their level.
     noisy_loggers = [
         "streamlit.watcher.local_sources_watcher",
         "transformers",
@@ -166,13 +161,14 @@ def setup_logging():
 
     root.handlers.clear()
 
-    # Консоль
+    	
+    # Console
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(getattr(logging, config.LOG_LEVEL, logging.INFO))
     console_handler.setFormatter(simple_formatter)
     root.addHandler(console_handler)
 
-    # Общий файл app.log - ротация каждый день, храним 7 дней
+    # Shared app.log - daily rotation, keep 7 days
     app_handler = SafeTimedRotatingFileHandler(
         logs_dir / "app.log",
         when="midnight",
@@ -185,7 +181,8 @@ def setup_logging():
     app_handler.setFormatter(detailed_formatter)
     root.addHandler(app_handler)
 
-    # Файл ошибок errors.log - ротация каждый день, храним 30 дней
+    	
+    # Error file errors.log - daily rotation, keep 30 days
     error_handler = SafeTimedRotatingFileHandler(
         logs_dir / "errors.log",
         when="midnight",
@@ -198,7 +195,7 @@ def setup_logging():
     error_handler.setFormatter(detailed_formatter)
     root.addHandler(error_handler)
 
-    # Файл пользовательских событий user.log
+    # User events file user.log
     user_handler = SafeTimedRotatingFileHandler(
         logs_dir / "user.log",
         when="midnight",
@@ -212,7 +209,7 @@ def setup_logging():
     user_handler.addFilter(UserLogFilter())
     root.addHandler(user_handler)
 
-    # Файл message.log - только сообщения модели
+    # message.log - model messages only
     message_logger = logging.getLogger("ai_client.messages")
     message_logger.setLevel(logging.INFO)
     message_logger.propagate = False
@@ -229,7 +226,7 @@ def setup_logging():
     message_handler.setFormatter(simple_formatter)
     message_logger.addHandler(message_handler)
 
-    # Файл key.log - ключевые события
+    # key.log - key events
     key_logger = logging.getLogger("key_events")
     key_logger.setLevel(logging.INFO)
     key_logger.propagate = False
@@ -250,7 +247,7 @@ def setup_logging():
 
 
 class UserLogFilter(logging.Filter):
-    """Фильтр: пропускает только записи от определённых логгеров."""
+    """Filter: passes only records from specific loggers."""
 
     def filter(self, record):
         return record.name in ("ai_client", "ai_client.token", "data_fetcher", "app")

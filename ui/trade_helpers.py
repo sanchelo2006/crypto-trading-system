@@ -1,14 +1,13 @@
 """
-Вспомогательные функции UI-слоя для работы с данными монет, журналами,
-правилами и докачкой исторических свечей.
-
-Модуль не содержит классов страниц NiceGUI и не создаёт UI-компоненты.
+UI-layer helper functions for working with coin data, journals,
+rules and catching up on historical candles.
+This module contains no NiceGUI page classes and creates no UI components.
 """
-
 from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import datetime, timezone, timedelta
 from typing import Callable, Dict, List, Optional, Tuple
 
@@ -18,7 +17,6 @@ import config
 from indicators import calculate_indicators
 from memory_manager import CoinMemory, MemoryManager
 from utils.helpers import df_to_csv_string
-
 
 logger = logging.getLogger(__name__)
 
@@ -30,43 +28,36 @@ def catch_up_historical_data(
     coin_memory: CoinMemory,
 ) -> Tuple[Optional[Dict], Optional[datetime]]:
     """
-    Загружает пропущенные свечи после простоя авторежима.
+    Loads candles missed while auto mode was idle.
 
-    Логика сохранена из прежнего nicegui_app.py:
-    - берёт время последнего intraday-обновления;
-    - если прошло менее 15 минут, докачка не нужна;
-    - загружает 15m и 1h свечи;
-    - рассчитывает технические индикаторы;
-    - собирает пакет формата intraday_update.
+    Logic:
+    - takes the time of the last intraday update;
+    - if less than 15 minutes passed, no catch-up is needed;
+    - loads 15m and 1h candles;
+    - computes technical indicators;
+    - builds a package in intraday_update format.
 
     Parameters
     ----------
     fetcher:
-        Экземпляр BybitDataFetcher.
-
+        BybitDataFetcher instance.
     symbol:
-        Торговая пара, например XRPUSDT.
-
+        Trading pair, e.g. XRPUSDT.
     category:
-        Категория рынка, обычно linear.
-
+        Market category, usually linear.
     coin_memory:
-        Память конкретной монеты.
+        Memory of the specific coin.
 
     Returns
     -------
     tuple:
         (data_package, new_last_candle_time).
-
-        Если докачка не нужна или данные не получены:
-        (None, None).
+        If no catch-up is needed or data was not received: (None, None).
     """
     state = coin_memory.get_state()
-
     last_update_str = state.get("last_update_utc")
     if not last_update_str:
         last_update_str = state.get("last_morning_update_utc")
-
     if not last_update_str:
         return None, None
 
@@ -74,7 +65,7 @@ def catch_up_historical_data(
         last_update = datetime.fromisoformat(last_update_str)
     except (TypeError, ValueError):
         logger.warning(
-            "[%s] Не удалось распарсить last_update_utc: %r",
+            "[%s] Failed to parse last_update_utc: %r",
             symbol,
             last_update_str,
         )
@@ -84,12 +75,11 @@ def catch_up_historical_data(
         last_update = last_update.replace(tzinfo=timezone.utc)
 
     now = datetime.now(timezone.utc)
-
     if (now - last_update).total_seconds() < 900:
         return None, None
 
     logger.info(
-        "[%s] Докачка свечей: %s → %s",
+        "[%s] Catching up candles: %s → %s",
         symbol,
         last_update.strftime("%Y-%m-%d %H:%M UTC"),
         now.strftime("%Y-%m-%d %H:%M UTC"),
@@ -102,7 +92,6 @@ def catch_up_historical_data(
         end_date=now,
         category=category,
     )
-
     prices_1h = fetcher.fetch_ohlcv(
         symbol=symbol,
         interval="60",
@@ -112,7 +101,7 @@ def catch_up_historical_data(
     )
 
     if prices_15m is None or prices_15m.empty:
-        logger.warning("[%s] Не удалось получить 15m свечи для докачки", symbol)
+        logger.warning("[%s] Failed to fetch 15m candles for catch-up", symbol)
         return None, None
 
     indicators, timestamps = calculate_indicators(
@@ -155,7 +144,6 @@ def catch_up_historical_data(
         "message_type": "intraday_update",
         "data": data,
     }
-
     return package, new_last_candle_time
 
 
@@ -166,31 +154,27 @@ def clear_coin_data(
     mode: str = "all",
 ) -> None:
     """
-    Очищает состояние конкретной монеты.
+    Clears the state of a specific coin.
 
-    Журнал сделок намеренно не очищается — это соответствует прежнему
-    поведению кнопки «Очистить» в интерфейсе.
+    The trade journal is intentionally NOT cleared — this matches the
+    previous behavior of the "Clear" button in the interface.
 
     Parameters
     ----------
     coin_memory:
-        Память монеты.
-
+        Coin memory.
     symbol:
-        Символ монеты.
-
+        Coin symbol.
     stop_auto_mode:
-        Функция остановки авторежима, обычно AutoModeState.stop.
-
+        Auto-mode stop function, usually AutoModeState.stop.
     mode:
-        "analysis" — очищает анализ, сетапы, индикаторы и контексты.
-        "all" — дополнительно очищает правила, состояние и strategy_spec.
+        "analysis" — clears analysis, setups, indicators and contexts.
+        "all" — additionally clears rules, state and strategy_spec.
     """
     stop_auto_mode(symbol)
 
     if mode in ("analysis", "all"):
         coin_memory.set_last_analysis(None)
-
         coin_memory.update_state(
             {
                 "last_signal": None,
@@ -210,7 +194,6 @@ def clear_coin_data(
         coin_memory.update_rules("")
         coin_memory.update_behavior_rules("")
         coin_memory.set_active_trade(None)
-
         coin_memory.update_state(
             {
                 "is_initialized": False,
@@ -231,7 +214,7 @@ def clear_coin_data(
 
 def clear_all_journals(memory_manager: MemoryManager) -> None:
     """
-    Полностью очищает журналы сделок для всех монет.
+    Completely clears trade journals for all coins.
     """
     for symbol in memory_manager.get_all_symbols():
         coin_memory = memory_manager.get(symbol)
@@ -241,22 +224,17 @@ def clear_all_journals(memory_manager: MemoryManager) -> None:
 
 def get_all_trades(memory_manager: MemoryManager) -> pd.DataFrame:
     """
-    Собирает журналы сделок всех монет в единый DataFrame.
+    Collects trade journals of all coins into a single DataFrame.
     """
     dataframes = []
-
     for symbol in memory_manager.get_all_symbols():
         coin_memory = memory_manager.get(symbol)
         journal_df = coin_memory.get_journal_df()
-
         if journal_df.empty:
             continue
-
         journal_df = journal_df.copy()
-
         if "pair" not in journal_df.columns:
             journal_df["pair"] = symbol
-
         dataframes.append(journal_df)
 
     if not dataframes:
@@ -279,69 +257,40 @@ def get_all_trades(memory_manager: MemoryManager) -> pd.DataFrame:
 
 def parse_rules_from_text(text: str) -> Tuple[List[str], List[str]]:
     """
-    Разделяет Markdown-текст правил на:
-    - торговые правила;
-    - риск-правила.
+    Splits Markdown rules text into:
+    - trading rules;
+    - risk-management rules.
 
-    Поддерживаются заголовки:
-    - ## Правила торговли
-    - ### Правила торговли
-    - ## Риск-менеджмент
-    - ### Риск-менеджмент
+    Section headers are detected case-insensitively by keyword, so all of
+    these work: "## Trading Rules", "### Trading rules",
+    "## Risk Management", "### Risk-Management".
 
-    Также поддерживаются списки:
-    - Правило
-    * Правило
-    1. Правило
+    Supported list markers: "-", "*", "•", "1.", "2)", "10." ...
     """
     if not text or not text.strip():
         return [], []
 
     lines = [line.strip() for line in text.splitlines() if line.strip()]
-
     trading_rules: List[str] = []
     risk_rules: List[str] = []
     current_section = "trading"
 
-    prefixes = [
-        "- ",
-        "* ",
-        "1. ",
-        "2. ",
-        "3. ",
-        "4. ",
-        "5. ",
-        "6. ",
-        "7. ",
-        "8. ",
-        "9. ",
-    ]
+    def _strip_marker(line: str) -> str:
+        rule = re.sub(r"^[-*•]\s+", "", line)
+        rule = re.sub(r"^\d+[.)]\s+", "", rule)
+        return rule.strip()
 
     for line in lines:
-        if (
-            line.startswith("## Риск-менеджмент")
-            or line.startswith("### Риск-менеджмент")
-        ):
-            current_section = "risk"
-            continue
-
-        if (
-            line.startswith("## Правила торговли")
-            or line.startswith("### Правила торговли")
-        ):
-            current_section = "trading"
-            continue
-
         if line.startswith("#"):
+            lowered = line.lower()
+            # Risk is checked first: "Risk Management Rules" contains both keywords.
+            if "risk" in lowered:
+                current_section = "risk"
+            elif "trading" in lowered or "rule" in lowered:
+                current_section = "trading"
             continue
 
-        rule = line
-
-        for prefix in prefixes:
-            if rule.startswith(prefix):
-                rule = rule[len(prefix):]
-                break
-
+        rule = _strip_marker(line)
         if not rule:
             continue
 
@@ -350,19 +299,12 @@ def parse_rules_from_text(text: str) -> Tuple[List[str], List[str]]:
         else:
             risk_rules.append(rule)
 
-    # Fallback для обычного текста без заголовков.
+    # Fallback for plain text without headers.
     if not trading_rules and not risk_rules and lines:
         for line in lines:
             if line.startswith("#"):
                 continue
-
-            rule = line
-
-            for prefix in prefixes:
-                if rule.startswith(prefix):
-                    rule = rule[len(prefix):]
-                    break
-
+            rule = _strip_marker(line)
             if rule:
                 trading_rules.append(rule)
 

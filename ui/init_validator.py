@@ -1,9 +1,8 @@
 """
-Санити-бэктест стратегии при инициализации монеты.
-
-Замыкает петлю обратной связи: модель генерирует strategy_spec,
-система прогоняет её на истории и возвращает модели числовую диагностику.
-Модель пересобирает стратегию сама — ручные правки state.json не нужны.
+Strategy sanity backtest during coin initialization.
+Closes the feedback loop: the model generates strategy_spec,
+the system runs it on history and returns numeric diagnostics to the model.
+The model rebuilds the strategy itself — no manual state.json edits needed.
 """
 from __future__ import annotations
 
@@ -22,7 +21,7 @@ QUICK_LOSS_CANDLES = 3
 
 
 def build_diagnostics(stats: Dict, trades, df) -> Dict:
-    """Числовая диагностика санити-бэктеста + текст для модели."""
+    """Numeric sanity-backtest diagnostics + text for the model."""
     total = int(stats.get("total_trades", 0) or 0)
     if "timestamp" in df.columns:
         days = max(
@@ -31,8 +30,8 @@ def build_diagnostics(stats: Dict, trades, df) -> Dict:
         )
     else:
         days = float(SANITY_DAYS)
-
     tpw = total / max(1.0, days / 7.0)
+
     wr = float(stats.get("win_rate", 0.0) or 0.0)
     pf = float(stats.get("profit_factor", 0.0) or 0.0)
     exp = float(stats.get("expectancy_pct", 0.0) or 0.0)
@@ -63,42 +62,43 @@ def build_diagnostics(stats: Dict, trades, df) -> Dict:
     defects = []
     if tpw < MIN_TRADES_PER_WEEK:
         defects.append(
-            f"частота {tpw:.1f} сделок/неделю при норме >= {MIN_TRADES_PER_WEEK} "
-            f"(фильтры входа слишком жёсткие)"
+            f"frequency {tpw:.1f} trades/week vs required >= {MIN_TRADES_PER_WEEK} "
+            f"(entry filters are too strict)"
         )
     if pf < 1.0 and exp < 0:
-        defects.append(f"нет эджа: PF={pf:.2f}, expectancy={exp:+.3f}%")
+        defects.append(f"no edge: PF={pf:.2f}, expectancy={exp:+.3f}%")
     if quick_share > MAX_QUICK_LOSS_SHARE:
         defects.append(
-            f"{quick_share:.0%} убытков закрываются за <={QUICK_LOSS_CANDLES} свечи: "
-            f"входы слишком поздние или стоп внутри шума"
+            f"{quick_share:.0%} of losses close within <={QUICK_LOSS_CANDLES} candles: "
+            f"entries are too late or the stop is inside noise"
         )
 
     lines = [
-        f"=== САНИТИ-БЭКТЕСТ СТРАТЕГИИ (последние {int(days)} дней) ===",
-        f"Сделок: {total} ({tpw:.1f}/неделю). WR={wr:.1f}%, payoff={payoff:.2f} "
-        f"(безубыток при WR >= {be_wr:.1f}%).",
-        f"PF={pf:.2f}, expectancy={exp:+.3f}%, доходность={stats.get('return_pct', 0):+.2f}%, "
+        f"=== STRATEGY SANITY BACKTEST (last {int(days)} days) ===",
+        f"Trades: {total} ({tpw:.1f}/week). WR={wr:.1f}%, payoff={payoff:.2f} "
+        f"(breakeven at WR >= {be_wr:.1f}%).",
+        f"PF={pf:.2f}, expectancy={exp:+.3f}%, return={stats.get('return_pct', 0):+.2f}%, "
         f"DD={stats.get('max_drawdown_pct', 0):.1f}%",
-        "Выходы: " + ", ".join(f"{k}={v}" for k, v in sorted(exits.items())),
-        f"Быстрые убытки (<= {QUICK_LOSS_CANDLES} свечи): {quick_share:.0%} от всех убытков",
-        f"Buy&Hold за тот же период: {bh:+.1f}%",
+        "Exits: " + ", ".join(f"{k}={v}" for k, v in sorted(exits.items())),
+        f"Quick losses (<= {QUICK_LOSS_CANDLES} candles): {quick_share:.0%} of all losses",
+        f"Buy&Hold over the same period: {bh:+.1f}%",
     ]
+
     if defects:
-        lines.append("ВЫЯВЛЕННЫЕ ДЕФЕКТЫ:")
+        lines.append("DETECTED DEFECTS:")
         lines += [f"- {d}" for d in defects]
         lines += [
-            "ТРЕБОВАНИЯ К ПЕРЕРАБОТКЕ:",
-            "- Частота: ослабь объёмный/RSI-фильтры и/или добавь вторую OR-группу входа "
-            "(ретест/откат); цель 2-5 сделок в неделю.",
-            "- Тайминг и стопы: при доле быстрых убытков > 50% входи раньше (ретест, а не догон) "
-            "и/или расширь стоп до 2.5-4.0 x ATR15m, чтобы он был вне шума.",
-            "- Payoff: если WR ниже безубыточного порока, подними take_profit_atr_mult до 3-5 "
-            "или убери входы с малым потенциалом движения.",
-            "- Меняй только диагностированные дефекты, не ломай остальные блоки.",
+            "REWORK REQUIREMENTS:",
+            "- Frequency: loosen the volume/RSI filters and/or add a second OR entry group "
+            "(retest/pullback); target 2-5 trades per week. Keep exactly 4 conditions per group.",
+            "- Timing and stops: if quick losses exceed 50%, enter earlier (retest, not chasing) "
+            "and/or widen the stop to 2.5-4.0 x ATR15m so it sits outside noise.",
+            "- Payoff: if WR is below the breakeven threshold, raise take_profit_atr_mult so "
+            "that take >= 2 x stop (RR >= 2:1), or drop entries with little room to move.",
+            "- Change only the diagnosed defects, do not break the other blocks.",
         ]
     else:
-        lines.append("Дефектов не выявлено, стратегия принята как база для оптимизации.")
+        lines.append("No defects detected; the strategy is accepted as a base for optimization.")
 
     return {
         "ok": not defects,
@@ -120,15 +120,20 @@ def run_init_with_sanity(
     fetcher=None,
 ) -> Optional[Dict]:
     """
-    Обёртка над инициализацией: первый ответ модели + до max_revisions
-    переработок по результатам санити-бэктеста. Возвращает итоговый response
-    в том же формате, что и initialize_coin — сохранение в память не меняется.
+    Wrapper around initialization: the first model response plus up to
+    max_revisions reworks based on sanity-backtest results. Returns the final
+    response in the same format as initialize_coin — saving to memory is unchanged.
     """
     response = init_call()
     if not response:
         return None
 
-    # Пробуем 3 варианта получения fetcher
+    # This wrapper is used ONLY for coin initialization. Force the action so
+    # process_ai_response always takes the INIT branch, even if the model
+    # omitted the field in its JSON.
+    response["action"] = "INIT"
+
+    # Try 3 ways to obtain the fetcher
     if fetcher is None:
         fetcher = getattr(engine, "fetcher", None)
     if fetcher is None:
@@ -137,32 +142,33 @@ def run_init_with_sanity(
             fetcher = getattr(_services, "data_fetcher", None)
         except Exception:
             pass
+
     if fetcher is None:
-        logger.warning("[%s] init_validator: fetcher не найден, санити-бэктест пропущен", symbol)
+        logger.warning("[%s] init_validator: fetcher not found, sanity backtest skipped", symbol)
         return response
 
-    # Если глобальный движок не инициализирован — создаём локальный экземпляр
+    # If the global engine is not initialized, create a local instance
     if engine is None:
         try:
             from backtest_engine import BacktestEngine
             engine = BacktestEngine(fetcher=fetcher)
-            logger.info("[%s] init_validator: движок создан локально", symbol)
+            logger.info("[%s] init_validator: engine created locally", symbol)
         except Exception as exc:
-            logger.warning("[%s] init_validator: не удалось создать движок (%s), санити-бэктест пропущен", symbol, exc)
+            logger.warning("[%s] init_validator: failed to create engine (%s), sanity backtest skipped", symbol, exc)
             return response
 
     from datetime import datetime, timezone
-
     end = datetime.now(timezone.utc)
     start = end - timedelta(days=SANITY_DAYS)
+
     try:
         df = fetcher.fetch_ohlcv(symbol, "15", start, end, category)
     except Exception as exc:
-        logger.warning("[%s] init_validator: ошибка загрузки истории (%s), санити-бэктест пропущен", symbol, exc)
+        logger.warning("[%s] init_validator: history loading error (%s), sanity backtest skipped", symbol, exc)
         return response
 
     if df is None or df.empty or len(df) < 500:
-        logger.warning("[%s] init_validator: мало истории для санити-бэктеста (%d строк)", symbol, 0 if df is None else len(df))
+        logger.warning("[%s] init_validator: not enough history for sanity backtest (%d rows)", symbol, 0 if df is None else len(df))
         return response
 
     best_spec: Optional[Dict] = None
@@ -181,7 +187,7 @@ def run_init_with_sanity(
                 diagnostics_text=feedback,
                 research=response.get("research"),
             )
-            logger.info("[%s] revise_init_strategy вернул: %s", symbol, "OK" if revised else "None")
+            logger.info("[%s] revise_init_strategy returned: %s", symbol, "OK" if revised else "None")
             if revised and revised.get("strategy_spec"):
                 for key in (
                     "strategy_spec",
@@ -191,23 +197,24 @@ def run_init_with_sanity(
                 ):
                     if key in revised:
                         response[key] = revised[key]
-                logger.info("[%s] INIT: модель пересобрала спеку (раунд %d)", symbol, attempt)
+                logger.info("[%s] INIT: model rebuilt the spec (round %d)", symbol, attempt)
             else:
-                logger.warning("[%s] INIT: переработка не дала спеку, раунд %d", symbol, attempt)
+                logger.warning("[%s] INIT: revision produced no spec, round %d", symbol, attempt)
 
         spec = response.get("strategy_spec")
-        err = validate_strategy_spec(spec) if spec else "strategy_spec отсутствует"
+        err = validate_strategy_spec(spec) if spec else "strategy_spec is missing"
         last_rules = response.get("new_rules", "") or ""
+
         if err is not None:
-            logger.warning("[%s] INIT: спека невалидна (%s)", symbol, err)
-            feedback = f"strategy_spec невалиден: {err}. Верни исправленный строгий JSON."
+            logger.warning("[%s] INIT: spec is invalid (%s)", symbol, err)
+            feedback = f"strategy_spec is invalid: {err}. Return a corrected strict JSON."
             last_spec = spec
             continue
 
         spec = ensure_engine_defaults(spec)
         res = engine.run_on_dataframe(df=df, symbol=symbol, strategy_spec=spec)
         if "error" in res:
-            logger.warning("[%s] INIT: санити-бэктест ошибка: %s", symbol, res["error"])
+            logger.warning("[%s] INIT: sanity backtest error: %s", symbol, res["error"])
             break
 
         diag = build_diagnostics(res["stats"], res["trades"], df)

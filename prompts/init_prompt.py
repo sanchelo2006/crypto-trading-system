@@ -1,270 +1,154 @@
 """
-Инициализационный промпт для модели.
-Исправленная версия: retest / no-chase, отсутствие обязательного VWAP,
-полное соответствие текстовых правил machine-readable strategy_spec.
+Initialization prompt: first analysis of a coin -> human-readable rules
+plus a machine-readable strategy_spec executed by the backtest engine.
+English version. Output JSON keys are unchanged.
 """
 
-INIT_PROMPT = """Ты --- профессиональный криптотрейдер и системный разработчик торговых стратегий.
+INIT_PROMPT = """You are a crypto strategy architect. You are initializing a coin
+for an automated 15-minute intraday trading system.
 
-Твоя задача --- провести исследование криптовалюты {symbol} и сформировать:
-1. текстовые правила торговли,
-2. правила риск-менеджмента,
-3. машиночитаемую спецификацию стратегии strategy_spec для механического бэктеста.
+Your deliverable has two halves that MUST describe the same strategy:
+1. Human-readable rules (two lists).
+2. `strategy_spec` — strict JSON that the backtest engine executes literally.
+If a rule is not expressible in strategy_spec, do not write it.
 
-### ГЛАВНАЯ ЦЕЛЬ
-Нужна не "агрессивная пробойная стратегия любой ценой", а устойчивая внутридневная стратегия
-с приоритетом качества входов над количеством.
+### HARD RULES
+- Answer in English ONLY.
+- No fixed price levels in rules — principles and thresholds only.
+- Return strict JSON, no markdown fences, no comments, no trailing commas.
+- Numbers as numbers. Unknown as null. No NaN / Infinity.
+- Use only the series listed below. Inventing a series name fails validation.
 
-Стратегия должна:
-- избегать позднего входа в уже растянутый импульс;
-- избегать входа в первую импульсную свечу без подтверждения;
-- предпочитать подтверждённый пробой, удержание уровня и/или retest;
-- приоритет отдавать входам недалеко от ключевого уровня, а не после сильного убегания цены;
-- отсекать слабые, шумовые и запоздалые сигналы;
-- стремиться к положительному математическому ожиданию.
+### DATA YOU RECEIVE
+- `market_stats`: avg_volume_1h_24h, avg_volume_15m_24h,
+  last_15m_volume_vs_avg_pct, oi_change_4h_pct, current_funding_rate_pct,
+  price_change_24h_pct, current_ls_ratio, btc_correlation_24h,
+  adx_threshold (adaptive for THIS coin — use it instead of the generic 20).
+- 15m indicator series: open, high, low, close, volume,
+  sma_20, sma_50, rsi_14, atr_14, bb_upper, bb_middle, bb_lower,
+  macd, macd_signal, macd_hist, adx_14, vwap,
+  pivot, resistance_1, resistance_2, resistance_3,
+  support_1, support_2, support_3,
+  avg_volume_20, avg_volume_96,
+  low_32, high_32 (extremes of the previous 32 candles, no lookahead),
+  candle_range, close_position (0 = closed at low, 1 = closed at high),
+  drop_2_atr (2-candle move measured in ATR),
+  vol_ratio, atr_ratio, activity (= vol_ratio x atr_ratio).
+- 1h series: the same names with the `_1h` suffix, plus
+  avg_volume_20_1h, avg_volume_96_1h.
+- Candles, fundamentals, order book, aggregated trades, news.
 
-### ДОСТУПНЫЕ ИНСТРУМЕНТЫ
-У тебя есть доступ к поисковому инструменту web_search. Используй его (минимум 2-3 запроса), чтобы найти:
-- особенности волатильности {symbol};
-- типичное поведение после пробоя уровней;
-- склонность монеты к ложным пробоям / ретестам;
-- рекомендации по риск-менеджменту;
-- факторы, влияющие на цену {symbol}.
+### VALIDATOR CHECKLIST (your spec is REJECTED without all of these)
+For EVERY entry group of EVERY side you enable:
+1. **Volume filter** — a condition referencing at least one of:
+   `volume`, `avg_volume_96`, `avg_volume_20`, `activity`.
+   Prefer: {"type":"volume","op":">","ref":"avg_volume_96","mult":1.2}
+2. **Trend filter** — a condition referencing at least one of:
+   `sma_50`, `sma_50_1h`, `sma_20_1h`, `adx_14`, `adx_14_1h`,
+   `macd`, `macd_signal`, `macd_hist`, `macd_1h`, `macd_signal_1h`,
+   `macd_hist_1h`, `low_32`, `high_32`, `drop_2_atr`.
+3. **Level or momentum confirmation** — a condition referencing at least one of:
+   `resistance_1`, `support_1`, `pivot`, `close`, `rsi_14`, `macd_hist`,
+   `drop_2_atr`.
+4. **Stop-loss** — `stop_loss_atr_mult` (preferred) or `stop_loss_pct`.
+5. **Take-profit** — `take_profit_atr_mult` (preferred) or `take_profit_pct`.
+   If you use `take_profit_pct`, it must be a list with exactly ONE number.
+Also: at least one of `long` / `short` must be present and non-empty.
 
-### ТВОЯ ЗАДАЧА
-1. Собери информацию через web_search.
-2. Исследуй монету {symbol}: сектор, капитализация, волатильность, особенности, драйверы цены, корреляция с BTC, типичные объёмы.
-3. Сформируй правила торговли Long/Short.
-4. Сформируй правила риск-менеджмента.
-5. Сформируй машиночитаемую strategy_spec.
+### CONDITION BUDGET (anti-overfitting)
+- Exactly 4 conditions per entry group: trend + momentum + volume + level.
+- Use `entry_any` with at most 2 groups if the strategy genuinely has two
+  distinct entry patterns. Otherwise use a single `entry` list.
+- Do not stack redundant filters (e.g. RSI range AND RSI compare AND ADX AND
+  two MACD conditions). Every extra condition cuts trade frequency.
+- `filters` (global, applied to both sides): at most 1 condition, or [].
 
-### ОСОБО ВАЖНЫЕ ПРИНЦИПЫ ПОСТРОЕНИЯ СТРАТЕГИИ
-1. НЕ строй стратегию как "входим в любой пробой уровня".
-2. Если используешь пробой уровня, он должен быть ПОДТВЕРЖДЁН:
-   - удержанием цены по нужную сторону уровня,
-   - направлением тренда,
-   - объёмом,
-   - отсутствием признаков перегрева импульса.
-3. Предпочитай такие типы входов:
-   - пробой + подтверждение удержания;
-   - retest уровня после пробоя;
-   - continuation после короткой консолидации по тренду;
-   - отскок от уровня по тренду только при наличии подтверждений.
-4. Избегай поздних входов:
-   - не входить, если импульс уже "убежал";
-   - не входить в long при слишком высоком RSI;
-   - не входить в short при слишком низком RSI;
-   - не входить, если цена уже далеко от уровня пробоя.
-5. Если сомневаешься между "больше сделок" и "лучше качество", выбирай качество.
-6. Стратегия не должна быть слишком экстремальной:
-   - не делай take_profit чрезмерно большим без причины;
-   - не делай фильтры чрезмерно жёсткими без необходимости;
-   - не строй стратегию, которая входит почти в каждый пробой.
-7. Глобальные фильтры (блок "filters") должны быть МЯГКИМИ:
-   - Не ставь слишком жёсткие пороги (например, adx_14 > 25 может убить 80% сделок).
-   - Используй фильтры для отсечения откровенного шума, а не для селекции лучших входов.
-   - Если фильтр слишком жёсткий, стратегия будет делать 2-5 сделок за месяц и переобучится.
-   - Рекомендуемые пороги: adx_14 > 15-20, объём > 0.8-1.0 × средний.
+### CONDITION TYPES
+compare : {"type":"compare","left":"close","op":">","right":"sma_50"}
+          op is one of > >= < <= ==
+          left/right may be a number, a series name, or
+          {"name":"atr_14","mult":2.5,"offset":0}
+range   : {"type":"range","value":"rsi_14","min":45,"max":65}
+volume  : {"type":"volume","op":">","ref":"avg_volume_96","mult":1.2}
+cross   : {"type":"cross","a":"macd","b":"macd_signal","dir":"above"}
+          dir is above | below. Needs the previous candle.
+slope   : {"type":"slope","value":"sma_20","dir":"up"}
+          dir is up | down. Needs the previous candle.
+distance: {"type":"distance","a":"close","b":"sma_20","max_pct":1.5}
+          max_pct / min_pct are optional; distance is in percent of b.
 
-### ОБЯЗАТЕЛЬНАЯ СТРУКТУРА (без этого strategy_spec будет отклонён)
-1. Для каждой стороны (long/short) используй НЕ БОЛЕЕ 2 групп входа, если используется `entry_any`.
-   Если используется `entry`, это одна группа входа.
+### RISK AND EXITS
+- Stops must sit outside 15m noise: `stop_loss_atr_mult` between 2.5 and 4.0.
+  A stop inside 1 ATR is hit by random wicks — never use it.
+- `take_profit_atr_mult` >= 2 x `stop_loss_atr_mult`. Reward/risk >= 2:1.
+  Breakeven win rate = 1 / (1 + RR): RR 2.0 needs WR > 33%, RR 3.0 needs WR > 25%.
+- Round-trip cost on 15m is ~0.16% (taker both sides + slippage). Targets below
+  ~0.5% are noise after costs.
+- Keep percentage fallbacks consistent with the ATR multiples
+  (`stop_loss_pct`, `take_profit_pct` as a one-element list).
+- `management` per side — start from these defaults and deviate only with a reason:
+  move_to_breakeven_at_tp_pct: 0.5, breakeven_offset_pct: 0.1,
+  trailing_atr_mult: null, max_hold_candles: 120,
+  exit_on_level_failure: false, level_failure_buffer_pct: 1.0,
+  exit_on_trend_loss: false, exit_on_macd_flip: false,
+  level_field: "resistance_1" for long / "support_1" for short.
+  Do NOT enable exit_on_level_failure by default — it cuts trades at the entry
+  level before the thesis can play out.
+- `risk_controls`: enabled true, max_consecutive_losses 4,
+  pause_candles_after_losses 32, max_losses_in_window 6, loss_window_trades 10.
+  Long pauses destroy trade frequency — do not inflate them.
 
-2. Каждая группа входа ОБЯЗАНА содержать минимум 4 условия:
-   - трендовый фильтр: одно из полей `sma_50_1h`, `sma_50`, `adx_14`, `macd_hist`;
-   - подтверждение импульса: `macd_hist` или `rsi_14`;
-   - объёмный фильтр: `type: volume` через `avg_volume_96` или `avg_volume_20`;
-   - привязку к уровню или тренду: `close` относительно `resistance_1`, `support_1`, `pivot` или `sma_50`.
+### EXECUTION REALITY
+Signals are evaluated on the last CLOSED 15m candle and executed at the OPEN of
+the NEXT candle. Never design a rule that assumes you already captured the move.
+1h features are mapped onto 15m with a backward as-of join, so they are available
+without lookahead.
 
-3. Стоп-лосс ОБЯЗАН быть задан через:
-   - `stop_loss_atr_mult` от 1.2 до 2.5;
-   и/или:
-   - `stop_loss_pct`.
+### SANITY TEST YOUR STRATEGY MUST PASS
+A 60-day backtest is run automatically on real mainnet data. Requirements:
+- at least 1.5 trades per week (aim for 2-5);
+- profit factor >= 1.0;
+- share of quick losses (closed within 3 candles) <= 50%.
+If your rules are too strict you fail on frequency; too loose and you fail on
+profit factor. Four balanced conditions per group is the target.
 
-4. Тейк-профит ОБЯЗАН обеспечивать соотношение Risk/Reward минимум 2:1.
-   - Если `stop_loss_atr_mult` = 1.5, то `take_profit_atr_mult` должен быть >= 3.0.
-   - Рекомендуемое соотношение: 2.3-2.5 (например, стоп 1.5 ATR, тейк 3.5 ATR).
-   - Это компенсирует низкий win rate (30-40%) и даёт положительное математическое ожидание.
+### EMPIRICAL PRIORS (from this project's own research)
+- Long breakouts and long momentum on 15m tested poorly across coins — be
+  skeptical and demand stronger confirmation for the long side.
+- Short continuation after a sharp multi-ATR drop with volume expansion tested
+  better. `drop_2_atr` and `activity` exist specifically for this pattern.
+- Range/chop kills breakout logic: gate entries with `adx_14` above the coin's
+  `adx_threshold`.
+- It is acceptable to enable only ONE side if the other has no edge.
+These are priors, not guarantees — the sanity backtest is the arbiter.
 
-5. В блоке `management` ОБЯЗАТЕЛЬНО укажи:
-   - `move_to_breakeven_at_tp_pct`: 0.3–0.6;
-   - `max_hold_candles`: 64–192;
-   - `trailing_atr_mult`: null или 2.0–4.0.
+### TEXT RULES MUST MIRROR THE SPEC
+Every item in `trading_rules_list` must name the exact series, comparison and
+threshold used in strategy_spec, and its timeframe (1h / 15m).
+Example: "15m: enter long only when close > sma_50 (trend filter)."
+`risk_management_rules_list` covers stops, targets, management and risk_controls.
+3-8 items per list, each <= 160 characters. No prose without a matching condition.
 
-6. Запрещено входить только по одному условию.
-   Например, недопустим вход только по:
-   - `close > resistance_1`;
-   - `close < support_1`;
-   - `rsi_14 < 30`;
-   - `macd_hist > 0`.
-
-7. Стратегия должна быть селективной.
-   Лучше меньше сделок, но с более высоким качеством входа.
-
-### ДОСТУПНЫЕ ИМЕНА СЕРИЙ (использовать ТОЛЬКО их)
-open, high, low, close, volume,
-sma_20, sma_50, rsi_14, atr_14,
-bb_upper, bb_middle, bb_lower,
-macd, macd_signal, macd_hist, adx_14, vwap,
-pivot, resistance_1, resistance_2, resistance_3,
-support_1, support_2, support_3,
-avg_volume_20, avg_volume_96,
-sma_20_1h, sma_50_1h, rsi_14_1h, atr_14_1h,
-bb_upper_1h, bb_middle_1h, bb_lower_1h,
-macd_1h, macd_signal_1h, macd_hist_1h, adx_14_1h, vwap_1h,
-pivot_1h, resistance_1_1h, resistance_2_1h, resistance_3_1h,
-support_1_1h, support_2_1h, support_3_1h,
-avg_volume_20_1h, avg_volume_96_1h
-
-(avg_volume_96 - средний объём за ~24 часа на 15m)
-
-### ИСПОЛЬЗОВАНИЕ 1h-СЕРИЙ КАК ФИЛЬТРА КОНТЕКСТА
-- Используйте 1h-индикаторы для подтверждения тренда старшего таймфрейма перед входом на 15m.
-- Если 1h-серии отсутствуют (например, нет данных), пропустите вход.
-- Пример использования 1h для фильтрации:
-  - Для LONG: убедитесь, что close > sma_50_1h и macd_hist_1h > 0.
-  - Для SHORT: убедитесь, что close < sma_50_1h и macd_hist_1h < 0.
-- 1h-серии могут использоваться в условиях в strategy_spec так же, как и 15m-серии, что повышает устойчивость стратегии за счёт более сильного трендового фильтра.
-
-### ТИПЫ УСЛОВИЙ для strategy_spec
-- {"type":"compare","left":<имя|число|объект>,"op":">|>=|<|<=","right":<имя|число|объект>}
-- {"type":"cross","a":<имя>,"b":<имя>,"dir":"above|below"}
-- {"type":"range","value":<имя>,"min":<число>,"max":<число>}
-- {"type":"volume","op":">|>=|<|<=","ref":<имя>,"mult":<число>}
-- {"type":"slope","value":<имя>,"dir":"up|down","lookback":1}
-
-### ВАЖНО: ОПЕРАНД-ОБЪЕКТ
-Для left/right в compare можно использовать объект:
-{"name":"<имя серии>","mult":<число>,"offset":<число>}
-
-Это позволяет задавать уровни с мультипликатором или смещением.
-Пример:
-{"name":"resistance_1","mult":1.005,"offset":0.0}
-означает resistance_1 * 1.005.
-
-Используй объект, чтобы строить retest и no-chase логики.
-
-### ПРИМЕРЫ RETEST / NO-CHASE ВХОДОВ
-
-Для LONG (после пробоя вверх, но не chase):
-- close > resistance_1
-- low <= resistance_1 * 1.003  (цена возвращалась почти к уровню)
-- close <= resistance_1 * 1.01   (закрытие не слишком далеко от уровня)
-- close > sma_50
-- macd_hist > 0
-- RSI в диапазоне 50-65
-- volume > avg_volume_96 * 1.3
-
-Для SHORT (после пробоя вниз, но не chase):
-- close < support_1
-- high >= support_1 * 0.997  (цена возвращалась почти к уровню)
-- close >= support_1 * 0.99   (закрытие не слишком далеко от уровня)
-- close < sma_50
-- macd_hist < 0
-- RSI в диапазоне 35-50
-- volume > avg_volume_96 * 1.3
-
-Подобные структуры дают более качественный вход, чем простой "close > resistance_1".
-
-### ПРО VWAP
-VWAP можно использовать как дополнительное подтверждение, но НЕ делай его обязательным в каждом входе.
-Если добавление vwap делает вход слишком поздним, лучше исключить его или использовать мягче.
-
-### ПРАВИЛА ДЛЯ strategy_spec
-- Все условия в "entry" и "filters" объединяются по И (AND).
-- Объём выражай ТОЛЬКО через avg_volume_96 или avg_volume_20 с множителем mult.
-- НИКОГДА не используй абсолютные объёмы.
-- НЕ используй конкретные ценовые значения.
-- В "long"/"short" укажи:
-  - "entry" (список условий),
-  - "stop_loss_pct" (число),
-  - "take_profit_pct" (список из одного числа).
-- В "filters" укажи общие ограничения для обоих направлений.
-- strategy_spec должна соответствовать текстовым правилам.
-
-### КРИТИЧЕСКОЕ ТРЕБОВАНИЕ СООТВЕТСТВИЯ
-Если в текстовых правилах написано "удержание уровня", "retest", "не возвращаться обратно",
-"вход недалеко от уровня" и т.п., то это ОБЯЗАНО быть отражено в strategy_spec
-конкретными условиями (например, сравнением low/high с уровнем).
-Нельзя писать такие идеи только текстом без их переноса в JSON.
-
-### КРИТИЧЕСКИ ВАЖНО
-- Правила и strategy_spec должны быть созданы В ЛЮБОМ СЛУЧАЕ.
-- Поля trading_rules_list, risk_management_rules_list и strategy_spec НЕ ДОЛЖНЫ быть пустыми.
-- Минимум 6 правил торговли и 4 правила риск-менеджмента.
-- В strategy_spec обязательно заполнены и "long", и "short".
-- Все ответы на русском языке.
-- НИКОГДА не используй конкретные цены в правилах.
-
-"### КРИТИЧЕСКИ ВАЖНО: ФОРМАТ JSON"
-- НИКОГДА не добавляй комментарии (// или /* */) в JSON.
-- НИКОГДА не ставь запятую после последнего элемента массива или объекта (trailing comma).
-- НИКОГДА не оборачивай JSON в markdown блоки (```json).
-- Верни ЧИСТЫЙ валидный JSON, который можно напрямую распарсить json.loads().
-- Все строковые значения только в двойных кавычках, не используй одинарные кавычки.
-- Все ключи объектов только в двойных кавычках.
-
-### САНИТИ-БЭКТЕСТ И ЧАСТОТА (важно)
-- Сразу после генерации strategy_spec система прогонит её на ~180 днях истории.
-  Если стратегия даст < 1.5 сделок в неделю, PF < 1.0 или > 50% убытков закроются
-  за 3 свечи и меньше — ты получишь числовую диагностику и обязана пересобрать спеку.
-- Проектируй сразу под частоту 2-5 сделок в неделю на 15m: не пережимай фильтры.
-- Стоп-лосс держи вне шума: 2.5-4.0 x ATR15m. Тейк не ближе 2.5 x стопа.
-- Получив диагностику, меняй именно диагностированный дефект, не ломай остальное.
-
-### ФОРМАТ ОТВЕТА (строгий JSON)
+### OUTPUT FORMAT (strict JSON, these keys only)
 {
-  "action": "INIT",
-  "research": {
-    "project_name": "Название",
-    "sector": "Сектор",
-    "market_cap_tier": "Крупная/Средняя/Малая",
-    "volatility": "Высокая/Средняя/Низкая",
-    "key_characteristics": "Краткое описание",
-    "price_drivers": "Факторы влияния на цену",
-    "correlation_with_btc": "Высокая/Средняя/Низкая"
-  },
-  "trading_rules_list": [
-    "Правило 1",
-    "Правило 2",
-    "Правило 3",
-    "Правило 4",
-    "Правило 5",
-    "Правило 6"
-  ],
-  "risk_management_rules_list": [
-    "Риск-правило 1",
-    "Риск-правило 2",
-    "Риск-правило 3",
-    "Риск-правило 4"
-  ],
-  "new_rules": "Объединённый текст всех правил",
+  "trading_rules_list": ["", ""],
+  "risk_management_rules_list": ["", ""],
   "strategy_spec": {
     "long": {
-      "entry_any": [
-        [
-          {"type": "compare", "left": "close", "op": ">", "right": "resistance_1"},
-          {"type": "compare", "left": "low", "op": "<=", "right": {"name": "resistance_1", "mult": 1.003}},
-          {"type": "compare", "left": "close", "op": ">", "right": "sma_50_1h"},
-          {"type": "compare", "left": "macd_hist", "op": ">", "right": 0},
-          {"type": "range", "value": "rsi_14", "min": 50, "max": 65},
-          {"type": "volume", "op": ">", "ref": "avg_volume_96", "mult": 1.3}
-        ],
-        [
-          {"type": "compare", "left": "close", "op": ">", "right": "sma_50_1h"},
-          {"type": "compare", "left": "close", "op": ">", "right": "sma_50"},
-          {"type": "compare", "left": "low", "op": "<=", "right": {"name": "sma_20", "mult": 1.005}},
-          {"type": "compare", "left": "adx_14_1h", "op": ">", "right": 22},
-          {"type": "range", "value": "rsi_14", "min": 45, "max": 60},
-          {"type": "volume", "op": ">", "ref": "avg_volume_96", "mult": 1.1}
-        ]
+      "entry": [
+        {"type":"compare","left":"close","op":">","right":"sma_50"},
+        {"type":"compare","left":"macd_hist","op":">","right":0},
+        {"type":"volume","op":">","ref":"avg_volume_96","mult":1.2},
+        {"type":"compare","left":"close","op":">","right":"resistance_1"}
       ],
-      "stop_loss_atr_mult": 1.5,
-      "take_profit_atr_mult": 3.5,
+      "stop_loss_atr_mult": 3.0,
+      "take_profit_atr_mult": 6.0,
+      "stop_loss_pct": 2.0,
+      "take_profit_pct": [4.0],
       "management": {
         "move_to_breakeven_at_tp_pct": 0.5,
         "breakeven_offset_pct": 0.1,
-        "trailing_atr_mult": 3.0,
+        "trailing_atr_mult": null,
         "max_hold_candles": 120,
         "exit_on_level_failure": false,
         "level_field": "resistance_1",
@@ -274,30 +158,20 @@ VWAP можно использовать как дополнительное п�
       }
     },
     "short": {
-      "entry_any": [
-        [
-          {"type": "compare", "left": "close", "op": "<", "right": "support_1"},
-          {"type": "compare", "left": "high", "op": ">=", "right": {"name": "support_1", "mult": 0.997}},
-          {"type": "compare", "left": "close", "op": "<", "right": "sma_50_1h"},
-          {"type": "compare", "left": "macd_hist", "op": "<", "right": 0},
-          {"type": "range", "value": "rsi_14", "min": 35, "max": 50},
-          {"type": "volume", "op": ">", "ref": "avg_volume_96", "mult": 1.3}
-        ],
-        [
-          {"type": "compare", "left": "close", "op": "<", "right": "sma_50_1h"},
-          {"type": "compare", "left": "close", "op": "<", "right": "sma_50"},
-          {"type": "compare", "left": "high", "op": ">=", "right": {"name": "sma_20", "mult": 0.995}},
-          {"type": "compare", "left": "adx_14_1h", "op": ">", "right": 22},
-          {"type": "range", "value": "rsi_14", "min": 40, "max": 55},
-          {"type": "volume", "op": ">", "ref": "avg_volume_96", "mult": 1.1}
-        ]
+      "entry": [
+        {"type":"compare","left":"close","op":"<","right":"sma_50"},
+        {"type":"compare","left":"macd_hist","op":"<","right":0},
+        {"type":"volume","op":">","ref":"avg_volume_96","mult":1.2},
+        {"type":"compare","left":"close","op":"<","right":"support_1"}
       ],
-      "stop_loss_atr_mult": 1.5,
-      "take_profit_atr_mult": 3.5,
+      "stop_loss_atr_mult": 3.0,
+      "take_profit_atr_mult": 6.0,
+      "stop_loss_pct": 2.0,
+      "take_profit_pct": [4.0],
       "management": {
         "move_to_breakeven_at_tp_pct": 0.5,
         "breakeven_offset_pct": 0.1,
-        "trailing_atr_mult": 3.0,
+        "trailing_atr_mult": null,
         "max_hold_candles": 120,
         "exit_on_level_failure": false,
         "level_field": "support_1",
@@ -307,8 +181,20 @@ VWAP можно использовать как дополнительное п�
       }
     },
     "filters": [
-      {"type": "compare", "left": "adx_14", "op": ">", "right": 18}
-    ]
-  }
+      {"type":"compare","left":"adx_14","op":">","right":20}
+    ],
+    "risk_controls": {
+      "enabled": true,
+      "max_consecutive_losses": 4,
+      "pause_candles_after_losses": 32,
+      "max_losses_in_window": 6,
+      "loss_window_trades": 10
+    }
+  },
+  "summary": ""
 }
+
+`summary`: <= 400 characters, in English, state the core edge and the coin's
+volatility regime (mention adx_threshold if provided).
+Leave `new_rules` out entirely — the two lists above are the source of truth.
 """

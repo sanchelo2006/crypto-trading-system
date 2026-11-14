@@ -1,11 +1,9 @@
 """
-Экспорт результата одиночного бэктеста в XLSX.
-
-Файл содержит два листа:
-  - «Статистика» — шапка (symbol, источник спеки, даты) + все метрики из stats;
-  - «Сделки»     — таблица сделок с колонкой entry_reasons.
+Export a single backtest result to XLSX.
+The file contains two sheets:
+- "Statistics" — header (symbol, spec source, dates) + all metrics from stats;
+- "Trades"     — trade table with the entry_reasons column.
 """
-
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -16,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def _fmt_date(value) -> str:
-    """Приводит datetime/строку к YYYY-MM-DD. None → 'unknown'."""
+    """Converts datetime/string to YYYY-MM-DD. None -> 'unknown'."""
     if hasattr(value, "strftime"):
         return value.strftime("%Y-%m-%d")
     if value is None:
@@ -25,14 +23,14 @@ def _fmt_date(value) -> str:
 
 
 def _fmt_dt(value) -> str:
-    """Дата+время для колонок сделок."""
+    """Date + time for trade columns."""
     if hasattr(value, "strftime"):
         return value.strftime("%Y-%m-%d %H:%M:%S")
     return str(value) if value is not None else ""
 
 
 def _format_entry_reasons(reasons) -> str:
-    """Склеивает список условий входа в одну строку для ячейки Excel."""
+    """Joins the list of entry conditions into a single Excel cell string."""
     if not reasons:
         return ""
     parts = []
@@ -50,26 +48,26 @@ def _format_entry_reasons(reasons) -> str:
 def _build_stats_rows(result: Dict, symbol: str) -> List[Dict]:
     stats = result.get("stats", {}) or {}
     rows = [
-        ("Символ", symbol),
-        ("Источник стратегии", result.get("spec_source", "")),
-        ("Дата начала", _fmt_date(result.get("start_date"))),
-        ("Дата конца", _fmt_date(result.get("end_date"))),
+        ("Symbol", symbol),
+        ("Strategy source", result.get("spec_source", "")),
+        ("Start date", _fmt_date(result.get("start_date"))),
+        ("End date", _fmt_date(result.get("end_date"))),
         ("", ""),
-        ("Всего сделок", stats.get("total_trades", 0)),
+        ("Total trades", stats.get("total_trades", 0)),
         (
             "Long / Short",
             f'{stats.get("long_trades", 0)} / {stats.get("short_trades", 0)}',
         ),
         ("Win Rate (%)", stats.get("win_rate", 0)),
-        ("Доходность (%)", stats.get("return_pct", 0)),
-        ("Сумма % сделок", stats.get("total_pnl_pct", 0)),
-        ("Итоговый капитал ($)", stats.get("final_capital", 0)),
-        ("Макс. просадка (%)", stats.get("max_drawdown_pct", 0)),
+        ("Return (%)", stats.get("return_pct", 0)),
+        ("Sum of trade %", stats.get("total_pnl_pct", 0)),
+        ("Final capital ($)", stats.get("final_capital", 0)),
+        ("Max drawdown (%)", stats.get("max_drawdown_pct", 0)),
         ("Profit Factor", stats.get("profit_factor", 0)),
-        ("Средняя сделка (%)", stats.get("avg_trade_pct", 0)),
+        ("Average trade (%)", stats.get("avg_trade_pct", 0)),
         ("Expectancy (%)", stats.get("expectancy_pct", 0)),
-        ("Средний win (%)", stats.get("avg_win_pct", 0)),
-        ("Средний loss (%)", stats.get("avg_loss_pct", 0)),
+        ("Average win (%)", stats.get("avg_win_pct", 0)),
+        ("Average loss (%)", stats.get("avg_loss_pct", 0)),
         ("Risk controls", "ON" if stats.get("risk_controls_enabled") else "OFF"),
         ("Cooldown activations", stats.get("cooldown_activations", 0)),
         (
@@ -77,7 +75,7 @@ def _build_stats_rows(result: Dict, symbol: str) -> List[Dict]:
             stats.get("skipped_candles_by_cooldown", 0),
         ),
     ]
-    return [{"Метрика": k, "Значение": v} for k, v in rows]
+    return [{"Metric": k, "Value": v} for k, v in rows]
 
 
 def _build_trades_rows(trades) -> List[Dict]:
@@ -107,13 +105,11 @@ def export_backtest_to_xlsx(
     end_date=None,
 ) -> Optional[Path]:
     """
-    Сохраняет результат одиночного бэктеста в XLSX.
-
-    Имя файла: {symbol}_backtest_{start}_{end}.xlsx (даты — YYYY-MM-DD).
-
-    Возвращает путь к файлу или None, если сохранить не удалось.
-    Ошибки логируются, но не пробрасываются — падение экспорта не должно
-    ломать рендер результата в UI.
+    Saves a single backtest result to XLSX.
+    File name: {symbol}_backtest_{start}_{end}.xlsx (dates as YYYY-MM-DD).
+    Returns the file path, or None if saving failed.
+    Errors are logged but not raised — an export failure must not
+    break rendering the result in the UI.
     """
     try:
         output_dir = Path(output_dir)
@@ -155,14 +151,13 @@ def export_backtest_to_xlsx(
             )
             text_fmt = workbook.add_format({"valign": "top"})
 
-            stats_df.to_excel(writer, sheet_name="Статистика", index=False)
-            ws_stats = writer.sheets["Статистика"]
+            stats_df.to_excel(writer, sheet_name="Statistics", index=False)
+            ws_stats = writer.sheets["Statistics"]
             ws_stats.set_column(0, 0, 34, text_fmt)
             ws_stats.set_column(1, 1, 44, text_fmt)
 
-            trades_df.to_excel(writer, sheet_name="Сделки", index=False)
-            ws_trades = writer.sheets["Сделки"]
-
+            trades_df.to_excel(writer, sheet_name="Trades", index=False)
+            ws_trades = writer.sheets["Trades"]
             widths = {
                 "entry_time": 20,
                 "exit_time": 20,
@@ -177,14 +172,14 @@ def export_backtest_to_xlsx(
             for idx, col in enumerate(trades_df.columns):
                 ws_trades.set_column(idx, idx, widths.get(col, 16), text_fmt)
 
-            # Жирная шапка на обоих листах
+            # Bold header on both sheets
             for ws, df in ((ws_stats, stats_df), (ws_trades, trades_df)):
                 for col_idx in range(len(df.columns)):
                     ws.write(0, col_idx, str(df.columns[col_idx]), header_fmt)
 
-        logger.info("[%s] Бэктест сохранён: %s", symbol, filepath)
+        logger.info("[%s] Backtest saved: %s", symbol, filepath)
         return filepath
 
     except Exception as e:
-        logger.warning("[%s] Не удалось сохранить XLSX бэктеста: %s", symbol, e)
+        logger.warning("[%s] Failed to save backtest XLSX: %s", symbol, e)
         return None

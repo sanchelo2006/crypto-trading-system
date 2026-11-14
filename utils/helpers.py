@@ -1,5 +1,5 @@
 """
-Вспомогательные функции: форматирование данных в CSV, работа с датами, логирование.
+Helper functions: formatting data as CSV, date handling, logging.
 """
 import pandas as pd
 import logging
@@ -29,23 +29,23 @@ def csv_string_to_df(csv_str: str) -> pd.DataFrame:
 
 def safe_parse_json(text: str) -> Optional[Dict[str, Any]]:
     """
-    Устойчивый парсинг JSON из ответа AI.
-    Порядок:
-    1) прямой json.loads
+    Robust JSON parsing of an AI response.
+    Order:
+    1) direct json.loads
     2) markdown ```json
-    3) вырезка между первой { и последней }
-    4) вырезка по балансу фигурных скобок
-    5) попытка починить строки и убрать хвостовой мусор
+    3) slice between the first { and the last }
+    4) slice by balanced curly braces
+    5) attempt to fix strings and strip trailing garbage
     """
     if not text:
         return None
 
     candidates = []
 
-    # 1. Исходный текст
+    # 1. Original text
     candidates.append(text.strip())
 
-    # 2. Markdown-блок
+    # 2. Markdown block 
     if "```json" in text:
         try:
             content = text.split("```json", 1)[1].split("```", 1)[0].strip()
@@ -54,13 +54,14 @@ def safe_parse_json(text: str) -> Optional[Dict[str, Any]]:
         except Exception:
             pass
 
-    # 3. Между первой { и последней }
+    # 3. Between the first { and the last }
     start = text.find("{")
     end = text.rfind("}")
     if start != -1 and end != -1 and end > start:
         candidates.append(text[start:end + 1].strip())
 
-    # 4. По балансу скобок
+    	
+# 4. By balanced braces
     balanced = _extract_balanced_json_object(text)
     if balanced:
         candidates.append(balanced.strip())
@@ -73,7 +74,7 @@ def safe_parse_json(text: str) -> Optional[Dict[str, Any]]:
             unique_candidates.append(c)
 
     for candidate in unique_candidates:
-        # 4.1 прямой парсинг
+        # 4.1 direct parsing
         try:
             return json.loads(candidate)
         except json.JSONDecodeError:
@@ -86,21 +87,21 @@ def safe_parse_json(text: str) -> Optional[Dict[str, Any]]:
         except Exception:
             pass
 
-        # 4.2 починка строк
+        # 4.2 string repair
         try:
             fixed = _fix_json_strings(candidate)
             return json.loads(fixed)
         except json.JSONDecodeError:
             pass
 
-        # 4.3 убрать висячие запятые
+        # 4.3 remove trailing commas
         try:
             fixed = _remove_trailing_commas(_fix_json_strings(candidate))
             return json.loads(fixed)
         except json.JSONDecodeError:
             pass
 
-        # 4.4 грубая нормализация спецсимволов
+        # 4.4 rough normalization of special characters
         try:
             fixed = candidate.replace('\r\n', '\\n').replace('\n', '\\n').replace('\t', '\\t')
             fixed = _remove_trailing_commas(fixed)
@@ -109,9 +110,9 @@ def safe_parse_json(text: str) -> Optional[Dict[str, Any]]:
             pass
 
     logger.error(
-        f"Все способы парсинга JSON не сработали. "
-        f"Первые 500 символов ответа: {text[:500]}..."
-    )
+            f"All JSON parsing methods failed. "
+            f"First 500 characters of the response: {text[:500]}..."
+        )
     return None
 
 def _extract_balanced_json_object(text: str) -> Optional[str]:
@@ -157,8 +158,8 @@ def _remove_trailing_commas(text: str) -> str:
 
 def _fix_json_strings(json_str: str) -> str:
     """
-    Исправляет неэкранированные символы внутри строковых значений JSON.
-    Экранирует: \n, \r, \t, неэкранированные двойные кавычки.
+    Fixes unescaped characters inside JSON string values.
+    Escapes newlines, carriage returns, tabs and unescaped double quotes.
     """
     result = []
     in_string = False
@@ -188,7 +189,7 @@ def _fix_json_strings(json_str: str) -> str:
             continue
         
         if ch == '"' and in_string:
-            # Проверяем: это закрывающая кавычка или кавычка внутри строки?
+            # Check: is this a closing quote or a quote inside the string?
             lookahead = i + 1
             while lookahead < n and json_str[lookahead] in (' ', '\t', '\r', '\n'):
                 lookahead += 1
@@ -203,7 +204,7 @@ def _fix_json_strings(json_str: str) -> str:
                 i += 1
                 continue
             else:
-                # Кавычка внутри строки — экранируем
+                # Quote inside the string — escape it
                 result.append('\\')
                 result.append(ch)
                 i += 1
