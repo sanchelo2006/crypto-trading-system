@@ -1,10 +1,8 @@
 """
-Управление позициями: открытие, закрытие, мониторинг, выход по TP/SL.
-
-Хранит состояние открытых позиций для каждой монеты и синхронизирует
-его с реальными позициями на бирже.
+Position management: opening, closing, monitoring, exit by TP/SL.
+Stores the state of open positions for each coin and synchronizes it
+with the real positions on the exchange.
 """
-
 import logging
 import math
 from datetime import datetime, timezone
@@ -14,15 +12,16 @@ from trading.executor import BybitExecutor
 
 logger = logging.getLogger(__name__)
 
-# Снимок индикаторов при входе (для анализа)
+# Snapshot of indicators at entry (for analysis)
 SNAPSHOT_KEYS = [
     "close", "rsi_14", "adx_14", "volume", "avg_volume_96", "avg_volume_20",
     "sma_20", "sma_50", "macd", "macd_signal", "macd_hist", "atr_14", "vwap",
     "pivot", "resistance_1", "support_1",
 ]
 
+
 def _to_dt(ts):
-    """Приводит timestamp (str / datetime / pd.Timestamp) к tz-aware datetime UTC."""
+    """Converts timestamp (str / datetime / pd.Timestamp) to tz-aware datetime UTC."""
     if ts is None:
         return None
     try:
@@ -39,9 +38,9 @@ def _to_dt(ts):
 
 def _compute_bars_held(pos: Dict, row: Dict) -> Optional[int]:
     """
-    Считает bars_held для живой торговли из entry_candle_ts.
-    Возвращает None, если данных не хватает (позиция без entry_candle_ts
-    или неизвестный timestamp свечи).
+    Computes bars_held for live trading from entry_candle_ts.
+    Returns None if the data is insufficient (position without entry_candle_ts
+    or unknown candle timestamp).
     """
     entry_dt = _to_dt(pos.get("entry_candle_ts"))
     curr_dt = _to_dt(row.get("timestamp"))
@@ -56,15 +55,14 @@ def _compute_bars_held(pos: Dict, row: Dict) -> Optional[int]:
 
 class PositionManager:
     """
-    Управление позициями для одной монеты.
-    
-    Отвечает за:
-    - Открытие позиций (market ордер + установка TP/SL)
-    - Закрытие позиций (по причине: SL, TP, ручное, stop-out)
-    - Мониторинг (получение текущего состояния с биржи)
-    - Проверку выходов (по management-правилам из strategy_spec)
+    Position manager for one coin.
+    Responsible for:
+    - Opening positions (market order + TP/SL placement)
+    - Closing positions (by reason: SL, TP, manual, stop-out)
+    - Monitoring (fetching current state from the exchange)
+    - Checking exits (by management rules from strategy_spec)
     """
-    
+
     def __init__(
         self,
         executor: BybitExecutor,
@@ -75,15 +73,14 @@ class PositionManager:
         self.executor = executor
         self.symbol = symbol
         self.category = category
-        # Taker-ставка для вычитания комиссий при закрытии.
-        # Значение перезаписывается AutoTraderSymbol после запроса
-        # get_fee_rates() на старте.
+        # Taker fee rate for deducting commissions on close.
+        # Value is overwritten by AutoTraderSymbol after get_fee_rates() at start.
         self.taker_fee_pct = float(taker_fee_pct)
-        
-        # Локальное состояние: список открытых позиций
-        # Каждая позиция — dict с полями:
+
+        # Local state: list of open positions
+        # Each position is a dict with fields:
         # {
-        #   "position_id": str (генерируется локально),
+        #   "position_id": str (generated locally),
         #   "direction": "long" | "short",
         #   "entry_price": float,
         #   "qty": float,
@@ -93,39 +90,37 @@ class PositionManager:
         #   "entry_reasons": List[str],
         #   "entry_snapshot": Dict,
         #   "management": Dict,
-        #   "bybit_position_idx": int (для hedge mode),
+        #   "bybit_position_idx": int (for hedge mode),
         # }
         self.positions: List[Dict] = []
 
     def set_taker_fee_pct(self, value: float) -> None:
-        """Обновляет taker-ставку (вызывается из AutoTraderSymbol после get_fee_rates)."""
+        """Updates the taker rate (called from AutoTraderSymbol after get_fee_rates)."""
         try:
             v = float(value)
             if v >= 0:
                 self.taker_fee_pct = v
         except (TypeError, ValueError):
             pass
-    
+
     def sync_with_exchange(self) -> Tuple[bool, Optional[str]]:
         """
-        Синхронизирует локальное состояние с биржей.
+        Synchronizes local state with the exchange.
 
-        Единственная задача этого метода — ДОБАВИТЬ orphan-позиции
-        (то, что есть на бирже, но не отслеживается локально, например
-        после рестарта трейдера). УДАЛЕНИЕ локальных позиций здесь
-        НЕ делается — этим занимается auto_trader._detect_closed_positions,
-        который умеет правильно логировать CLOSE-событие и подтягивать
-        Closed-PnL.
+        The only task of this method is to ADD orphan positions
+        (what exists on the exchange but is not tracked locally, e.g.
+        after the trader restarts). REMOVAL of local positions is NOT done here —
+        that is handled by auto_trader._detect_closed_positions, which knows
+        how to properly log a CLOSE event and fetch Closed-PnL.
 
         Returns:
-            (success, error_message или None)
+            (success, error_message or None)
         """
         success, result = self.executor.get_position_info(self.symbol)
-
         if not success:
             return False, result
 
-        # Собираем ненулевые позиции с биржи: side -> {size, avgPrice}
+        # Collect non-zero positions from the exchange: side -> {size, avgPrice}
         exchange_by_side: Dict[str, Dict] = {}
         for p in (result or []):
             try:
@@ -143,9 +138,9 @@ class PositionManager:
                 avg_price = 0.0
             exchange_by_side[side] = {"size": size, "avg_price": avg_price}
 
-        # Добавляем orphan-позиции: то, что есть на бирже, но не отслеживается
-        # локально. Если позиция восстановлена из файла состояния —
-        # она уже в self.positions и НЕ будет помечена как orphan.
+        # Add orphan positions: what exists on the exchange but is not tracked
+        # locally. If a position was restored from a state file —
+        # it is already in self.positions and will NOT be marked as orphan.
         existing_sides = {
             ("buy" if p["direction"] == "long" else "sell")
             for p in self.positions
@@ -153,6 +148,7 @@ class PositionManager:
         for side_key, info in exchange_by_side.items():
             if side_key in existing_sides:
                 continue
+
             direction = "long" if side_key == "buy" else "short"
             orphan = {
                 "position_id": (
@@ -162,8 +158,8 @@ class PositionManager:
                 "direction": direction,
                 "entry_price": info["avg_price"] or 0.0,
                 "qty": info["size"],
-                "stop_loss": 0.0,        # неизвестно, не трогаем
-                "take_profit": 0.0,      # неизвестно, не трогаем
+                "stop_loss": 0.0,        # unknown, do not touch
+                "take_profit": 0.0,      # unknown, do not touch
                 "entry_time": datetime.now(timezone.utc),
                 "entry_reasons": [],
                 "entry_snapshot": {},
@@ -172,14 +168,13 @@ class PositionManager:
                 "tpsl_error": "external_position_detected",
             }
             logger.warning(
-                f"[{self.symbol}] Обнаружена внешняя позиция на бирже "
-                f"(side={side_key}, size={info['size']}). Добавлена как orphan."
+                f"[{self.symbol}] External position detected on the exchange "
+                f"(side={side_key}, size={info['size']}). Added as orphan."
             )
             self.positions.append(orphan)
 
-
         return True, None
-    
+
     def open_position(
         self,
         direction: str,  # "long" | "short"
@@ -191,21 +186,20 @@ class PositionManager:
         entry_candle_ts=None,
     ) -> Tuple[bool, Optional[str]]:
         """
-        Открывает новую позицию.
-        
-        Шаги:
-        1. Размещает market ордер
-        2. Вычисляет TP/SL
-        3. Устанавливает TP/SL через set_trading_stop
-        4. Сохраняет позицию в локальное состояние
-        
+        Opens a new position.
+        Steps:
+        1. Places a market order
+        2. Computes TP/SL
+        3. Sets TP/SL via set_trading_stop
+        4. Saves the position to local state
+
         Returns:
-            (success, error_message или None)
+            (success, error_message or None)
         """
-        # 0. Страховка: если на бирже УЖЕ есть позиция по этому символу —
-        #    новую не открываем. Защищает от двойных входов при рассинхроне
-        #    локального состояния с биржей (например, после рестарта трейдера
-        #    или после исключения в середине open_position).
+        # 0. Safety net: if a position for this symbol ALREADY exists on the exchange —
+        #    do not open a new one. Protects against double entry when local state
+        #    is out of sync with the exchange (e.g. after trader restart
+        #    or after an exception in the middle of open_position).
         success_check, exchange_positions = self.executor.get_position_info(self.symbol)
         if success_check and exchange_positions:
             for p in exchange_positions:
@@ -215,70 +209,68 @@ class PositionManager:
                     size = 0
                 if size > 0:
                     logger.warning(
-                        f"[{self.symbol}] Отказ в открытии: на бирже уже есть "
-                        f"позиция (side={p.get('side')}, size={size})."
+                        f"[{self.symbol}] Open rejected: a position already exists "
+                        f"on the exchange (side={p.get('side')}, size={size})."
                     )
                     return False, "position_already_exists_on_exchange"
 
-        # Направление ордера для открытия позиции
+        # Order direction for opening a position
         side = "Buy" if direction == "long" else "Sell"
-        
-        # 1. Открываем позицию market ордером
+
+        # 1. Open the position with a market order
         success, result = self.executor.place_market_order(
             symbol=self.symbol,
             side=side,
             qty=qty,
             reduce_only=False,
         )
-        
         if not success:
-            logger.error(f"[{self.symbol}] Не удалось открыть позицию: {result}")
+            logger.error(f"[{self.symbol}] Failed to open position: {result}")
             return False, result
-        
+
         order_id = result.get("orderId")
 
-        # Узнаём ФАКТИЧЕСКОЕ исполнение (частичный филл + проскальзывание)
+        # Learn the ACTUAL fill (partial fill + slippage)
         success_o, order_info = self.executor.get_order_info(self.symbol, order_id)
         if success_o and order_info:
             filled_qty = float(order_info.get("cumExecQty", 0) or 0)
             avg_price = float(order_info.get("avgPrice", 0) or 0)
             if filled_qty > 0:
-                qty = filled_qty          # реальный размер, а не рассчитанный
+                qty = filled_qty          # actual size, not calculated
             if avg_price > 0:
-                current_price = avg_price  # реальная средняя цена входа
+                current_price = avg_price  # actual average entry price
 
-        # если не исполнилось ничего — позицию не открываем
+        # if nothing was filled — do not open the position
         if qty <= 0:
-            logger.error(f"[{self.symbol}] Ордер не исполнился")
+            logger.error(f"[{self.symbol}] Order was not filled")
             return False, "order_not_filled"
-        
-        # 2. Вычисляем TP/SL
+
+        # 2. Compute TP/SL
         stop_loss, take_profit = self._compute_tp_sl(
             direction, current_price, side_spec, indicators
         )
-        
-        # 3. Устанавливаем TP/SL
+
+        # 3. Set TP/SL
         tpsl_error = None
         success_sl, error_sl = self.executor.set_trading_stop(
             symbol=self.symbol,
             stop_loss=stop_loss,
             take_profit=take_profit,
         )
-
         if not success_sl:
             tpsl_error = error_sl
             logger.warning(
-                f"[{self.symbol}] Не удалось установить TP/SL: {error_sl}. "
-                "Позиция открыта, но без защиты."
+                f"[{self.symbol}] Failed to set TP/SL: {error_sl}. "
+                "Position is open but without protection."
             )
-        
-        # 4. Сохраняем в локальное состояние
+
+        # 4. Save to local state
         snapshot = {}
         for k in SNAPSHOT_KEYS:
             v = indicators.get(k)
             if v is not None and not (isinstance(v, float) and math.isnan(v)):
                 snapshot[k] = round(float(v), 6)
-        
+
         position = {
             "position_id": f"{self.symbol}_{int(datetime.now(timezone.utc).timestamp())}",
             "direction": direction,
@@ -286,13 +278,13 @@ class PositionManager:
             "qty": qty,
             "stop_loss": stop_loss,
             "take_profit": take_profit,
-            # Запоминаем ИЗНАЧАЛЬНЫЕ уровни — они не меняются,
-            # даже когда trailing/breakeven двигают stop_loss.
+            # Remember the INITIAL levels — they do not change
+            # even when trailing/breakeven move stop_loss.
             "initial_stop_loss": stop_loss,
             "initial_take_profit": take_profit,
             "entry_time": datetime.now(timezone.utc),
-            # Timestamp свечи, на которой сработал сигнал. Нужен для
-            # расчёта bars_held в живой торговле (time-stop).
+            # Timestamp of the candle on which the signal fired. Needed for
+            # computing bars_held in live trading (time-stop).
             "entry_candle_ts": (
                 str(entry_candle_ts) if entry_candle_ts is not None else None
             ),
@@ -302,14 +294,12 @@ class PositionManager:
             "bybit_order_id": order_id,
             "tpsl_error": tpsl_error,
         }
-        
         self.positions.append(position)
-        
+
         logger.info(
-            f"[{self.symbol}] Позиция открыта: {direction.upper()} {qty} @ {current_price:.4f}, "
+            f"[{self.symbol}] Position opened: {direction.upper()} {qty} @ {current_price:.4f}, "
             f"SL={stop_loss:.4f}, TP={take_profit:.4f}"
         )
-        
         return True, None
 
     def open_position_limit(
@@ -324,34 +314,34 @@ class PositionManager:
         timeout_seconds: int = 900,
     ) -> Tuple[bool, Optional[str], Optional[str]]:
         """
-        Открывает позицию лимитным ордером (мейкер).
+        Opens a position with a limit order (maker).
 
-        Алгоритм:
-        1. Получает best bid/ask из стакана.
-        2. Вычисляет лимитную цену:
-           - Лонг: best_bid + offset (покупаем по биду или чуть выше)
-           - Шорт: best_ask - offset (продаём по аску или чуть ниже)
-        3. Размещает Post-Only лимитный ордер.
-        4. Возвращает order_id для мониторинга.
+        Algorithm:
+        1. Gets best bid/ask from the order book.
+        2. Computes the limit price:
+           - Long: best_bid + offset (buy at bid or slightly above)
+           - Short: best_ask - offset (sell at ask or slightly below)
+        3. Places a Post-Only limit order.
+        4. Returns order_id for monitoring.
 
-        Позиция НЕ добавляется в self.positions сразу.
-        Вызывающий код (auto_trader) должен мониторить филл и
-        вызвать _finalize_limit_entry() после исполнения.
+        The position is NOT added to self.positions immediately.
+        The calling code (auto_trader) must monitor the fill and
+        call _finalize_limit_entry() after execution.
 
         Args:
-            direction: "long" или "short"
-            qty: размер в контрактах
-            side_spec: спека стороны (для расчёта TP/SL)
-            entry_reasons: причины входа
-            indicators: текущие индикаторы
-            entry_candle_ts: timestamp свечи сигнала
-            price_offset_ticks: сдвиг цены в тиках от лучшей цены
-            timeout_seconds: таймаут ожидания филла
+            direction: "long" or "short"
+            qty: size in contracts
+            side_spec: side spec (for TP/SL computation)
+            entry_reasons: entry reasons
+            indicators: current indicators
+            entry_candle_ts: timestamp of the signal candle
+            price_offset_ticks: price shift in ticks from the best price
+            timeout_seconds: fill wait timeout
 
         Returns:
-            (success, order_id или error, limit_price)
+            (success, order_id or error, limit_price)
         """
-        # 0. Проверяем, нет ли уже позиции на бирже
+        # 0. Check whether a position already exists on the exchange
         success_check, exchange_positions = self.executor.get_position_info(self.symbol)
         if success_check and exchange_positions:
             for p in exchange_positions:
@@ -362,33 +352,31 @@ class PositionManager:
                 if size > 0:
                     return False, "position_already_exists_on_exchange", None
 
-        # 1. Получаем best bid/ask
+        # 1. Get best bid/ask
         success, bid_ask = self.executor.get_best_bid_ask(self.symbol)
         if not success:
-            return False, f"Нет стакана: {bid_ask}", None
-
+            return False, f"No order book: {bid_ask}", None
         best_bid, best_ask = bid_ask
 
-        # 2. Получаем tickSize для округления
+        # 2. Get tickSize for rounding
         success_info, info = self.executor.get_instrument_info(self.symbol)
         if not success_info or not info:
-            return False, f"Нет параметров инструмента: {info}", None
-
+            return False, f"No instrument parameters: {info}", None
         tick_size = info.get("tickSize", 0.01)
 
-        # 3. Вычисляем лимитную цену
+        # 3. Compute the limit price
         if direction == "long":
-            # Покупаем по биду (мейкер). Если цена вырастет — не исполнится.
+            # Buy at bid (maker). If the price rises — it will not be filled.
             raw_price = best_bid + (price_offset_ticks * tick_size)
             limit_price = self.executor.round_price(raw_price, tick_size)
             side = "Buy"
         else:
-            # Продаём по аску (мейкер). Если цена упадёт — не исполнится.
+            # Sell at ask (maker). If the price falls — it will not be filled.
             raw_price = best_ask - (price_offset_ticks * tick_size)
             limit_price = self.executor.round_price(raw_price, tick_size)
             side = "Sell"
 
-        # 4. Размещаем Post-Only лимитный ордер
+        # 4. Place a Post-Only limit order
         success, result = self.executor.place_limit_order(
             symbol=self.symbol,
             side=side,
@@ -396,20 +384,18 @@ class PositionManager:
             price=limit_price,
             post_only=True,
         )
-
         if not success:
             if isinstance(result, dict) and result.get("error") == "post_only_rejected":
-                # Ордер стал бы тейкером. Попробуем с пассивной ценой.
+                # The order would become taker. Try with a more passive price.
                 logger.warning(
-                    f"[{self.symbol}] Post-Only отклонён. Пробуем пассивнее."
+                    f"[{self.symbol}] Post-Only rejected. Trying more passive."
                 )
-                # Отступаем на 1 тик вглубь стакана
+                # Step back 1 tick deeper into the order book
                 if direction == "long":
                     limit_price -= tick_size
                 else:
                     limit_price += tick_size
                 limit_price = self.executor.round_price(limit_price, tick_size)
-
                 success, result = self.executor.place_limit_order(
                     symbol=self.symbol,
                     side=side,
@@ -418,19 +404,18 @@ class PositionManager:
                     post_only=True,
                 )
                 if not success:
-                    return False, f"Повторный Post-Only отклонён: {result}", None
+                    return False, f"Second Post-Only rejected: {result}", None
             else:
                 return False, str(result), None
 
         order_id = result.get("orderId")
         if not order_id:
-            return False, "Нет orderId в ответе", None
+            return False, "No orderId in response", None
 
         logger.info(
-            f"[{self.symbol}] Лимитный ордер размещён: {direction} {qty} @ {limit_price} "
-            f"(orderId={order_id}, timeout={timeout_seconds}с)"
+            f"[{self.symbol}] Limit order placed: {direction} {qty} @ {limit_price} "
+            f"(orderId={order_id}, timeout={timeout_seconds}s)"
         )
-
         return True, order_id, str(limit_price)
 
     def finalize_limit_entry(
@@ -445,20 +430,19 @@ class PositionManager:
         order_id: str = "",
     ) -> Tuple[bool, Optional[str]]:
         """
-        Завершает открытие позиции после исполнения лимитного ордера.
-        Вызывается из auto_trader после подтверждения филла.
-
-        Устанавливает TP/SL и добавляет позицию в локальный список.
+        Completes opening a position after a limit order is filled.
+        Called from auto_trader after fill confirmation.
+        Sets TP/SL and adds the position to the local list.
 
         Returns:
-            (success, error_message или None)
+            (success, error_message or None)
         """
-        # Вычисляем TP/SL
+        # Compute TP/SL
         stop_loss, take_profit = self._compute_tp_sl(
             direction, entry_price, side_spec, indicators
         )
 
-        # Устанавливаем TP/SL на бирже
+        # Set TP/SL on the exchange
         tpsl_error = None
         success_sl, error_sl = self.executor.set_trading_stop(
             symbol=self.symbol,
@@ -468,11 +452,11 @@ class PositionManager:
         if not success_sl:
             tpsl_error = error_sl
             logger.warning(
-                f"[{self.symbol}] Не удалось установить TP/SL: {error_sl}. "
-                "Позиция открыта без защиты."
+                f"[{self.symbol}] Failed to set TP/SL: {error_sl}. "
+                "Position is open without protection."
             )
 
-        # Формируем снапшот индикаторов
+        # Build the indicator snapshot
         snapshot = {}
         for k in SNAPSHOT_KEYS:
             v = indicators.get(k)
@@ -499,16 +483,14 @@ class PositionManager:
             "tpsl_error": tpsl_error,
             "entry_type": "limit",
         }
-
         self.positions.append(position)
 
         logger.info(
-            f"[{self.symbol}] Лимитная позиция открыта: {direction.upper()} "
+            f"[{self.symbol}] Limit position opened: {direction.upper()} "
             f"{qty} @ {entry_price:.4f}, SL={stop_loss:.4f}, TP={take_profit:.4f}"
         )
-
         return True, None
-    
+
     def close_position(
         self,
         position: Dict,
@@ -516,16 +498,16 @@ class PositionManager:
         current_price: Optional[float] = None,
     ) -> Tuple[bool, Optional[Dict]]:
         """
-        Закрывает позицию.
+        Closes a position.
 
-        Закрывает РЕАЛЬНЫЙ размер позиции с биржи, а не локально
-        записанный (market-ордер мог исполниться частично).
+        Closes the REAL position size from the exchange, not the one recorded
+        locally (a market order could have been partially filled).
         """
         direction = position["direction"]
         qty = position["qty"]
         expected_side = "buy" if direction == "long" else "sell"
 
-        # 1. Узнаём фактический размер позиции на бирже
+        # 1. Learn the actual position size on the exchange
         exchange_qty = None
         success_pos, exchange_positions = self.executor.get_position_info(self.symbol)
         if success_pos and exchange_positions:
@@ -539,25 +521,25 @@ class PositionManager:
 
         if exchange_qty is not None:
             if exchange_qty <= 0:
-                # На бирже позиции уже нет — второй ордер отправлять нельзя.
+                # The position is already gone on the exchange — do not send a second order.
                 logger.warning(
-                    f"[{self.symbol}] Позиция {position['position_id']} на бирже "
-                    "отсутствует, reduce-only ордер не отправляю."
+                    f"[{self.symbol}] Position {position['position_id']} is absent "
+                    "on the exchange, not sending a reduce-only order."
                 )
                 self.positions = [
                     p for p in self.positions
                     if p["position_id"] != position["position_id"]
                 ]
                 return False, "already_closed_on_exchange"
-            qty = exchange_qty  # закрываем ровно столько, сколько реально есть
+            qty = exchange_qty  # close exactly as much as actually exists
 
-        # 2. Цена выхода — берём прямо перед отправкой ордера, если не передана
+        # 2. Exit price — fetch it right before sending the order if not provided
         if current_price is None:
             ok, price = self.executor.get_ticker_price(self.symbol)
             if ok and price:
                 current_price = price
 
-        # 3. Отправляем reduce-only market-ордер
+        # 3. Send a reduce-only market order
         side = "Sell" if direction == "long" else "Buy"
         success, result = self.executor.place_market_order(
             symbol=self.symbol,
@@ -565,12 +547,11 @@ class PositionManager:
             qty=qty,
             reduce_only=True,
         )
-
         if not success:
-            logger.error(f"[{self.symbol}] Не удалось закрыть позицию: {result}")
+            logger.error(f"[{self.symbol}] Failed to close position: {result}")
             return False, result
 
-        # 4. Вычисляем PnL
+        # 4. Compute PnL
         entry_price = position["entry_price"]
         exit_price = current_price if current_price else entry_price
 
@@ -579,8 +560,8 @@ class PositionManager:
         else:
             pnl_pct = (entry_price - exit_price) / entry_price * 100
 
-        # Комиссии: taker на входе и на выходе. То же самое делает
-        # backtest_engine._close_position — так результат совпадает.
+        # Commissions: taker on entry and exit. The same is done in
+        # backtest_engine._close_position — so the result matches.
         pnl_pct -= 2.0 * self.taker_fee_pct
 
         trade = {
@@ -606,59 +587,54 @@ class PositionManager:
             "entry_snapshot": position.get("entry_snapshot", {}),
         }
 
-        # Удаляем из локального состояния
+        # Remove from local state
         self.positions = [p for p in self.positions if p["position_id"] != position["position_id"]]
 
         logger.info(
-            f"[{self.symbol}] Позиция закрыта: {direction.upper()} {qty} @ {exit_price:.4f}, "
-            f"PnL={pnl_pct:+.2f}%, причина={reason}"
+            f"[{self.symbol}] Position closed: {direction.upper()} {qty} @ {exit_price:.4f}, "
+            f"PnL={pnl_pct:+.2f}%, reason={reason}"
         )
-
         return True, trade
-    
+
     def close_all_positions(self, reason: str = "manual_stop") -> List[Dict]:
         """
-        Закрывает все открытые позиции.
-        
+        Closes all open positions.
+
         Returns:
-            Список закрытых сделок (trade_dict)
+            List of closed trades (trade_dict)
         """
         trades = []
-        
         for position in list(self.positions):
             success, result = self.close_position(position, reason)
             if success:
                 trades.append(result)
             else:
                 logger.error(
-                    f"[{self.symbol}] Не удалось закрыть позицию {position['position_id']}: {result}"
+                    f"[{self.symbol}] Failed to close position {position['position_id']}: {result}"
                 )
-        
         return trades
-    
+
     def check_exits(
         self,
         current_indicators: Dict,
     ) -> List[Tuple[Dict, str, float]]:
         """
-        Проверяет условия выхода для всех открытых позиций.
-        
+        Checks exit conditions for all open positions.
+
         Returns:
-            Список [(position, exit_reason, exit_price), ...]
+            List of [(position, exit_reason, exit_price), ...]
         """
         exits = []
-        
         for position in self.positions:
             exit_price, reason = self._check_exit(position, current_indicators)
             if exit_price is not None:
                 exits.append((position, reason, exit_price))
-        
         return exits
-    
+
     @staticmethod
     def _check_hard_exit(pos: Dict, row: Dict) -> Tuple[Optional[float], str]:
-        """Жёсткие выходы (SL/TP). Используется только в бэктесте —
-        в живой торговле SL/TP выставляет биржа."""
+        """Hard exits (SL/TP). Used only in backtest —
+        in live trading SL/TP is set by the exchange."""
         if pos["direction"] == "long":
             if row.get("low") is not None and row["low"] <= pos["stop_loss"]:
                 return pos["stop_loss"], "stop_loss"
@@ -674,14 +650,13 @@ class PositionManager:
     @staticmethod
     def _check_management_exits(pos: Dict, row: Dict) -> Tuple[Optional[float], str]:
         """
-        Мягкие выходы по management: time_stop, exit_on_level_failure,
+        Soft exits by management: time_stop, exit_on_level_failure,
         exit_on_trend_loss, exit_on_macd_flip.
-
-        Логика идентична backtest_engine._check_exit. Для time_stop
-        используется:
-          - pos["bars_held"], если он есть (путь бэктеста);
-          - иначе bars_held считается из entry_candle_ts и row["timestamp"]
-            (путь живой торговли).
+        Logic is identical to backtest_engine._check_exit. For time_stop
+        it uses:
+          - pos["bars_held"] if present (backtest path);
+          - otherwise bars_held is computed from entry_candle_ts and row["timestamp"]
+            (live trading path).
         """
         mgmt = pos.get("management", {}) or {}
         close_price = row.get("close")
@@ -711,12 +686,10 @@ class PositionManager:
                 lvl = row.get(mgmt.get("level_field", "resistance_1"))
                 if _valid(lvl) and close_price < lvl * (1 - buffer_pct):
                     return float(close_price), "level_failure"
-
             if mgmt.get("exit_on_trend_loss"):
                 sma50 = row.get("sma_50")
                 if _valid(sma50) and close_price < sma50:
                     return float(close_price), "trend_loss"
-
             if mgmt.get("exit_on_macd_flip"):
                 mh = row.get("macd_hist")
                 if _valid(mh) and mh < 0:
@@ -726,21 +699,18 @@ class PositionManager:
                 lvl = row.get(mgmt.get("level_field", "support_1"))
                 if _valid(lvl) and close_price > lvl * (1 + buffer_pct):
                     return float(close_price), "level_failure"
-
             if mgmt.get("exit_on_trend_loss"):
                 sma50 = row.get("sma_50")
                 if _valid(sma50) and close_price > sma50:
                     return float(close_price), "trend_loss"
-
             if mgmt.get("exit_on_macd_flip"):
                 mh = row.get("macd_hist")
                 if _valid(mh) and mh > 0:
                     return float(close_price), "macd_flip"
-
         return None, ""
 
     def _check_exit(self, pos: Dict, row: Dict) -> Tuple[Optional[float], str]:
-        """Полная проверка (используется в бэктесте и тестах)."""
+        """Full check (used in backtest and tests)."""
         price, reason = self._check_hard_exit(pos, row)
         if price is not None:
             return price, reason
@@ -748,11 +718,11 @@ class PositionManager:
 
     def check_soft_exit(self, position: Dict, candle: Dict) -> Tuple[Optional[float], str]:
         """
-        Публичный метод для живого трейдера: только мягкие выходы.
-        SL/TP обрабатывает биржа, повторно их проверять нельзя.
+        Public method for the live trader: soft exits only.
+        SL/TP is handled by the exchange, they cannot be re-checked.
         """
         return self._check_management_exits(position, candle)
-    
+
     def _compute_tp_sl(
         self,
         direction: str,
@@ -761,14 +731,13 @@ class PositionManager:
         indicators: Dict,
     ) -> Tuple[float, float]:
         """
-        Вычисляет TP и SL для новой позиции.
-
-        Приоритет — ATR-стопы (как в бэктесте).
-        Цены округляются под tickSize инструмента: иначе Bybit отклонит
-        set_trading_stop, и позиция останется без защиты.
+        Computes TP and SL for a new position.
+        Priority — ATR stops (as in backtest).
+        Prices are rounded to the instrument tickSize: otherwise Bybit will reject
+        set_trading_stop, and the position will remain unprotected.
         """
-        # Используем 4H ATR если он есть (свинг-стратегии),
-        # иначе стандартный 15m ATR
+        # Use 4H ATR if available (swing strategies),
+        # otherwise standard 15m ATR
         atr = indicators.get("atr_14_4h") or indicators.get("atr_14", 0)
         atr_valid = (
             atr is not None
@@ -781,32 +750,30 @@ class PositionManager:
 
         stop_dist = None
         take_dist = None
-
         if atr_valid and sl_atr_mult is not None:
             try:
                 stop_dist = float(sl_atr_mult) * float(atr)
             except (TypeError, ValueError):
                 stop_dist = None
-
         if atr_valid and tp_atr_mult is not None:
             try:
                 take_dist = float(tp_atr_mult) * float(atr)
             except (TypeError, ValueError):
                 take_dist = None
 
-        # Fallback — фиксированные проценты
+        # Fallback — fixed percentages
         if stop_dist is None:
             sl_pct = float(side_spec.get("stop_loss_pct", 2.0)) / 100.0
             stop_dist = entry * sl_pct
 
-        # Fallback — если ATR не дал значения, берём проценты из spec.
+        # Fallback — if ATR did not produce a value, take percentages from spec.
         if take_dist is None:
             tp_list = side_spec.get("take_profit_pct", [3.0]) or [3.0]
             tp_pct = float(tp_list[0]) / 100.0
             take_dist = entry * tp_pct
 
-        # Расчёт stop/take идёт ВСЕГДА — независимо от того,
-        # пришёл take_dist из ATR или из процентов.
+        # stop/take computation ALWAYS runs — regardless of whether
+        # take_dist came from ATR or from percentages.
         if direction == "long":
             stop = entry - stop_dist
             take = entry + take_dist
@@ -814,13 +781,12 @@ class PositionManager:
             stop = entry + stop_dist
             take = entry - take_dist
 
-        # ЗАЩИТА: ограничиваем SL и TP разумными процентами от entry.
-        # ATR может быть аномально завышен из-за выбросов в OHLCV (особенно на testnet),
-        # и тогда SL/TP улетают в 10-20 раз дальше нормы. Лучше сделать
-        # консервативный стоп, чем получить -16% на одной сделке.
-        MAX_STOP_PCT = 2.5    # стоп не дальше 2.5% от входа
-        MAX_TAKE_PCT = 10.0   # тейк не дальше 10% от входа
-
+        # PROTECTION: limit SL and TP to reasonable percentages of entry.
+        # ATR can be abnormally inflated due to outliers in OHLCV (especially on testnet),
+        # and then SL/TP fly 10-20x further than normal. Better to have
+        # a conservative stop than to get -16% on one trade.
+        MAX_STOP_PCT = 2.5    # stop no further than 2.5% from entry
+        MAX_TAKE_PCT = 10.0   # take no further than 10% from entry
         if direction == "long":
             stop = max(stop, entry * (1 - MAX_STOP_PCT / 100.0))
             take = min(take, entry * (1 + MAX_TAKE_PCT / 100.0))
@@ -828,12 +794,11 @@ class PositionManager:
             stop = min(stop, entry * (1 + MAX_STOP_PCT / 100.0))
             take = max(take, entry * (1 - MAX_TAKE_PCT / 100.0))
 
-        # Округляем под tickSize инструмента.
+        # Round to the instrument tickSize.
         success, info = self.executor.get_instrument_info(self.symbol)
         if success and info:
             tick = info.get("tickSize")
             if tick:
                 stop = self.executor.round_price(stop, tick)
                 take = self.executor.round_price(take, tick)
-
         return stop, take

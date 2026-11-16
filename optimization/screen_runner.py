@@ -1,9 +1,9 @@
 """
-Фаза 0: скрининг простых архетипов и базовой линии.
+Phase 0: screening of simple archetypes and the baseline.
 
-Цель: ДО оптимизации понять, есть ли на символе вообще эдж,
-в каких режимах/годах он живёт и сильнее ли он, чем «просто держать монету».
-Скрининг информационный: ничего не отбирает и не сохраняет.
+Goal: BEFORE optimization, understand whether the symbol has any edge at all,
+in which regimes/years it lives, and whether it is stronger than "just hold the coin".
+Screening is informational: it selects nothing and saves nothing.
 """
 from __future__ import annotations
 
@@ -19,9 +19,9 @@ logger = logging.getLogger(__name__)
 
 
 # ------------------------------------------------------------------
-# Вызов движка. Сигнатура: run_on_dataframe(df, symbol, strategy_spec,
+# Engine call. Signature: run_on_dataframe(df, symbol, strategy_spec,
 # initial_capital, commission_pct, rules_text="", start_date=None, end_date=None).
-# Возвращает {"trades": [...], "stats": {...}}.
+# Returns {"trades": [...], "stats": {...}}.
 # ------------------------------------------------------------------
 def _call_engine(engine, df, symbol: str, spec: Dict, capital: float, commission: float):
     result = engine.run_on_dataframe(
@@ -82,18 +82,18 @@ def _fmt(name: str, m: Dict) -> str:
 
 
 def run_screen(engine, df, symbol: str, commission_pct: float, initial_capital: float) -> Tuple[str, Dict]:
-    # Сырой df из CSV не содержит индикаторов: без adx_14 режим
-    # вырождался в unknown. Считаем индикаторы ОДИН раз на весь
-    # скрининг — заодно движок не будет пересчитывать их при каждом
-    # вызове архетипа (ускорение скрининга в разы).
+    # Raw df from CSV contains no indicators: without adx_14 the regime
+    # degenerated to unknown. Compute indicators ONCE for the whole screening —
+    # this also prevents the engine from recomputing them on every archetype
+    # call (speeds up screening many times).
     if not engine._has_precomputed_indicators(df):
         df = engine._build_indicator_frame(df)
 
     lines = ["=" * 96]
-    lines.append("ФАЗА 0: СКРИНИНГ АРХЕТИПОВ И БАЗОВОЙ ЛИНИИ")
+    lines.append("PHASE 0: ARCHETYPE AND BASELINE SCREENING")
     lines.append("=" * 96)
     bh = buy_and_hold(df)
-    lines.append(_fmt("BUY&HOLD (база)", bh))
+    lines.append(_fmt("BUY&HOLD (baseline)", bh))
     lines.append("-" * 96)
 
     best_overall = None
@@ -107,7 +107,7 @@ def run_screen(engine, df, symbol: str, commission_pct: float, initial_capital: 
                     _call_engine(engine, df, symbol, arch["build"](p), initial_capital, commission_pct)
                 )
             except Exception as exc:
-                logger.warning("screen: %s, params=%s -> ошибка: %s", arch["name"], p, exc)
+                logger.warning("screen: %s, params=%s -> error: %s", arch["name"], p, exc)
                 continue
             m = _metrics(trades, stats)
             if m["trades"] < 10:
@@ -116,13 +116,12 @@ def run_screen(engine, df, symbol: str, commission_pct: float, initial_capital: 
                 best_m, best_p = m, p
 
         if best_m is None:
-            lines.append(f"{arch['name']:26s} НЕТ СДЕЛОК ни на одном наборе параметров")
+            lines.append(f"{arch['name']:26s} NO TRADES on any parameter set")
             continue
 
         lines.append(_fmt(arch["name"], best_m) + f"  params={best_p}")
-        
 
-        # --- Сбор результатов для автоматического выбора ---
+        # --- Collect results for automatic selection ---
         candidate = {
             "name": arch["name"],
             "spec": arch["build"](best_p),
@@ -137,10 +136,9 @@ def run_screen(engine, df, symbol: str, commission_pct: float, initial_capital: 
         if best_overall is None or best_m["return_pct"] > best_overall["return_pct"]:
             best_overall = candidate
 
-
     lines.append("-" * 96)
-    lines.append("Скрининг информационный. В оптимизацию уходит только архетип,")
-    lines.append("который положителен по годам и лучше базовой линии.")
+    lines.append("Screening is informational. Only an archetype that is positive")
+    lines.append("across years and beats the baseline proceeds to optimization.")
     lines.append("=" * 96)
 
     results = {

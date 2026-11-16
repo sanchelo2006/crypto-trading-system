@@ -1,6 +1,6 @@
 """
-Поисковый инструмент для модели DeepSeek.
-Использует DuckDuckGo Instant Answer API (бесплатно, без ключа).
+Search tool for the DeepSeek model.
+Uses the DuckDuckGo Instant Answer API (free, no key required).
 """
 import logging
 import requests
@@ -9,10 +9,15 @@ from typing import List, Dict, Optional
 logger = logging.getLogger(__name__)
 
 
+# Marker returned by search_formatted() when there are no results.
+# search_for_trading_rules() checks it, so both places must stay in sync.
+_NO_RESULTS_MARKER = "Nothing found"
+
+
 class WebSearcher:
     """
-    Поиск информации через DuckDuckGo.
-    Возвращает текстовые результаты для использования моделью.
+    Information search via DuckDuckGo.
+    Returns text results for use by the model.
     """
 
     def __init__(self):
@@ -23,8 +28,8 @@ class WebSearcher:
 
     def search(self, query: str, max_results: int = 5) -> List[Dict[str, str]]:
         """
-        Поиск через DuckDuckGo Instant Answer API.
-        Возвращает список результатов: {title, snippet, url}.
+        Search via the DuckDuckGo Instant Answer API.
+        Returns a list of results: {title, snippet, url}.
         """
         url = "https://api.duckduckgo.com/"
         params = {
@@ -39,7 +44,7 @@ class WebSearcher:
             resp = self.session.get(url, params=params, timeout=10)
             data = resp.json()
 
-            # Abstract (краткий ответ)
+            # Abstract (short answer)
             if data.get("AbstractText"):
                 results.append({
                     "title": data.get("AbstractSource", "DuckDuckGo"),
@@ -56,19 +61,19 @@ class WebSearcher:
                         "url": topic.get("FirstURL", "")
                     })
 
-            # Если DuckDuckGo не дал результатов, пробуем запасной вариант
+            # If DuckDuckGo returned nothing, try the fallback
             if not results:
                 results = self._fallback_search(query, max_results)
 
         except Exception as e:
-            logger.warning(f"Ошибка поиска DuckDuckGo для '{query}': {e}")
+            logger.warning(f"DuckDuckGo search error for '{query}': {e}")
             results = self._fallback_search(query, max_results)
 
         return results[:max_results]
 
     def _fallback_search(self, query: str, max_results: int = 3) -> List[Dict[str, str]]:
         """
-        Запасной поиск через Wikipedia API.
+        Fallback search via the Wikipedia API.
         """
         try:
             url = "https://en.wikipedia.org/w/api.php"
@@ -90,21 +95,21 @@ class WebSearcher:
                 })
             return results
         except Exception as e:
-            logger.warning(f"Ошибка Wikipedia для '{query}': {e}")
+            logger.warning(f"Wikipedia error for '{query}': {e}")
             return []
 
     def search_formatted(self, query: str, max_results: int = 5) -> str:
         """
-        Поиск с форматированным выводом для модели.
-        Возвращает строку: Заголовок: ... Содержание: ... URL: ...
+        Search with formatted output for the model.
+        Returns a string: Title: ... Content: ... URL: ...
         """
         results = self.search(query, max_results)
         if not results:
-            return f"По запросу '{query}' ничего не найдено."
+            return f"{_NO_RESULTS_MARKER} for the query '{query}'."
 
-        lines = [f"### Результаты поиска: {query}\n"]
+        lines = [f"### Search results: {query}\n"]
         for i, r in enumerate(results, 1):
-            title = r.get("title", "Без названия")
+            title = r.get("title", "Untitled")
             snippet = r.get("snippet", "")[:300]
             url = r.get("url", "")
             lines.append(f"{i}. **{title}**")
@@ -115,12 +120,11 @@ class WebSearcher:
 
     def search_for_trading_rules(self, symbol: str, base_asset: str) -> str:
         """
-        Специализированный поиск: собирает информацию о торговле конкретной монетой.
-        Выполняет несколько запросов и объединяет результаты.
+        Specialized search: collects information about trading a specific coin.
+        Runs several queries and merges the results.
         """
         queries = [
             f"{base_asset} cryptocurrency trading strategy intraday 2025 2026",
-            f"{base_asset} криптовалюта торговля стратегия внутридневная",
             f"{base_asset} risk management stop loss volatility",
             f"{base_asset} price drivers news impact analysis",
         ]
@@ -128,10 +132,10 @@ class WebSearcher:
         all_results = []
         for query in queries:
             result = self.search_formatted(query, max_results=3)
-            if "ничего не найдено" not in result:
+            if _NO_RESULTS_MARKER not in result:
                 all_results.append(result)
 
         if not all_results:
-            return f"Информация по {symbol} ({base_asset}) в поиске не найдена."
+            return f"No search information found for {symbol} ({base_asset})."
 
         return "\n\n".join(all_results)

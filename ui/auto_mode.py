@@ -1,15 +1,15 @@
 """
-Авторежим торговой системы.
+Auto mode of the trading system.
 
-Модуль управляет фоновыми потоками по монетам:
-- запуск / остановка авторежима;
-- утренний пакет при необходимости;
-- докачка пропущенных свечей;
-- периодические intraday-проверки;
-- обновление статусов и логов авторежима.
+The module manages per-coin background threads:
+- starting / stopping auto mode;
+- the morning package when needed;
+- catching up missed candles;
+- periodic intraday checks;
+- updating auto mode statuses and logs.
 
-UI-компоненты напрямую не создаются: взаимодействие с интерфейсом
-идёт через переданные callback-функции и очередь событий.
+No UI components are created directly: interaction with the interface
+goes through the passed callback functions and the event queue.
 """
 
 from __future__ import annotations
@@ -32,10 +32,10 @@ _auto_threads_lock = threading.Lock()
 
 class AutoModeState:
     """
-    Менеджер состояния авторежима.
+    Auto mode state manager.
 
-    Зависимости передаются один раз через configure(), чтобы модуль был
-    отделён от глобальных переменных nicegui_app.py.
+    Dependencies are passed once via configure(), so that the module stays
+    decoupled from the global variables of nicegui_app.py.
     """
 
     _memory = None
@@ -62,9 +62,9 @@ class AutoModeState:
         schedule_refresh: Callable[[str], None],
     ) -> None:
         """
-        Конфигурирует зависимости авторежима.
+        Configures the auto mode dependencies.
 
-        Вызывается из nicegui_app.py после успешной инициализации сервисов.
+        Called from nicegui_app.py after the services are successfully initialized.
         """
         cls._memory = memory
         cls._fetcher = fetcher
@@ -75,7 +75,7 @@ class AutoModeState:
         cls._add_notification = add_notification
         cls._schedule_refresh = schedule_refresh
 
-        logger.info("AutoModeState сконфигурирован")
+        logger.info("AutoModeState configured")
 
     @classmethod
     def _is_configured(cls) -> bool:
@@ -95,17 +95,17 @@ class AutoModeState:
     @classmethod
     def start(cls, symbol, category, update_callback=None, initial_mode: str = "full"):
         """
-        Запускает авторежим для конкретной монеты.
+        Starts auto mode for a specific coin.
 
-        Режимы запуска:
-        - full: обычный запуск (докачка, при необходимости утренний пакет, затем цикл)
-        - position_only: запуск после ручного открытия позиции
-        -> НЕ выполняет стартовую докачку и НЕ запускает утренний пакет,
-            чтобы не дублировать анализ позиции отдельным worker'ом из CoinPage.
+        Start modes:
+        - full: regular start (catch-up, morning package if needed, then the loop)
+        - position_only: start after a position was opened manually
+        -> does NOT run the initial catch-up and does NOT run the morning package,
+            to avoid duplicating the position analysis by a separate worker from CoinPage.
         """
         if not cls._is_configured():
             logger.warning(
-                "AutoModeState.start вызван до configure(); запуск пропущен"
+                "AutoModeState.start called before configure(); start skipped"
             )
             return
 
@@ -119,7 +119,7 @@ class AutoModeState:
 
         if cm.is_day_closed() and cm.get_state().get("date") == today:
             cls._add_notification(
-                f"[{symbol}] День закрыт. Откройте новый день для торговли.",
+                f"[{symbol}] Day is closed. Open a new day to trade.",
                 "warning",
             )
             if update_callback:
@@ -135,9 +135,9 @@ class AutoModeState:
                 "thread": None,
                 "log": [],
                 "current_action": (
-                    "Запуск сопровождения позиции..."
+                    "Starting position management..."
                     if initial_mode == "position_only"
-                    else "Докачка данных..."
+                    else "Catching up data..."
                 ),
                 "needs_update": False,
             }
@@ -145,7 +145,7 @@ class AutoModeState:
 
         def auto_loop():
             if cm.is_day_closed():
-                state["log"].append("❌ День закрыт")
+                state["log"].append("❌ Day is closed")
                 state["is_running"] = False
                 if update_callback:
                     update_callback()
@@ -164,18 +164,18 @@ class AutoModeState:
 
             need_morning = not (last_morning_dt and last_morning_dt >= today_start)
 
-            # Обычный старт авторежима:
-            # - докачка пропущенных свечей
-            # - при необходимости утренний пакет
+            # Regular auto mode start:
+            # - catch up missed candles
+            # - morning package if needed
             #
-            # Специальный запуск после ручного открытия позиции:
-            # - НЕ делаем стартовую докачку
-            # - НЕ делаем утренний пакет
-            # - НЕ дублируем анализ позиции, потому что он уже выполняется
-            #   отдельным worker'ом в CoinPage.open_trade(...)
+            # Special start after a position was opened manually:
+            # - do NOT run the initial catch-up
+            # - do NOT run the morning package
+            # - do NOT duplicate the position analysis, because it is already
+            #   running in a separate worker in CoinPage.open_trade(...)
             if initial_mode != "position_only":
-                # === Докачка пропущенных свечей ===
-                state["current_action"] = "Докачка данных..."
+                # === Catch-up of missed candles ===
+                state["current_action"] = "Catching up data..."
                 pkg, new_time = cls._catch_up_historical_data(
                     fetcher=cls._fetcher,
                     symbol=symbol,
@@ -218,7 +218,7 @@ class AutoModeState:
                         except Exception:
                             pass
 
-                    state["current_action"] = "Анализ после докачки..."
+                    state["current_action"] = "Analysis after catch-up..."
                     active = cm.get_active_trade()
                     response = cls._ai_client.analyze(
                         pkg,
@@ -239,10 +239,10 @@ class AutoModeState:
                     state["needs_update"] = True
                     cls._schedule_refresh(symbol)
 
-                # === Утренний пакет (если нужен) ===
+                # === Morning package (if needed) ===
                 if need_morning:
                     try:
-                        state["current_action"] = "Утренний пакет..."
+                        state["current_action"] = "Morning package..."
                         pkg, new_time = cls._fetcher.get_morning_package(
                             symbol,
                             category,
@@ -273,29 +273,29 @@ class AutoModeState:
                             {"last_morning_update_utc": datetime.now(timezone.utc).isoformat()}
                         )
                         state["needs_update"] = True
-                        state["current_action"] = "Утренний пакет выполнен"
+                        state["current_action"] = "Morning package completed"
                         cls._add_notification(
-                            f"Утренний пакет {symbol} выполнен",
+                            f"Morning package {symbol} completed",
                             "positive",
                         )
                         cls._schedule_refresh(symbol)
 
                     except Exception as e:
-                        state["log"].append(f"❌ Утренний пакет: {e}")
-                        state["current_action"] = f"Ошибка: {e}"
+                        state["log"].append(f"❌ Morning package: {e}")
+                        state["current_action"] = f"Error: {e}"
                         cls._add_notification(
-                            f"Ошибка утреннего пакета {symbol}: {e}",
+                            f"Morning package error {symbol}: {e}",
                             "negative",
                         )
                 else:
                     cm.open_new_day()
                     state["needs_update"] = True
-                    state["current_action"] = "День открыт"
+                    state["current_action"] = "Day opened"
             else:
                 state["needs_update"] = True
-                state["current_action"] = "Авторежим запущен для сопровождения позиции"
+                state["current_action"] = "Auto mode started for position management"
 
-            # === Основной цикл ===
+            # === Main loop ===
             while True:
                 with _auto_threads_lock:
                     thread_state = _auto_threads.get(symbol)
@@ -304,7 +304,7 @@ class AutoModeState:
 
                 try:
                     if cm.is_day_closed():
-                        state["log"].append("❌ День закрыт")
+                        state["log"].append("❌ Day is closed")
                         state["is_running"] = False
                         if update_callback:
                             update_callback()
@@ -319,7 +319,7 @@ class AutoModeState:
                     wait = (nr - now).total_seconds()
 
                     if 0 < wait < 900:
-                        state["current_action"] = f"Ожидание {nr.strftime('%H:%M UTC')}..."
+                        state["current_action"] = f"Waiting for {nr.strftime('%H:%M UTC')}..."
                         for _ in range(int(wait)):
                             with _auto_threads_lock:
                                 thread_state = _auto_threads.get(symbol)
@@ -332,7 +332,7 @@ class AutoModeState:
 
                     active = cm.get_active_trade()
                     state["current_action"] = (
-                        f"Анализ ({'позиция' if active else 'поиск входа'})..."
+                        f"Analysis ({'position' if active else 'entry search'})..."
                     )
 
                     lt = cm.get_last_candle_time()
@@ -378,7 +378,7 @@ class AutoModeState:
                     if active:
                         state["log"].append(
                             f"[{datetime.now(timezone.utc).strftime('%H:%M')}] "
-                            f"Позиция: {pu.get('advice', 'OK')}"
+                            f"Position: {pu.get('advice', 'OK')}"
                         )
                     else:
                         if (
@@ -388,17 +388,17 @@ class AutoModeState:
                         ):
                             state["log"].append(
                                 f"[{datetime.now(timezone.utc).strftime('%H:%M')}] "
-                                f"СИГНАЛ: {response['signal'].get('direction', '?')}"
+                                f"SIGNAL: {response['signal'].get('direction', '?')}"
                             )
 
                     state["needs_update"] = True
-                    state["current_action"] = "Готово"
+                    state["current_action"] = "Done"
                     cls._schedule_refresh(symbol)
 
                 except Exception as e:
-                    logger.error("Автоцикл %s: %s", symbol, e, exc_info=True)
+                    logger.error("Auto loop %s: %s", symbol, e, exc_info=True)
                     state["log"].append(f"❌ {e}")
-                    state["current_action"] = f"Ошибка: {e}"
+                    state["current_action"] = f"Error: {e}"
                     time.sleep(60)
 
                 if update_callback:
@@ -408,7 +408,7 @@ class AutoModeState:
         state["thread"] = thread
         thread.start()
         state["log"].append(
-            f"🟢 Авторежим {datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}"
+            f"🟢 Auto mode {datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}"
         )
         if update_callback:
             update_callback()
@@ -416,13 +416,13 @@ class AutoModeState:
     @classmethod
     def stop(cls, symbol):
         """
-        Останавливает авторежим по конкретной монете.
+        Stops auto mode for a specific coin.
         """
         with _auto_threads_lock:
             if symbol in _auto_threads:
                 _auto_threads[symbol]["is_running"] = False
                 _auto_threads[symbol]["log"].append(
-                    f"🔴 Остановлен {datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}"
+                    f"🔴 Stopped {datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}"
                 )
 
         if cls._schedule_refresh:
@@ -431,7 +431,7 @@ class AutoModeState:
     @classmethod
     def stop_all(cls):
         """
-        Останавливает все авторежимы.
+        Stops all auto modes.
         """
         with _auto_threads_lock:
             symbols = list(_auto_threads.keys())
@@ -445,7 +445,7 @@ class AutoModeState:
     @classmethod
     def get_state(cls, symbol):
         """
-        Возвращает состояние авторежима по монете.
+        Returns the auto mode state for a coin.
         """
         with _auto_threads_lock:
             return _auto_threads.get(symbol)

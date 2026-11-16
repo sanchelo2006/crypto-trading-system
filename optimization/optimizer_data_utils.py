@@ -1,8 +1,8 @@
 """
-Утилиты для работы с данными в оптимизаторе:
-- загрузка и кэширование свечей
-- разбиение на TRAIN/TEST окна
-- разделение на optimization/holdout
+Data utilities for the optimizer:
+- loading and caching candles
+- splitting into TRAIN/TEST windows
+- splitting into optimization/holdout
 """
 
 import logging
@@ -29,12 +29,12 @@ class OptimizerDataUtils:
         end_date: datetime,
     ) -> Dict:
         """
-        Один раз скачивает полный исторический период и один раз рассчитывает
-        индикаторы. Все итерации оптимизации затем используют только срезы
-        этого DataFrame через engine.run_on_dataframe(), без повторного API-запроса.
+        Downloads the full historical period once and calculates indicators
+        once. All optimization iterations then use only slices of this
+        DataFrame via engine.run_on_dataframe(), without repeated API requests.
         """
         logger.info(
-            f'[{symbol}] Однократная загрузка исторических свечей для оптимизации: '
+            f'[{symbol}] One-time download of historical candles for optimization: '
             f'{start_date} → {end_date}'
         )
 
@@ -45,7 +45,7 @@ class OptimizerDataUtils:
             f"{end_date.strftime('%Y%m%d')}.parquet"
         )
 
-        # Кэш используем только для полностью прошедших периодов.
+        # Cache is used only for fully completed periods.
         cache_usable = end_date.date() < datetime.now(datetime.now().astimezone().tzinfo).date()
 
         df = None
@@ -53,7 +53,7 @@ class OptimizerDataUtils:
             try:
                 df = pd.read_parquet(cache_file)
                 df['timestamp'] = pd.to_datetime(df['timestamp'], utc=True)
-                logger.info(f'[{symbol}] Свечи взяты из дискового кэша: {cache_file.name}')
+                logger.info(f'[{symbol}] Candles taken from disk cache: {cache_file.name}')
             except Exception:
                 df = None
 
@@ -70,29 +70,29 @@ class OptimizerDataUtils:
 
         if df is None or df.empty:
             return {
-                'error': f'Не удалось загрузить 15m свечи для {symbol}.'
+                'error': f'Failed to load 15m candles for {symbol}.'
             }
 
         if len(df) < 150:
             return {
                 'error': (
-                    f'Недостаточно свечей для оптимизации: {len(df)}. '
-                    'Нужно хотя бы 150 свечей.'
+                    f'Not enough candles for optimization: {len(df)}. '
+                    'At least 150 candles are needed.'
                 )
             }
 
         try:
             logger.info(
-                f'[{symbol}] Свечи загружены: {len(df)}. '
-                'Однократный расчёт индикаторов...'
+                f'[{symbol}] Candles loaded: {len(df)}. '
+                'One-time indicator calculation...'
             )
 
             prepared_df = self.engine._build_indicator_frame(df)
 
             logger.info(
-                f'[{symbol}] Подготовка исторических данных завершена. '
-                f'Строк: {len(prepared_df)}. '
-                'Дальнейшие итерации будут работать без загрузки свечей.'
+                f'[{symbol}] Historical data preparation completed. '
+                f'Rows: {len(prepared_df)}. '
+                'Further iterations will work without loading candles.'
             )
 
             return {
@@ -101,9 +101,9 @@ class OptimizerDataUtils:
             }
 
         except Exception as e:
-            logger.exception(f'[{symbol}] Ошибка подготовки индикаторов')
+            logger.exception(f'[{symbol}] Error preparing indicators')
             return {
-                'error': f'Ошибка расчёта индикаторов: {e}'
+                'error': f'Error calculating indicators: {e}'
             }
 
     @staticmethod
@@ -114,18 +114,18 @@ class OptimizerDataUtils:
         walk_forward_folds: int = 1,
     ) -> List[Dict]:
         """
-        Формирует хронологические TRAIN/TEST-разбиения.
+        Forms chronological TRAIN/TEST splits.
 
         walk_forward_folds = 1:
-            Обычный split:
-            TRAIN = первые train_ratio периода,
-            TEST = остаток периода.
+            Simple split:
+            TRAIN = first train_ratio of the period,
+            TEST = remainder of the period.
 
         walk_forward_folds > 1:
             Expanding walk-forward:
-            - первоначальный TRAIN занимает train_ratio периода;
-            - оставшаяся TEST-часть делится на N последовательных тестовых окон;
-            - перед каждым следующим TEST окно TRAIN расширяется.
+            - initial TRAIN occupies train_ratio of the period;
+            - the remaining TEST part is divided into N consecutive test windows;
+            - before each next TEST, the TRAIN window expands.
         """
         if start_date >= end_date:
             return []
@@ -191,10 +191,10 @@ class OptimizerDataUtils:
         min_optimization_candles: int = 3000,
     ):
         """
-        Отделяет хвост истории под финальный holdout.
+        Separates the history tail for the final holdout.
 
-        Holdout НЕ участвует в оптимизации и используется только
-        для финальной проверки лучшего кандидата.
+        Holdout does NOT participate in optimization and is used only
+        for final validation of the best candidate.
         """
         total = len(candles_df)
         if total <= 0:
@@ -237,16 +237,16 @@ class OptimizerDataUtils:
         fallback_end=None,
     ):
         """
-        Возвращает реальные datetime-границы DataFrame.
-        Приоритет:
-        1) колонка timestamp/datetime/date/open_time/time
+        Returns the actual datetime boundaries of the DataFrame.
+        Priority:
+        1) timestamp/datetime/date/open_time/time column
         2) DatetimeIndex
         3) fallback_start / fallback_end
         """
         if candles_df is None or len(candles_df) == 0:
             return fallback_start, fallback_end
 
-        # 1. Сначала пробуем колонки времени
+        # 1. First try time columns
         for col in ("timestamp", "datetime", "date", "open_time", "time"):
             if col in candles_df.columns and len(candles_df[col]) > 0:
                 try:
@@ -262,7 +262,7 @@ class OptimizerDataUtils:
                 except Exception:
                     pass
 
-        # 2. Потом datetime index
+        # 2. Then datetime index
         try:
             idx = candles_df.index
             if hasattr(idx, "dtype") and str(idx.dtype).startswith("datetime64"):
@@ -283,8 +283,8 @@ class OptimizerDataUtils:
     @staticmethod
     def describe_frame_period(candles_df) -> Dict:
         """
-        Определяет начало и конец периода по колонке времени
-        или datetime-индексу. Числовой индекс не считаем временем.
+        Determines the start and end of the period by the time column
+        or datetime-index. Numeric index is not considered time.
         """
         result = {"start": None, "end": None}
 

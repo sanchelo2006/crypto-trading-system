@@ -1,5 +1,5 @@
 """
-Мутации стратегий и локальный поиск.
+Strategy mutations and local search.
 """
 
 import copy
@@ -21,7 +21,7 @@ class OptimizerMutations:
 
     @staticmethod
     def mutate_numeric(spec: Dict) -> Dict:
-        """Случайная мутация числовых параметров spec."""
+        """Random mutation of numeric spec parameters."""
         s = copy.deepcopy(spec)
 
         def _mut_conditions(conds):
@@ -72,8 +72,8 @@ class OptimizerMutations:
             if not isinstance(block, dict):
                 continue
 
-            # Коридор выходов: если задан exit_corridor, мутируем в его пределах.
-            # Иначе — стандартные широкие диапазоны.
+            # Exit corridor: if exit_corridor is set, mutate within its bounds.
+            # Otherwise — standard wide ranges.
             corridor = s.get('exit_corridor')
             if 'stop_loss_atr_mult' in block and random.random() < 0.5:
                 if corridor and 'stop_loss_atr_mult' in corridor:
@@ -90,8 +90,8 @@ class OptimizerMutations:
 
             mgmt = block.get('management')
             if isinstance(mgmt, dict):
-                # Если коридор задан — НЕ мутируем breakeven и trailing
-                # (лаборатория зафиксировала их на null).
+                # If the corridor is set — do NOT mutate breakeven and trailing
+                # (the laboratory fixed them to null).
                 if not corridor:
                     if random.random() < 0.4:
                         mgmt['move_to_breakeven_at_tp_pct'] = random.choice(
@@ -100,7 +100,7 @@ class OptimizerMutations:
                         mgmt['trailing_atr_mult'] = random.choice(
                             [None, 2.0, 2.5, 3.0, 3.5])
                 else:
-                    # Холд можно мутировать в пределах коридора
+                    # Hold can be mutated within the corridor
                     if 'max_hold_candles' in corridor and random.random() < 0.4:
                         lo, hi = corridor['max_hold_candles']
                         mgmt['max_hold_candles'] = random.randint(int(lo), int(hi))
@@ -120,8 +120,8 @@ class OptimizerMutations:
         evaluate_func, train_score_func, spec_fingerprint_func,
     ) -> Optional[tuple]:
         """
-        Локальный поиск: N мутаций, лучшая по TRAIN-score.
-        Возвращает (best_candidate, best_eval) или None.
+        Local search: N mutations, best by TRAIN-score.
+        Returns (best_candidate, best_eval) or None.
         """
         best_candidate = None
         best_eval = None

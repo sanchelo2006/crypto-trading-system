@@ -1,10 +1,10 @@
 """
-Механический бэктест-движок.
+Mechanical backtest engine.
 
-Исполняет машиночитаемую спецификацию стратегии (strategy_spec), которую AI
-генерирует при инициализации монеты. Индикаторы рассчитываются внутри движка
-с корректным выравниванием по индексу свечей, pivot-уровни пересчитываются
-на каждый день (по данным предыдущего дня).
+Executes the machine-readable strategy specification (strategy_spec) that
+the AI generates during coin initialization. Indicators are calculated
+inside the engine with proper candle-index alignment; pivot levels are
+recomputed daily (based on the previous day's data).
 """
 import logging
 from datetime import datetime, timedelta
@@ -37,7 +37,7 @@ from strategy_spec import (
 
 logger = logging.getLogger(__name__)
 
-# Индикаторы, которые сохраняем на моменте входа в сделку — для последующего анализа
+# Indicators saved at entry time — for subsequent analysis
 SNAPSHOT_KEYS = [
     "close", "rsi_14", "adx_14", "volume", "avg_volume_96", "avg_volume_20",
     "sma_20", "sma_50", "macd", "macd_signal", "macd_hist", "atr_14", "vwap",
@@ -49,11 +49,12 @@ class BacktestEngine:
     def __init__(self, fetcher: BybitDataFetcher):
         self.fetcher = fetcher
         self.last_simulation_meta = {}
-        # Проскальзывание по умолчанию — из config, можно переопределить
-        # параметром run()/run_on_dataframe().
+        # Default slippage — from config, can be overridden
+        # via run()/run_on_dataframe() parameter.
         self.slippage_pct = float(getattr(config, "BACKTEST_SLIPPAGE_PCT", 0.0))
+
     # ------------------------------------------------------------------ #
-    # Публичный метод
+    # Public method
     # ------------------------------------------------------------------ #
     def run(
         self,
@@ -63,17 +64,17 @@ class BacktestEngine:
         start_date: datetime,
         end_date: datetime,
         initial_capital: float = 1000.0,
-        commission_pct: float = 0.055,   # taker Bybit, совпадает с live-дефолтом
+        commission_pct: float = 0.055,   # Bybit taker, matches live default
         rules_text: str = "",
         slippage_pct: Optional[float] = None,
     ) -> Dict:
         """
-        Выполняет бэктест по strategy_spec на данных, загруженных из fetcher.
+        Runs a backtest of strategy_spec on data loaded from the fetcher.
         """
-        logger.info(f"[{symbol}] Загрузка свечей {start_date} → {end_date}")
+        logger.info(f"[{symbol}] Loading candles {start_date} → {end_date}")
         df = self.fetcher.fetch_ohlcv(symbol, "15", start_date, end_date, category)
         if df is None or df.empty:
-            return {"error": f"Не удалось загрузить 15m свечи для {symbol}"}
+            return {"error": f"Failed to load 15m candles for {symbol}"}
 
         return self.run_on_dataframe(
             df=df,
@@ -93,21 +94,21 @@ class BacktestEngine:
         symbol: str,
         strategy_spec: Optional[Dict],
         initial_capital: float = 1000.0,
-        commission_pct: float = 0.055,   # taker Bybit, совпадает с live-дефолтом
+        commission_pct: float = 0.055,   # Bybit taker, matches live default
         rules_text: str = "",
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         slippage_pct: Optional[float] = None,
     ) -> Dict:
         """
-        Выполняет бэктест по уже имеющемуся DataFrame.
-        Если индикаторы ещё не рассчитаны — рассчитывает их.
-        Если они уже есть — использует как есть.
+        Runs a backtest on an existing DataFrame.
+        If indicators are not yet calculated — calculates them.
+        If they already exist — uses them as-is.
         """
         spec_source = "ai"
         if strategy_spec is None or validate_strategy_spec(strategy_spec) is not None:
-            reason = validate_strategy_spec(strategy_spec) if strategy_spec else "spec отсутствует"
-            logger.warning(f"[{symbol}] strategy_spec невалиден ({reason}). Использую default.")
+            reason = validate_strategy_spec(strategy_spec) if strategy_spec else "spec is missing"
+            logger.warning(f"[{symbol}] strategy_spec is invalid ({reason}). Using default.")
             strategy_spec = default_strategy_spec()
             spec_source = "default"
 
@@ -115,10 +116,10 @@ class BacktestEngine:
             slippage_pct = self.slippage_pct
 
         if df is None or df.empty:
-            return {"error": f"Пустой DataFrame для {symbol}"}
+            return {"error": f"Empty DataFrame for {symbol}"}
 
         if len(df) < 60:
-            return {"error": f"Недостаточно свечей ({len(df)}), нужно минимум 60"}
+            return {"error": f"Not enough candles ({len(df)}), need at least 60"}
 
         try:
             if not self._has_precomputed_indicators(df):
@@ -126,8 +127,8 @@ class BacktestEngine:
             else:
                 df = df.copy().reset_index(drop=True)
         except Exception as e:
-            logger.exception("Ошибка подготовки индикаторов")
-            return {"error": f"Ошибка подготовки индикаторов: {e}"}
+            logger.exception("Error preparing indicators")
+            return {"error": f"Error preparing indicators: {e}"}
 
         trades, equity, capital = self._simulate(
             df, strategy_spec, initial_capital, commission_pct, slippage_pct
@@ -168,11 +169,11 @@ class BacktestEngine:
         return all(col in df.columns for col in required)
 
     # ------------------------------------------------------------------ #
-    # Индикаторы (выровнены по индексу, NaN сохраняются)
+    # Indicators (index-aligned, NaN preserved)
     # ------------------------------------------------------------------ #
     def _build_indicator_frame(self, df: pd.DataFrame) -> pd.DataFrame:
         if talib is None:
-            raise RuntimeError("TA-Lib не установлен")
+            raise RuntimeError("TA-Lib is not installed")
 
         df = df.copy().reset_index(drop=True)
         df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
@@ -194,18 +195,17 @@ class BacktestEngine:
 
         df["adx_14"] = talib.ADX(high, low, close, timeperiod=14)
 
-        
-        # === НОВЫЕ ИНДИКАТОРЫ ДЛЯ ПРОБОЙНЫХ СТРАТЕГИЙ (Итерация 3) ===
-        # 32-свечной минимум/максимум (shift(1) гарантирует отсутствие lookahead)
+        # === NEW INDICATORS FOR BREAKOUT STRATEGIES (Iteration 3) ===
+        # 32-candle min/max (shift(1) guarantees no lookahead)
         df["low_32"] = df["low"].shift(1).rolling(32, min_periods=32).min()
         df["high_32"] = df["high"].shift(1).rolling(32, min_periods=32).max()
-        # === A6: моментум-шорт — падение за 2 свечи в единицах ATR ===
-        # То же, что vel_2 в impulse_lab. < -2.0 = падение >2 ATR за 2 свечи.
-        # shift не нужен: close.diff(2) = close[t] - close[t-2], lookahead нет.
+        # === A6: momentum short — drop over 2 candles in ATR units ===
+        # Same as vel_2 in impulse_lab. < -2.0 = drop >2 ATR over 2 candles.
+        # shift is not needed: close.diff(2) = close[t] - close[t-2], no lookahead.
         df["drop_2_atr"] = df["close"].diff(2) / df["atr_14"]
 
-        
-        # Внутрибаровая сила: где закрылась свеча относительно своего диапазона (0.0 = лоу, 1.0 = хай)
+        # Intra-bar strength: where the candle closed relative to its range
+        # (0.0 = low, 1.0 = high)
         df["candle_range"] = (df["high"] - df["low"]).replace(0, np.nan)
         df["close_position"] = (df["close"] - df["low"]) / df["candle_range"]
         # ================================================================
@@ -213,9 +213,9 @@ class BacktestEngine:
         df["avg_volume_20"] = df["volume"].rolling(20).mean()
         df["avg_volume_96"] = df["volume"].rolling(96).mean()
 
-        # === Портфель: аномальная активность (объём × волатильность) ===
-        # Используется в сигнале act_short. Оба компонента нормализованы
-        # по своим средним (96 свечей).
+        # === Portfolio: anomalous activity (volume × volatility) ===
+        # Used in the act_short signal. Both components are normalized
+        # by their own averages (96 candles).
         df["vol_ratio"] = df["volume"] / df["avg_volume_96"]
         df["atr_ratio"] = df["atr_14"] / df["atr_14"].rolling(96, min_periods=24).mean()
         df["activity"] = df["vol_ratio"] * df["atr_ratio"]
@@ -223,7 +223,7 @@ class BacktestEngine:
         df["vwap"] = self._compute_vwap(df)
         self._add_daily_pivots(df)
 
-        # 1h признаки из indicators.py
+        # 1h features from indicators.py
         df_1h = resample_15m_to_1h(df)
         if df_1h.empty or len(df_1h) < 60:
             for col in get_1h_feature_columns():
@@ -233,8 +233,7 @@ class BacktestEngine:
             df_1h = compute_1h_indicators(df_1h, talib=talib)
             df = merge_1h_features_to_15m(df, df_1h)
 
-
-        # === 4h-признаки: ресэмплинг 15m → 4h ===
+        # === 4h features: 15m → 4h resample ===
         df_4h = (
             df.set_index("timestamp")
             .resample("4h")
@@ -249,7 +248,7 @@ class BacktestEngine:
         )
 
         if len(df_4h) > 2:
-            # ATR на 4H
+            # ATR on 4H
             high_4h, low_4h, close_4h = df_4h["high"], df_4h["low"], df_4h["close"]
             prev_close_4h = close_4h.shift(1)
             tr_4h = pd.concat([
@@ -259,17 +258,17 @@ class BacktestEngine:
             ], axis=1).max(axis=1)
             df_4h["atr_14"] = tr_4h.rolling(14, min_periods=14).mean()
 
-            # Средний объём за 20 баров 4H
+            # Average volume over 20 bars of 4H
             df_4h["avg_volume_20"] = df_4h["volume"].rolling(20, min_periods=20).mean()
 
-            # Скорость движения за 1 бар 4H (в единицах ATR)
+            # Speed of movement over 1 bar of 4H (in ATR units)
             df_4h["vel_1"] = close_4h.diff(1) / df_4h["atr_14"].replace(0, np.nan)
 
-            # Позиция закрытия в свече 4H
+            # Close position in the 4H candle
             candle_range_4h = (high_4h - low_4h).replace(0, np.nan)
             df_4h["close_position"] = (close_4h - low_4h) / candle_range_4h
 
-            # Forward fill на 15m таймлайн
+            # Forward fill onto the 15m timeline
             idx_15m = df["timestamp"]
             df["volume_4h"] = df_4h["volume"].reindex(idx_15m, method="ffill").values
             df["avg_volume_20_4h"] = df_4h["avg_volume_20"].reindex(idx_15m, method="ffill").values
@@ -277,13 +276,13 @@ class BacktestEngine:
             df["close_position_4h"] = df_4h["close_position"].reindex(idx_15m, method="ffill").values
             df["atr_14_4h"] = df_4h["atr_14"].reindex(idx_15m, method="ffill").values
 
-            # Флаг границы 4H свечи: 1 если текущий 15m бар — первый после
-            # закрытия 4H свечи (т.е. минута == 0 и час кратен 4)
+            # 4H candle boundary flag: 1 if the current 15m bar is the first
+            # after the 4H candle close (i.e. minute == 0 and hour divisible by 4)
             hours = df["timestamp"].dt.hour
             minutes = df["timestamp"].dt.minute
             df["is_4h_boundary"] = ((hours % 4 == 0) & (minutes == 0)).astype(int)
         else:
-            # Недостаточно данных для 4H — заполняем NaN/0
+            # Not enough data for 4H — fill with NaN/0
             for col in ("volume_4h", "avg_volume_20_4h", "vel_1_4h",
                         "close_position_4h", "atr_14_4h"):
                 df[col] = np.nan
@@ -306,7 +305,7 @@ class BacktestEngine:
         daily = df.groupby("_date").agg(
             high=("high", "max"), low=("low", "min"), close=("close", "last")
         )
-        # Pivot текущего дня считается по ПРЕДЫДУЩЕМУ дню
+        # The current day's pivot is calculated from the PREVIOUS day
         prev = daily.shift(1)
         piv = (prev["high"] + prev["low"] + prev["close"]) / 3.0
         levels = pd.DataFrame(index=daily.index)
@@ -322,13 +321,12 @@ class BacktestEngine:
             df[col] = df["_date"].map(levels[col])
         df.drop(columns=["_date"], inplace=True)
 
-
     def _get_risk_controls(self, spec: Dict) -> Dict:
         """
-        Возвращает нормализованные настройки защиты от серий убытков.
+        Returns normalized settings for protection against loss streaks.
 
-        Если блока risk_controls нет или enabled=False, стратегия ведёт себя
-        строго как раньше: новые входы не ограничиваются.
+        If the risk_controls block is missing or enabled=False, the strategy
+        behaves exactly as before: new entries are not restricted.
         """
         raw = spec.get("risk_controls") or {}
 
@@ -366,12 +364,12 @@ class BacktestEngine:
         controls: Dict,
     ) -> bool:
         """
-        Решает, нужно ли ставить паузу после закрытия убыточной сделки.
+        Decides whether to pause after closing a losing trade.
 
-        Пауза срабатывает:
-        1. При серии max_consecutive_losses убыточных сделок.
-        2. При max_losses_in_window убыточных сделках
-           среди последних loss_window_trades.
+        The pause triggers:
+        1. On a streak of max_consecutive_losses losing trades.
+        2. On max_losses_in_window losing trades
+           among the last loss_window_trades.
         """
         if not controls.get("enabled", False):
             return False
@@ -392,7 +390,7 @@ class BacktestEngine:
         return False
 
     # ------------------------------------------------------------------ #
-    # Симуляция
+    # Simulation
     # ------------------------------------------------------------------ #
     def _simulate(self, df: pd.DataFrame, spec: Dict, initial_capital: float, commission_pct: float, slippage_pct: float = 0.0,):
         long_spec = spec.get("long") or {}
@@ -403,7 +401,7 @@ class BacktestEngine:
         equity = [initial_capital]
         capital = initial_capital
         position = None
-        pending_entry = None  # сигнал, который исполнится по open следующей свечи
+        pending_entry = None  # signal that will execute at the open of the next candle
 
         controls = self._get_risk_controls(spec)
         consecutive_losses = 0
@@ -414,19 +412,19 @@ class BacktestEngine:
 
         records = df.to_dict("records")
 
-        # Относительное проскальзывание (0.05% → 0.0005).
+        # Relative slippage (0.05% → 0.0005).
         eps = float(slippage_pct or 0.0) / 100.0
 
         for i in range(1, len(records)):
             row = records[i]
             prev = records[i - 1]
 
-            # --- Исполнение отложенного входа по OPEN текущей свечи ---
+            # --- Execute pending entry at OPEN of the current candle ---
             if position is None and pending_entry is not None:
                 direction = pending_entry["direction"]
                 raw_open = float(row["open"])
-                # Слиппедж «против сделки»: long платит дороже open,
-                # short продаёт дешевле.
+                # Slippage "against the trade": long pays more than open,
+                # short sells for less.
                 if direction == "long":
                     entry_fill = raw_open * (1.0 + eps)
                 else:
@@ -440,16 +438,16 @@ class BacktestEngine:
                 position["entry_reasons"] = pending_entry["reasons"]
                 pending_entry = None
 
-            # --- Управление открытой позицией ---
+            # --- Manage open position ---
             if position is not None:
                 position["bars_held"] = position.get("bars_held", 0) + 1
                 self._apply_position_management(position, row)
 
                 exit_price, reason = self._check_exit(position, row)
                 if exit_price is not None:
-                    # Слиппедж применяется к SL/TP. Мягкие выходы
-                    # (_check_exit вернёт time_stop / level_failure /
-                    # trend_loss / macd_flip) идут по close и не смещаются.
+                    # Slippage is applied to SL/TP. Soft exits
+                    # (_check_exit returns time_stop / level_failure /
+                    # trend_loss / macd_flip) go at close and are not shifted.
                     exit_price = self._apply_slippage_to_exit(
                         exit_price, reason, position["direction"], eps
                     )
@@ -460,7 +458,7 @@ class BacktestEngine:
                     equity.append(capital)
                     position = None
 
-                    # Учёт серии убытков и настройка паузы (risk_controls).
+                    # Account for loss streaks and set the pause (risk_controls).
                     if trade.get("result_pct", 0) <= 0:
                         consecutive_losses += 1
                         recent_loss_flags.append(1)
@@ -480,20 +478,20 @@ class BacktestEngine:
 
                     continue
 
-            # Пока позиция открыта — новые сигналы не ищем.
+            # While a position is open — do not look for new signals.
             if position is not None:
                 continue
 
-            # Пауза после серии убытков: не ищем новые входы.
+            # Pause after a loss streak: do not look for new entries.
             if cooldown_until_index is not None and i < cooldown_until_index:
                 skipped_candles_by_cooldown += 1
                 continue
 
-            # --- Глобальные фильтры ---
+            # --- Global filters ---
             if filters and not evaluate_conditions(filters, row, prev):
                 continue
 
-            # --- Сигнал входа Long (оценивается по close свечи, исполнится на следующей) ---
+            # --- Long entry signal (evaluated at candle close, executed on the next) ---
             matched_long = self._entry_signal(long_spec, row, prev)
             if matched_long is not None:
                 pending_entry = {
@@ -503,7 +501,7 @@ class BacktestEngine:
                 }
                 continue
 
-            # --- Сигнал входа Short ---
+            # --- Short entry signal ---
             matched_short = self._entry_signal(short_spec, row, prev)
             if matched_short is not None:
                 pending_entry = {
@@ -513,7 +511,7 @@ class BacktestEngine:
                 }
                 continue
 
-        # --- Закрытие в конце периода ---
+        # --- Close at end of period ---
         if position is not None:
             last = records[-1]
             capital, trade = self._close_position(
@@ -547,7 +545,7 @@ class BacktestEngine:
         stop_dist = None
         take_dist = None
 
-        # Приоритет — ATR-стопы (нормализуют поведение по всему ценовому диапазону).
+        # Priority — ATR stops (normalize behavior across the whole price range).
         if atr_valid and sl_atr_mult is not None:
             try:
                 stop_dist = float(sl_atr_mult) * float(atr)
@@ -559,7 +557,7 @@ class BacktestEngine:
             except Exception:
                 take_dist = None
 
-        # Fallback — фиксированные проценты.
+        # Fallback — fixed percentages.
         if stop_dist is None:
             sl_pct = float(side_spec.get("stop_loss_pct", 2.0)) / 100.0
             stop_dist = entry * sl_pct
@@ -597,11 +595,11 @@ class BacktestEngine:
     @staticmethod
     def _entry_signal(side_spec: Dict, row: Dict, prev: Dict):
         """
-        Проверяет вход по side_spec.
-        Возвращает список условий сработавшей группы (для explain) или None.
+        Checks entry by side_spec.
+        Returns the list of conditions of the fired group (for explain) or None.
 
-        Приоритет: entry_any (список OR-групп). Если его нет — старое поле entry.
-        Полная обратная совместимость со старыми spec.
+        Priority: entry_any (list of OR groups). If absent — the old entry field.
+        Full backward compatibility with older specs.
         """
         groups = side_spec.get("entry_any")
         if isinstance(groups, list) and groups:
@@ -617,15 +615,15 @@ class BacktestEngine:
 
     def _apply_position_management(self, pos: Dict, row: Dict) -> None:
         """
-        Опциональное сопровождение позиции. Ничего не делает без блока management.
-        Поддерживает:
-        - move_to_breakeven_at_tp_pct: доля пути к TP, после которой SL → безубыток;
-        - breakeven_offset_pct: смещение безубытка в % (напр. 0.1 покрывает комиссии);
-        - trailing_atr_mult: ATR-трейлинг стопа (SL подтягивается за ценой).
+        Optional position management. Does nothing without the management block.
+        Supports:
+        - move_to_breakeven_at_tp_pct: fraction of the way to TP after which SL → breakeven;
+        - breakeven_offset_pct: breakeven offset in % (e.g. 0.1 covers commissions);
+        - trailing_atr_mult: ATR trailing stop (SL follows the price).
         """
         mgmt = pos.get("management", {}) or {}
 
-        # --- 1. Перенос SL в безубыток ---
+        # --- 1. Move SL to breakeven ---
         trigger = mgmt.get("move_to_breakeven_at_tp_pct")
         if trigger is not None:
             try:
@@ -654,7 +652,7 @@ class BacktestEngine:
                         if pos["stop_loss"] > be_price:
                             pos["stop_loss"] = be_price
 
-        # --- 2. ATR-трейлинг стопа ---
+        # --- 2. ATR trailing stop ---
         trail_mult = mgmt.get("trailing_atr_mult")
         if trail_mult:
             try:
@@ -683,15 +681,15 @@ class BacktestEngine:
     @staticmethod
     def _check_exit(pos: Dict, row: Dict):
         """
-        Возвращает (exit_price, reason) или (None, '').
+        Returns (exit_price, reason) or (None, '').
 
-        Логика:
-        1. Жёсткие выходы по SL/TP.
-        2. Мягкие выходы по management. Выход по потере уровня теперь
-           срабатывает не при первом же дипе под уровень, а только когда цена
-           уходит за уровень дальше буфера (level_failure_buffer_pct).
+        Logic:
+        1. Hard exits by SL/TP.
+        2. Soft exits by management. Exit on level loss now triggers not on
+           the first dip below the level, but only when the price moves beyond
+           the level further than the buffer (level_failure_buffer_pct).
         """
-        # --- Жёсткие выходы: SL / TP ---
+        # --- Hard exits: SL / TP ---
         if pos["direction"] == "long":
             if row["low"] <= pos["stop_loss"]:
                 return pos["stop_loss"], "stop_loss"
@@ -703,13 +701,13 @@ class BacktestEngine:
             if row["low"] <= pos["take_profit"]:
                 return pos["take_profit"], "take_profit"
 
-        # --- Мягкие выходы по management ---
+        # --- Soft exits by management ---
         mgmt = pos.get("management", {}) or {}
         close_price = row.get("close")
         if close_price is None:
             return None, ""
 
-        # --- Time-stop: выход по времени, если сделка "не пошла" ---
+        # --- Time-stop: exit by time if the trade "didn't work" ---
         max_hold = mgmt.get("max_hold_candles")
         if max_hold:
             try:
@@ -727,7 +725,7 @@ class BacktestEngine:
             if mgmt.get("exit_on_level_failure"):
                 lvl = row.get(mgmt.get("level_field", "resistance_1"))
                 if _valid(lvl):
-                    # выходим только если цена ушла НИЖЕ уровня дальше буфера
+                    # exit only if the price moved BELOW the level further than the buffer
                     if close_price < lvl * (1 - buffer_pct):
                         return float(close_price), "level_failure"
 
@@ -768,12 +766,12 @@ class BacktestEngine:
         eps: float,
     ) -> float:
         """
-        Смещает цену выхода в сторону убытка для SL/TP.
+        Shifts the exit price towards the loss for SL/TP.
 
-        Для мягких выходов (time_stop, level_failure, trend_loss,
-        macd_flip) и end_of_period возвращает цену без изменения:
-        в живом трейдере они исполняются market-ордером по уже
-        наблюдаемой close-цене, а не по уровню.
+        For soft exits (time_stop, level_failure, trend_loss, macd_flip)
+        and end_of_period returns the price unchanged: in the live trader
+        they are executed by a market order at the already observed close
+        price, not at a level.
         """
         if eps <= 0 or reason not in ("stop_loss", "take_profit"):
             return price
@@ -788,7 +786,7 @@ class BacktestEngine:
             pnl_pct = (exit_price - pos["entry_price"]) / pos["entry_price"]
         else:
             pnl_pct = (pos["entry_price"] - exit_price) / pos["entry_price"]
-        # Комиссия на вход и выход
+        # Commission on entry and exit
         pnl_pct = (pnl_pct - 2 * commission_pct / 100) * 100
         capital += capital * (pnl_pct / 100)
         trade = {
@@ -806,7 +804,7 @@ class BacktestEngine:
         return capital, trade
 
     # ------------------------------------------------------------------ #
-    # Статистика
+    # Statistics
     # ------------------------------------------------------------------ #
     @staticmethod
     def _compute_stats(trades, equity, capital, initial_capital) -> Dict:

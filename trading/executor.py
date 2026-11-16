@@ -1,12 +1,12 @@
 """
-Исполнение ордеров через Bybit Unified Trading API для фьючерсной торговли.
+Order execution via Bybit Unified Trading API for futures trading.
 
-Особенности linear perpetuals (USDT-маржа):
-- Категория: linear
-- Leverage (плечо) устанавливается отдельно
-- Margin mode: isolated (по умолчанию) или cross
-- Position mode: one-way (позиция в одну сторону)
-- Размер позиции указывается в контрактах (qty), а не в USDT
+Specifics of linear perpetuals (USDT-margin):
+- Category: linear
+- Leverage is set separately
+- Margin mode: isolated (default) or cross
+- Position mode: one-way (position in one direction)
+- Position size is specified in contracts (qty), not in USDT
 """
 
 import logging
@@ -20,16 +20,17 @@ import config
 
 logger = logging.getLogger(__name__)
 
+
 class BybitError(Exception):
-    """Исключение для ошибок API Bybit."""
+    """Exception for Bybit API errors."""
     pass
 
 
 class BybitExecutor:
     """
-    Низкоуровневый адаптер для работы с Bybit фьючерсами (linear perpetual).
+    Low-level adapter for working with Bybit futures (linear perpetual).
     
-    Все методы возвращают (success: bool, result/error).
+    All methods return (success: bool, result/error).
     """
     
     def __init__(
@@ -38,7 +39,7 @@ class BybitExecutor:
         api_key: str = None,
         api_secret: str = None,
         default_leverage: int = 10,
-        margin_mode: str = "ISOLATED_MARGIN",  # или "REGULAR_MARGIN" (cross)
+        margin_mode: str = "ISOLATED_MARGIN",  # or "REGULAR_MARGIN" (cross)
     ):
         self.testnet = testnet
         self.api_key = api_key or config.BYBIT_API_KEY
@@ -47,7 +48,7 @@ class BybitExecutor:
         self.margin_mode = margin_mode
         
         if not self.api_key or not self.api_secret:
-            raise ValueError("BYBIT_API_KEY и BYBIT_API_SECRET должны быть заданы")
+            raise ValueError("BYBIT_API_KEY and BYBIT_API_SECRET must be set")
         
         self.session = HTTP(
             testnet=testnet,
@@ -55,51 +56,51 @@ class BybitExecutor:
             api_secret=self.api_secret,
         )
         
-        # Кэш параметров инструментов (tickSize, qtyStep, minOrderQty)
+        # Cache of instrument parameters (tickSize, qtyStep, minOrderQty)
         self._instruments_cache: Dict[str, Dict] = {}
         
         logger.info(
-            f"BybitExecutor инициализирован ({'testnet' if testnet else 'mainnet'}), "
+            f"BybitExecutor initialized ({'testnet' if testnet else 'mainnet'}), "
             f"leverage={default_leverage}, margin_mode={margin_mode}"
         )
     
     # ----------------------------------------------------------------
-    # Информация об инструментах
+    # Instrument information
     # ----------------------------------------------------------------
     
     def get_instrument_info(self, symbol: str) -> Tuple[bool, Optional[Dict]]:
         """
-        Получает параметры торгового инструмента.
+        Gets trading instrument parameters.
 
         Returns:
-            (success, info_dict или error)
+            (success, info_dict or error)
 
-        info_dict содержит:
-            - tickSize: минимальный шаг цены
-            - qtyStep: минимальный шаг количества
-            - minOrderQty: минимальный размер ордера
-            - maxOrderQty: максимальный размер ордера
-            - minNotionalValue: минимальная стоимость ордера в USDT
+        info_dict contains:
+            - tickSize: minimum price step
+            - qtyStep: minimum quantity step
+            - minOrderQty: minimum order size
+            - maxOrderQty: maximum order size
+            - minNotionalValue: minimum order value in USDT
 
-        Логика отказоустойчивости:
-        1. Если в кэше уже есть данные — отдаём сразу, в сеть не идём.
-        2. При промахе — retry с экспоненциальной задержкой.
-           Bybit testnet периодически отдаёт ErrCode 10016 (Internal System Error)
-           и 10000 (Server Timeout) — транзиентные ошибки, обычно проходят
-           со 2-3 попытки.
-        3. Если все попытки провалились, но в кэше ЕСТЬ данные (например,
-           получены раньше, а сейчас сеть опять легла) — возвращаем их.
-           tickSize/qtyStep для инструмента практически не меняются,
-           так что старые данные абсолютно валидны.
-        4. Если совсем ничего нет — возвращаем (False, error).
+        Fault tolerance logic:
+        1. If the cache already has data — return immediately, no network call.
+        2. On miss — retry with exponential backoff.
+           Bybit testnet periodically returns ErrCode 10016 (Internal System Error)
+           and 10000 (Server Timeout) — transient errors, usually pass
+           on the 2-3rd attempt.
+        3. If all attempts failed but the cache HAS data (e.g. received earlier,
+           and now the network is down again) — return it.
+           tickSize/qtyStep for an instrument rarely change,
+           so old data is absolutely valid.
+        4. If there is nothing at all — return (False, error).
         """
-        # 1. Быстрый путь — данные в кэше
+        # 1. Fast path — data in cache
         if symbol in self._instruments_cache:
             return True, self._instruments_cache[symbol]
 
         last_error = "Unknown error"
 
-        # 2. Retry с экспоненциальной задержкой
+        # 2. Retry with exponential backoff
         for attempt in range(3):
             try:
                 response = self.session.get_instruments_info(
@@ -110,8 +111,8 @@ class BybitExecutor:
                 if response.get("retCode") != 0:
                     last_error = response.get("retMsg", "Unknown error")
                     logger.warning(
-                        f"Информация о {symbol}: retCode={response.get('retCode')}, "
-                        f"{last_error} (попытка {attempt + 1}/3)"
+                        f"Info for {symbol}: retCode={response.get('retCode')}, "
+                        f"{last_error} (attempt {attempt + 1}/3)"
                     )
                     if attempt < 2:
                         time.sleep(1.0 * (2 ** attempt))
@@ -119,9 +120,9 @@ class BybitExecutor:
 
                 instruments = response.get("result", {}).get("list", [])
                 if not instruments:
-                    last_error = f"Инструмент {symbol} не найден"
+                    last_error = f"Instrument {symbol} not found"
                     logger.warning(
-                        f"Информация о {symbol}: пустой список инструментов"
+                        f"Info for {symbol}: empty instrument list"
                     )
                     return False, last_error
 
@@ -141,7 +142,7 @@ class BybitExecutor:
                 self._instruments_cache[symbol] = instrument_data
 
                 logger.info(
-                    f"Информация о {symbol}: tickSize={instrument_data['tickSize']}, "
+                    f"Info for {symbol}: tickSize={instrument_data['tickSize']}, "
                     f"qtyStep={instrument_data['qtyStep']}, "
                     f"minOrderQty={instrument_data['minOrderQty']}"
                 )
@@ -151,59 +152,59 @@ class BybitExecutor:
             except Exception as e:
                 last_error = str(e)
                 logger.warning(
-                    f"Информация о {symbol}: исключение {type(e).__name__} "
-                    f"({last_error}), попытка {attempt + 1}/3"
+                    f"Info for {symbol}: exception {type(e).__name__} "
+                    f"({last_error}), attempt {attempt + 1}/3"
                 )
                 if attempt < 2:
                     time.sleep(1.0 * (2 ** attempt))
 
-        # 3. Все попытки провалились.
-        # Если в кэше есть старые данные — отдаём их.
+        # 3. All attempts failed.
+        # If the cache has old data — return it.
         if symbol in self._instruments_cache:
             logger.warning(
-                f"Информация о {symbol}: не удалось получить свежие данные "
-                f"({last_error}). Использую кэш."
+                f"Info for {symbol}: failed to get fresh data "
+                f"({last_error}). Using cache."
             )
             return True, self._instruments_cache[symbol]
 
-        # 4. Совсем ничего нет
+        # 4. Nothing at all
         logger.error(
-            f"Информация о {symbol}: окончательный провал после 3 попыток. "
-            f"Причина: {last_error}"
+            f"Info for {symbol}: final failure after 3 attempts. "
+            f"Reason: {last_error}"
         )
         return False, last_error
     
     # ----------------------------------------------------------------
-    # Баланс и позиции
+    # Balance and positions
     # ----------------------------------------------------------------
     
     def get_wallet_balance(self, account_type: str = "UNIFIED") -> Tuple[bool, Optional[Dict]]:
         """
-        Получает баланс кошелька.
+        Gets wallet balance.
         
         Returns:
-            (success, balance_dict или error_message)
+            (success, balance_dict or error_message)
         """
         try:
             response = self.session.get_wallet_balance(accountType=account_type)
             
             if response.get("retCode") != 0:
                 error = response.get("retMsg", "Unknown error")
-                logger.error(f"Ошибка получения баланса: {error}")
+                logger.error(f"Error getting balance: {error}")
                 return False, error
             
             result = response.get("result", {})
             return True, result
         
         except Exception as e:
-            logger.exception("Исключение при получении баланса")
+            logger.exception("Exception getting balance")
             return False, str(e)
     
     def get_usdt_balance(self) -> Tuple[bool, Optional[float]]:
         """
-        Возвращает USDT-баланс кошелька.
-        availableToWithdraw deprecated для UTA 2.0 (всегда ""), поэтому
-        берём первое непустое из availableToWithdraw → walletBalance → equity.
+        Returns the wallet USDT balance.
+        availableToWithdraw is deprecated for UTA 2.0 (always ""), so
+        take the first non-empty from availableToWithdraw → walletBalance → equity.
         """
         success, result = self.get_wallet_balance()
         if not success:
@@ -221,22 +222,22 @@ class BybitExecutor:
                         continue
                     try:
                         value = float(raw)
-                        #раньше здесь было логирование в терминал - но это засоряет
+                        #previously there was terminal logging here - but it pollutes
                         return True, value
                     except (TypeError, ValueError):
                         continue
                 return True, 0.0
             return True, 0.0
         except Exception:
-            logger.exception("Ошибка парсинга баланса USDT")
+            logger.exception("Error parsing USDT balance")
             return False, None
     
     def get_position_info(self, symbol: str) -> Tuple[bool, Optional[List[Dict]]]:
         """
-        Получает информацию об открытых позициях по символу.
+        Gets information about open positions for the symbol.
         
         Returns:
-            (success, list_of_positions или error)
+            (success, list_of_positions or error)
         """
         try:
             response = self.session.get_positions(
@@ -246,18 +247,18 @@ class BybitExecutor:
             
             if response.get("retCode") != 0:
                 error = response.get("retMsg", "Unknown error")
-                logger.error(f"Ошибка получения позиций {symbol}: {error}")
+                logger.error(f"Error getting positions {symbol}: {error}")
                 return False, error
             
             positions = response.get("result", {}).get("list", [])
             return True, positions
         
         except Exception as e:
-            logger.exception(f"Исключение при получении позиций {symbol}")
+            logger.exception(f"Exception getting positions {symbol}")
             return False, str(e)
     
     # ----------------------------------------------------------------
-    # Настройка плеча и маржи
+    # Leverage and margin setup
     # ----------------------------------------------------------------
     
     def set_leverage(self, symbol: str, leverage: int) -> Tuple[bool, Optional[str]]:
@@ -270,33 +271,33 @@ class BybitExecutor:
             )
             ret_code = response.get("retCode")
             if ret_code == 0 or ret_code == 110043:
-                logger.info(f"Плечо для {symbol}: {leverage}x")
+                logger.info(f"Leverage for {symbol}: {leverage}x")
                 return True, "ok"
             error = response.get("retMsg", "Unknown error")
-            logger.error(f"Ошибка установки плеча {symbol}: {error}")
+            logger.error(f"Error setting leverage {symbol}: {error}")
             return False, error
         except Exception as e:
-            # pybit бросает InvalidRequestError; 110043 = плечо уже установлено
+            # pybit throws InvalidRequestError; 110043 = leverage already set
             code = getattr(e, "status_code", None)
             if code == 110043 or "leverage not modified" in str(e).lower():
-                logger.info(f"Плечо для {symbol} уже установлено: {leverage}x")
+                logger.info(f"Leverage for {symbol} already set: {leverage}x")
                 return True, "ok"
-            logger.exception(f"Исключение при установке плеча {symbol}")
+            logger.exception(f"Exception setting leverage {symbol}")
             return False, str(e)
     
     def switch_margin_mode(self, symbol: str, margin_mode: str) -> Tuple[bool, Optional[str]]:
         """
-        Переключает режим маржи.
+        Switches margin mode.
         
         Args:
-            symbol: торговая пара
-            margin_mode: "ISOLATED_MARGIN" или "REGULAR_MARGIN" (cross)
+            symbol: trading pair
+            margin_mode: "ISOLATED_MARGIN" or "REGULAR_MARGIN" (cross)
         
         Returns:
-            (success, result или error)
+            (success, result or error)
         """
         try:
-            # Важно: переключение возможно только при отсутствии открытых позиций
+            # Important: switching is only possible without open positions
             response = self.session.switch_margin_mode(
                 category="linear",
                 symbol=symbol,
@@ -307,46 +308,46 @@ class BybitExecutor:
             
             if response.get("retCode") != 0:
                 error = response.get("retMsg", "Unknown error")
-                # Если ошибка "leverage not modified" — это нормально (уже установлено)
+                # If the error is "leverage not modified" — that's normal (already set)
                 if "leverage not modified" in error.lower():
-                    logger.info(f"Режим маржи для {symbol} уже установлен: {margin_mode}")
+                    logger.info(f"Margin mode for {symbol} already set: {margin_mode}")
                     return True, "ok"
-                logger.error(f"Ошибка переключения режима маржи {symbol}: {error}")
+                logger.error(f"Error switching margin mode {symbol}: {error}")
                 return False, error
             
-            logger.info(f"Режим маржи установлен для {symbol}: {margin_mode}")
+            logger.info(f"Margin mode set for {symbol}: {margin_mode}")
             return True, "ok"
         
         except Exception as e:
-            logger.exception(f"Исключение при переключении режима маржи {symbol}")
+            logger.exception(f"Exception switching margin mode {symbol}")
             return False, str(e)
     
     # ----------------------------------------------------------------
-    # Открытие и закрытие позиций
+    # Opening and closing positions
     # ----------------------------------------------------------------
     
     def place_market_order(
         self,
         symbol: str,
-        side: str,  # "Buy" или "Sell"
+        side: str,  # "Buy" or "Sell"
         qty: float,
         reduce_only: bool = False,
         stop_loss: Optional[float] = None,
         take_profit: Optional[float] = None,
     ) -> Tuple[bool, Optional[Dict]]:
         """
-        Размещает рыночный ордер на фьючерсном рынке.
+        Places a market order on the futures market.
         
         Args:
-            symbol: торговая пара
-            side: "Buy" (лонг) или "Sell" (шорт/закрытие лонга)
-            qty: количество контрактов
-            reduce_only: True для закрытия позиции
-            stop_loss: цена стоп-лосса (опционально)
-            take_profit: цена тейк-профита (опционально)
+            symbol: trading pair
+            side: "Buy" (long) or "Sell" (short/close long)
+            qty: number of contracts
+            reduce_only: True to close a position
+            stop_loss: stop loss price (optional)
+            take_profit: take profit price (optional)
         
         Returns:
-            (success, order_result или error)
+            (success, order_result or error)
         """
         try:
             params = {
@@ -359,7 +360,7 @@ class BybitExecutor:
                 "positionIdx": 0,  # one-way mode
             }
             
-            # Добавляем TP/SL к ордеру (если указаны)
+            # Add TP/SL to the order (if specified)
             if stop_loss is not None:
                 params["stopLoss"] = str(stop_loss)
             
@@ -370,24 +371,24 @@ class BybitExecutor:
             
             if response.get("retCode") != 0:
                 error = response.get("retMsg", "Unknown error")
-                logger.error(f"Ошибка размещения market ордера {symbol}: {error}")
+                logger.error(f"Error placing market order {symbol}: {error}")
                 return False, error
             
             result = response.get("result", {})
             logger.info(
-                f"Market ордер размещён: {symbol} {side} {qty} "
+                f"Market order placed: {symbol} {side} {qty} "
                 f"(orderId={result.get('orderId')})"
             )
             return True, result
         
         except Exception as e:
-            logger.exception(f"Исключение при размещении market ордера {symbol}")
+            logger.exception(f"Exception placing market order {symbol}")
             return False, str(e)
 
     def place_limit_order(
         self,
         symbol: str,
-        side: str,  # "Buy" или "Sell"
+        side: str,  # "Buy" or "Sell"
         qty: float,
         price: float,
         reduce_only: bool = False,
@@ -396,23 +397,23 @@ class BybitExecutor:
         take_profit: Optional[float] = None,
     ) -> Tuple[bool, Optional[Dict]]:
         """
-        Размещает лимитный ордер.
+        Places a limit order.
 
-        При post_only=True ордер гарантированно исполняется как мейкер.
-        Если бы он исполнился как тейкер — биржа его отклонит (код 110016).
+        When post_only=True the order is guaranteed to execute as maker.
+        If it would execute as taker — the exchange rejects it (code 110016).
 
         Args:
-            symbol: торговая пара
-            side: "Buy" (лонг) или "Sell" (шорт)
-            qty: количество контрактов
-            price: цена лимитного ордера
-            reduce_only: True для закрытия позиции
-            post_only: True = только мейкер (отклоняется если станет тейкером)
-            stop_loss: цена стоп-лосса (опционально)
-            take_profit: цена тейк-профита (опционально)
+            symbol: trading pair
+            side: "Buy" (long) or "Sell" (short)
+            qty: number of contracts
+            price: limit order price
+            reduce_only: True to close a position
+            post_only: True = maker only (rejected if it would become taker)
+            stop_loss: stop loss price (optional)
+            take_profit: take profit price (optional)
 
         Returns:
-            (success, order_result или error)
+            (success, order_result or error)
         """
         try:
             params = {
@@ -438,27 +439,27 @@ class BybitExecutor:
                 error = response.get("retMsg", "Unknown error")
                 ret_code = response.get("retCode")
 
-                # 110016 = ордер был бы исполнен как тейкер → отклонён
+                # 110016 = order would have executed as taker → rejected
                 if ret_code == 110016:
                     logger.warning(
-                        f"Limit ордер {symbol} отклонён (стал бы тейкером): {error}"
+                        f"Limit order {symbol} rejected (would become taker): {error}"
                     )
                     return False, {"error": "post_only_rejected", "detail": error}
 
                 logger.error(
-                    f"Ошибка размещения limit ордера {symbol}: {error}"
+                    f"Error placing limit order {symbol}: {error}"
                 )
                 return False, error
 
             result = response.get("result", {})
             logger.info(
-                f"Limit ордер размещён: {symbol} {side} {qty} @ {price} "
+                f"Limit order placed: {symbol} {side} {qty} @ {price} "
                 f"(orderId={result.get('orderId')}, postOnly={post_only})"
             )
             return True, result
 
         except Exception as e:
-            logger.exception(f"Исключение при размещении limit ордера {symbol}")
+            logger.exception(f"Exception placing limit order {symbol}")
             return False, str(e)
     
     def cancel_order(
@@ -467,10 +468,10 @@ class BybitExecutor:
         order_id: str,
     ) -> Tuple[bool, Optional[str]]:
         """
-        Отменяет открытый ордер по orderId.
+        Cancels an open order by orderId.
 
         Returns:
-            (success, error или None)
+            (success, error or None)
         """
         try:
             response = self.session.cancel_order(
@@ -480,12 +481,12 @@ class BybitExecutor:
             )
             if response.get("retCode") != 0:
                 error = response.get("retMsg", "Unknown error")
-                logger.warning(f"Не удалось отменить ордер {order_id}: {error}")
+                logger.warning(f"Failed to cancel order {order_id}: {error}")
                 return False, error
-            logger.info(f"Ордер {order_id} отменён для {symbol}")
+            logger.info(f"Order {order_id} cancelled for {symbol}")
             return True, None
         except Exception as e:
-            logger.exception(f"Исключение при отмене ордера {order_id}")
+            logger.exception(f"Exception cancelling order {order_id}")
             return False, str(e)
 
     def get_open_orders(
@@ -493,10 +494,10 @@ class BybitExecutor:
         symbol: str,
     ) -> Tuple[bool, Optional[List[Dict]]]:
         """
-        Возвращает список открытых ордеров по символу.
+        Returns the list of open orders for the symbol.
 
         Returns:
-            (success, list_of_orders или error)
+            (success, list_of_orders or error)
         """
         try:
             response = self.session.get_open_orders(
@@ -509,7 +510,7 @@ class BybitExecutor:
             orders = response.get("result", {}).get("list", [])
             return True, orders
         except Exception as e:
-            logger.exception(f"Исключение при получении ордеров {symbol}")
+            logger.exception(f"Exception getting orders {symbol}")
             return False, str(e)
 
     def get_best_bid_ask(
@@ -517,10 +518,10 @@ class BybitExecutor:
         symbol: str,
     ) -> Tuple[bool, Optional[Tuple[float, float]]]:
         """
-        Возвращает лучшие цены покупки и продажи из стакана.
+        Returns the best bid and ask prices from the order book.
 
         Returns:
-            (success, (best_bid, best_ask) или error)
+            (success, (best_bid, best_ask) or error)
         """
         try:
             response = self.session.get_tickers(
@@ -533,19 +534,19 @@ class BybitExecutor:
 
             tickers = response.get("result", {}).get("list", [])
             if not tickers:
-                return False, f"Нет данных тикера для {symbol}"
+                return False, f"No ticker data for {symbol}"
 
             ticker = tickers[0]
             best_bid = float(ticker.get("bid1Price", 0))
             best_ask = float(ticker.get("ask1Price", 0))
 
             if best_bid <= 0 or best_ask <= 0:
-                return False, f"Некорректный стакан для {symbol}"
+                return False, f"Invalid order book for {symbol}"
 
             return True, (best_bid, best_ask)
 
         except Exception as e:
-            logger.exception(f"Исключение при получении стакана {symbol}")
+            logger.exception(f"Exception getting order book {symbol}")
             return False, str(e)
 
     def set_trading_stop(
@@ -555,15 +556,15 @@ class BybitExecutor:
         take_profit: Optional[float] = None,
     ) -> Tuple[bool, Optional[str]]:
         """
-        Устанавливает TP/SL для открытой позиции.
+        Sets TP/SL for an open position.
         
         Args:
-            symbol: торговая пара
-            stop_loss: цена стоп-лосса
-            take_profit: цена тейк-профита
+            symbol: trading pair
+            stop_loss: stop loss price
+            take_profit: take profit price
         
         Returns:
-            (success, result или error)
+            (success, result or error)
         """
         try:
             params = {
@@ -582,24 +583,25 @@ class BybitExecutor:
             
             if response.get("retCode") != 0:
                 error = response.get("retMsg", "Unknown error")
-                logger.error(f"Ошибка установки TP/SL {symbol}: {error}")
+                logger.error(f"Error setting TP/SL {symbol}: {error}")
                 return False, error
             
-            logger.info(f"TP/SL установлены для {symbol}: SL={stop_loss}, TP={take_profit}")
+            logger.info(f"TP/SL set for {symbol}: SL={stop_loss}, TP={take_profit}")
             return True, "ok"
         
         except Exception as e:
             err_text = str(e)
-            # ErrCode 34040 = "not modified": биржа сообщает, что SL/TP уже
-            # имеют ровно такие же значения. Это НЕ ошибка — цель достигнута.
-            # pybit кидает InvalidRequestError с этим кодом в тексте.
+            # ErrCode 34040 = "not modified": the exchange reports that SL/TP
+            # already have exactly these values. This is NOT an error —
+            # the goal is achieved. pybit throws InvalidRequestError with
+            # this code in the text.
             if "34040" in err_text or "not modified" in err_text.lower():
                 logger.info(
-                    f"TP/SL для {symbol} уже установлены в указанные значения "
-                    f"(SL={stop_loss}, TP={take_profit}) — пропуск."
+                    f"TP/SL for {symbol} already set to specified values "
+                    f"(SL={stop_loss}, TP={take_profit}) — skipping."
                 )
                 return True, "not_modified"
-            logger.exception(f"Исключение при установке TP/SL {symbol}")
+            logger.exception(f"Exception setting TP/SL {symbol}")
             return False, str(e)
 
     def get_order_info(
@@ -610,11 +612,11 @@ class BybitExecutor:
         retry_delay: float = 0.5,
     ) -> Tuple[bool, Optional[Dict]]:
         """
-        Возвращает фактическое исполнение ордера: cumExecQty, avgPrice.
+        Returns the actual order execution: cumExecQty, avgPrice.
 
-        Market-ордер исполняется мгновенно и НЕ появляется в get_open_orders,
-        поэтому запрашиваем историю ордеров. История обновляется с задержкой
-        ~0.5-1 сек, поэтому делаем несколько попыток.
+        A market order executes instantly and does NOT appear in get_open_orders,
+        so we request order history. History updates with a ~0.5-1 sec delay,
+        so we make several attempts.
         """
         for attempt in range(retries):
             try:
@@ -631,7 +633,7 @@ class BybitExecutor:
                     return True, orders[0]
 
             except Exception as e:
-                logger.exception(f"Исключение при получении ордера {order_id}")
+                logger.exception(f"Exception getting order {order_id}")
                 return False, str(e)
 
             if attempt < retries - 1:
@@ -640,7 +642,7 @@ class BybitExecutor:
         return True, None
 
     def get_closed_pnl(self, symbol: str, limit: int = 20) -> Tuple[bool, Optional[List[Dict]]]:
-        """Точный реализованный PnL закрытых сделок (ср. цены входа/выхода, комиссии)."""
+        """Exact realized PnL of closed trades (avg entry/exit prices, commissions)."""
         try:
             response = self.session.get_closed_pnl(
                 category="linear", symbol=symbol, limit=limit
@@ -653,10 +655,10 @@ class BybitExecutor:
     
     def cancel_all_orders(self, symbol: str) -> Tuple[bool, Optional[str]]:
         """
-        Отменяет все активные ордера по символу.
+        Cancels all active orders for the symbol.
         
         Returns:
-            (success, result или error)
+            (success, result or error)
         """
         try:
             response = self.session.cancel_all_orders(
@@ -666,17 +668,17 @@ class BybitExecutor:
             
             if response.get("retCode") != 0:
                 error = response.get("retMsg", "Unknown error")
-                logger.warning(f"Частичная ошибка отмены всех ордеров {symbol}: {error}")
+                logger.warning(f"Partial error cancelling all orders {symbol}: {error}")
             
-            logger.info(f"Все ордера отменены для {symbol}")
+            logger.info(f"All orders cancelled for {symbol}")
             return True, "ok"
         
         except Exception as e:
-            logger.exception(f"Исключение при отмене всех ордеров {symbol}")
+            logger.exception(f"Exception cancelling all orders {symbol}")
             return False, str(e)
     
     # ----------------------------------------------------------------
-    # Расчёт размера позиции
+    # Position size calculation
     # ----------------------------------------------------------------
     
     def calculate_position_size(
@@ -689,22 +691,22 @@ class BybitExecutor:
         stop_loss_pct: Optional[float] = None,
     ) -> Tuple[bool, Optional[float]]:
         """
-        Вычисляет размер позиции в контрактах.
+        Calculates position size in contracts.
         
-        Два режима:
-        1. Без учёта риска: qty = (capital × leverage) / entry_price
-        2. С учётом риска: qty рассчитывается так, чтобы потеря при SL = risk_pct от капитала
+        Two modes:
+        1. Without risk: qty = (capital × leverage) / entry_price
+        2. With risk: qty is calculated so that the loss on SL = risk_pct of capital
         
         Args:
-            symbol: торговая пара
-            capital_usdt: доступный капитал в USDT
-            leverage: плечо
-            entry_price: цена входа
-            risk_pct: процент капитала, который рискуем (для режима с риском)
-            stop_loss_pct: расстояние до SL в % от цены входа (для режима с риском)
+            symbol: trading pair
+            capital_usdt: available capital in USDT
+            leverage: leverage
+            entry_price: entry price
+            risk_pct: percentage of capital to risk (for risk mode)
+            stop_loss_pct: distance to SL as % of entry price (for risk mode)
         
         Returns:
-            (success, qty или error)
+            (success, qty or error)
         """
         success, info = self.get_instrument_info(symbol)
         if not success:
@@ -713,53 +715,53 @@ class BybitExecutor:
         min_order_qty = info["minOrderQty"]
         qty_step = info["qtyStep"]
         
-        # Режим 1: простой расчёт по капиталу
+        # Mode 1: simple calculation by capital
         if stop_loss_pct is None:
             qty_raw = (capital_usdt * leverage) / entry_price
         
-        # Режим 2: расчёт по риску
+        # Mode 2: calculation by risk
         else:
-            # Максимальная потеря в USDT при срабатывании SL
+            # Maximum loss in USDT when SL triggers
             max_loss_usdt = capital_usdt * (risk_pct / 100.0)
             
-            # Потеря на 1 контракт = entry_price × stop_loss_pct / 100
+            # Loss per 1 contract = entry_price × stop_loss_pct / 100
             loss_per_contract = entry_price * (stop_loss_pct / 100.0)
             
-            # Количество контрактов = max_loss_usdt / loss_per_contract
+            # Number of contracts = max_loss_usdt / loss_per_contract
             qty_raw = max_loss_usdt / loss_per_contract
         
-        # Округляем до допустимого шага
+        # Round to the allowed step
         qty = self.round_quantity(qty_raw, qty_step)
 
         min_notional = info.get("minNotionalValue", 5.0)
 
-        # Проверяем минимальный размер в КОНТРАКТАХ.
-        # Если расчёт дал меньше минимума — поднимаем до minOrderQty, но
-        # только когда это не ломает проверку notional (см. ниже).
+        # Check minimum size in CONTRACTS.
+        # If the calculation gave less than the minimum — raise to minOrderQty,
+        # but only when this does not break the notional check (see below).
         if qty < min_order_qty:
             logger.warning(
-                f"Вычисленный размер позиции {qty} меньше минимального "
-                f"{min_order_qty}. Используем минимальный."
+                f"Calculated position size {qty} is less than minimum "
+                f"{min_order_qty}. Using minimum."
             )
             qty = min_order_qty
 
-        # Проверяем минимальную СТОИМОСТЬ ордера (Bybit ErrCode 110094).
-        # Если qty * entry < minNotional — ордер будет отклонён биржей.
-        # Возвращаем ошибку вместо того, чтобы ждать отказа.
+        # Check minimum order VALUE (Bybit ErrCode 110094).
+        # If qty * entry < minNotional — the order will be rejected by the exchange.
+        # Return an error instead of waiting for rejection.
         notional = qty * entry_price
         if notional < min_notional:
             msg = (
-                f"Размер позиции {qty} контрактов ({notional:.2f} USDT) "
-                f"меньше минимальной стоимости ордера {min_notional:.2f} USDT "
-                f"для {symbol}. Увеличьте выделенный капитал, размер позиции "
-                f"или плечо."
+                f"Position size {qty} contracts ({notional:.2f} USDT) "
+                f"is less than minimum order value {min_notional:.2f} USDT "
+                f"for {symbol}. Increase allocated capital, position size "
+                f"or leverage."
             )
             logger.warning(msg)
             return False, msg
 
         logger.info(
-            f"Размер позиции для {symbol}: {qty} контрактов "
-            f"(капитал={capital_usdt} USDT, плечо={leverage}x, вход={entry_price}, "
+            f"Position size for {symbol}: {qty} contracts "
+            f"(capital={capital_usdt} USDT, leverage={leverage}x, entry={entry_price}, "
             f"notional={notional:.2f} USDT)"
         )
 
@@ -774,55 +776,55 @@ class BybitExecutor:
         entry_price: float,
     ) -> Tuple[bool, Optional[str]]:
         """
-        Проверяет, можно ли в принципе открыть позицию по этой монете
-        при заданных настройках.
+        Checks whether it is at all possible to open a position on this coin
+        with the given settings.
 
-        Вызывается ДО начала торговли, чтобы предупредить пользователя,
-        а не натыкаться на отказ биржи при первом сигнале.
+        Called BEFORE starting trading to warn the user, rather than hitting
+        exchange rejection on the first signal.
 
         Returns:
             (ok: bool, warning: str | None)
-            ok=True, warning=None — настройки валидны.
-            ok=False, warning=<текст> — при таких настройках ордер не пройдёт.
+            ok=True, warning=None — settings are valid.
+            ok=False, warning=<text> — with these settings the order will not pass.
         """
         success, info = self.get_instrument_info(symbol)
         if not success:
-            return False, f"Не удалось получить параметры {symbol}: {info}"
+            return False, f"Failed to get parameters for {symbol}: {info}"
 
         min_notional = info.get("minNotionalValue", 5.0)
         min_qty = info.get("minOrderQty", 0.0)
         qty_step = info.get("qtyStep", 0.0)
 
-        # Ожидаемая стоимость позиции при этих настройках.
-        # position_size_pct — доля allocated_capital, идущая в позицию.
+        # Expected position value with these settings.
+        # position_size_pct — share of allocated_capital going into the position.
         position_value_usdt = capital_usdt * (position_size_pct / 100.0)
         notional_with_leverage = position_value_usdt * leverage
 
         if notional_with_leverage < min_notional:
             return (
                 False,
-                f"Для {symbol} при текущих настройках ордер не пройдёт: "
-                f"стоимость позиции {notional_with_leverage:.2f} USDT "
-                f"меньше минимальной {min_notional:.2f} USDT. "
-                f"Увеличьте долю капитала на монету, размер позиции "
-                f"или плечо (сейчас плечо {leverage}x).",
+                f"For {symbol} with current settings the order will not pass: "
+                f"position value {notional_with_leverage:.2f} USDT "
+                f"is less than minimum {min_notional:.2f} USDT. "
+                f"Increase capital share per coin, position size "
+                f"or leverage (current leverage {leverage}x).",
             )
 
-        # Проверка минимального количества контрактов.
+        # Check minimum number of contracts.
         qty_raw = notional_with_leverage / entry_price if entry_price > 0 else 0
         qty = self.round_quantity(qty_raw, qty_step) if qty_step > 0 else qty_raw
 
         if qty <= 0 or qty < min_qty:
             return (
                 False,
-                f"Для {symbol} вычисленный размер позиции ({qty}) меньше "
-                f"минимального ({min_qty}). Увеличьте размер позиции.",
+                f"For {symbol} the calculated position size ({qty}) is less "
+                f"than minimum ({min_qty}). Increase position size.",
             )
 
         return True, None
 
     def get_recent_executions(self, symbol: str, limit: int = 50) -> Tuple[bool, Optional[List[Dict]]]:
-        """История исполнений: GET /v5/execution/list (pybit: get_executions)."""
+        """Execution history: GET /v5/execution/list (pybit: get_executions)."""
         try:
             response = self.session.get_executions(
                 category="linear",
@@ -831,19 +833,19 @@ class BybitExecutor:
             )
             if response.get("retCode") != 0:
                 error = response.get("retMsg", "Unknown error")
-                logger.error(f"Ошибка получения истории сделок {symbol}: {error}")
+                logger.error(f"Error getting execution history {symbol}: {error}")
                 return False, error
             return True, response.get("result", {}).get("list", [])
         except Exception as e:
-            logger.exception(f"Исключение при получении истории сделок {symbol}")
+            logger.exception(f"Exception getting execution history {symbol}")
             return False, str(e)
     
     def get_ticker_price(self, symbol: str) -> Tuple[bool, Optional[float]]:
         """
-        Получает текущую цену инструмента.
+        Gets the current instrument price.
         
         Returns:
-            (success, цена или error)
+            (success, price or error)
         """
         try:
             response = self.session.get_tickers(
@@ -853,28 +855,28 @@ class BybitExecutor:
             
             if response.get("retCode") != 0:
                 error = response.get("retMsg", "Unknown error")
-                logger.error(f"Ошибка получения цены {symbol}: {error}")
+                logger.error(f"Error getting price {symbol}: {error}")
                 return False, error
             
             tickers = response.get("result", {}).get("list", [])
             if not tickers:
-                return False, f"Нет данных тикера для {symbol}"
+                return False, f"No ticker data for {symbol}"
             
             price = float(tickers[0].get("lastPrice", 0))
             return True, price
         
         except Exception as e:
-            logger.exception(f"Исключение при получении цены {symbol}")
+            logger.exception(f"Exception getting price {symbol}")
             return False, str(e)
 
     def get_fee_rates(self, symbol: str) -> Tuple[bool, Optional[Dict]]:
         """
-        Возвращает taker/maker ставки комиссии для инструмента.
+        Returns taker/maker fee rates for the instrument.
 
         Endpoint: GET /v5/account/fee-rate
-        Bybit отдаёт ставки строками в долях: "0.00055" = 0.055%.
-        Метод возвращает их как проценты (0.055) — так удобнее
-        сравнивать с commission_pct в strategy_spec / бэктесте.
+        Bybit returns rates as strings in fractions: "0.00055" = 0.055%.
+        The method returns them as percentages (0.055) — this is more convenient
+        for comparison with commission_pct in strategy_spec / backtest.
         """
         try:
             response = self.session.get_fee_rates(
@@ -883,41 +885,41 @@ class BybitExecutor:
             )
             if response.get("retCode") != 0:
                 error = response.get("retMsg", "Unknown error")
-                logger.error(f"Ошибка получения ставок {symbol}: {error}")
+                logger.error(f"Error getting rates {symbol}: {error}")
                 return False, error
 
             rates = response.get("result", {}).get("list", [])
             if not rates:
-                return False, f"Пустой ответ fee-rate для {symbol}"
+                return False, f"Empty fee-rate response for {symbol}"
 
             item = rates[0]
             taker_pct = float(item.get("takerFeeRate", "0.00055")) * 100.0
             maker_pct = float(item.get("makerFeeRate", "0.0002")) * 100.0
 
             logger.info(
-                f"Ставки {symbol}: taker={taker_pct:.4f}%, "
+                f"Rates {symbol}: taker={taker_pct:.4f}%, "
                 f"maker={maker_pct:.4f}%"
             )
             return True, {"taker_pct": taker_pct, "maker_pct": maker_pct}
         except Exception as e:
-            logger.exception(f"Исключение при получении ставок {symbol}")
+            logger.exception(f"Exception getting rates {symbol}")
             return False, str(e)
     
     # ----------------------------------------------------------------
-    # Вспомогательные методы
+    # Helper methods
     # ----------------------------------------------------------------
     
     @staticmethod
     def round_quantity(qty: float, qty_step: float) -> float:
         """
-        Округляет количество до допустимого шага (вниз).
+        Rounds quantity to the allowed step (down).
         
         Args:
-            qty: исходное количество
-            qty_step: минимальный шаг (например, 0.001)
+            qty: original quantity
+            qty_step: minimum step (e.g. 0.001)
         
         Returns:
-            округлённое количество
+            rounded quantity
         """
         if qty_step == 0:
             return qty
@@ -931,14 +933,14 @@ class BybitExecutor:
     @staticmethod
     def round_price(price: float, tick_size: float) -> float:
         """
-        Округляет цену до допустимого шага (вниз для покупки, вверх для продажи).
+        Rounds price to the allowed step (down for buy, up for sell).
         
         Args:
-            price: исходная цена
-            tick_size: минимальный шаг цены (например, 0.01)
+            price: original price
+            tick_size: minimum price step (e.g. 0.01)
         
         Returns:
-            округлённая цена
+            rounded price
         """
         if tick_size == 0:
             return price

@@ -1,5 +1,5 @@
 """
-Страница общего журнала сделок.
+General trade journal page.
 """
 
 from __future__ import annotations
@@ -7,14 +7,19 @@ from __future__ import annotations
 from nicegui import ui
 
 
+# Marker meaning "no errors" in the journal.
+# Older records were written in Russian, so both variants are recognized.
+_NO_ERRORS_MARKERS = ("No errors", "Не было ошибок")
+
+
 class JournalPage:
     """
-    Страница журнала сделок по всем монетам.
+    Trade journal page across all coins.
 
-    Получает зависимости явно:
+    Receives dependencies explicitly:
     - memory;
-    - функцию get_all_trades(memory);
-    - функцию clear_all_journals(memory).
+    - the get_all_trades(memory) function;
+    - the clear_all_journals(memory) function.
     """
 
     def __init__(self, memory, get_all_trades_fn, clear_all_journals_fn):
@@ -30,25 +35,25 @@ class JournalPage:
         self.container.visible = False
 
     def build_ui(self):
-        ui.label("📋 Журнал сделок (все монеты)").classes("text-h6")
+        ui.label("📋 Trade journal (all coins)").classes("text-h6")
 
         with ui.row().classes("w-full justify-end"):
             ui.button(
-                "🗑 Очистить весь журнал",
+                "🗑 Clear entire journal",
                 on_click=self.clear_journal,
                 color="negative",
             )
 
         self.journal_table = ui.table(
             columns=[
-                {"name": "pair", "label": "Монета", "field": "pair", "align": "left"},
-                {"name": "datetime", "label": "Дата/Время", "field": "datetime", "align": "left"},
-                {"name": "direction", "label": "Напр.", "field": "direction", "align": "center"},
-                {"name": "entry_price", "label": "Вход", "field": "entry_price", "align": "right"},
-                {"name": "exit_price", "label": "Выход", "field": "exit_price", "align": "right"},
-                {"name": "result_pct", "label": "Результат", "field": "result_pct", "align": "center"},
-                {"name": "reason", "label": "Причина", "field": "reason", "align": "left"},
-                {"name": "errors", "label": "Ошибки", "field": "errors", "align": "left"},
+                {"name": "pair", "label": "Coin", "field": "pair", "align": "left"},
+                {"name": "datetime", "label": "Date/Time", "field": "datetime", "align": "left"},
+                {"name": "direction", "label": "Dir.", "field": "direction", "align": "center"},
+                {"name": "entry_price", "label": "Entry", "field": "entry_price", "align": "right"},
+                {"name": "exit_price", "label": "Exit", "field": "exit_price", "align": "right"},
+                {"name": "result_pct", "label": "Result", "field": "result_pct", "align": "center"},
+                {"name": "reason", "label": "Reason", "field": "reason", "align": "left"},
+                {"name": "errors", "label": "Errors", "field": "errors", "align": "left"},
             ],
             rows=[],
             row_key="index",
@@ -78,7 +83,7 @@ class JournalPage:
                         "reason": row.get("reason", ""),
                         "errors": (
                             row.get("errors", "")
-                            if row.get("errors") and row.get("errors") != "Не было ошибок"
+                            if row.get("errors") and row.get("errors") not in _NO_ERRORS_MARKERS
                             else ""
                         ),
                     }
@@ -89,13 +94,13 @@ class JournalPage:
 
     def clear_journal(self):
         with ui.dialog() as dialog, ui.card():
-            ui.label("Очистить весь журнал сделок?")
-            ui.label("Это действие необратимо!").classes("text-negative")
+            ui.label("Clear the entire trade journal?")
+            ui.label("This action cannot be undone!").classes("text-negative")
 
             with ui.row().classes("justify-end"):
-                ui.button("Отмена", on_click=dialog.close)
+                ui.button("Cancel", on_click=dialog.close)
                 ui.button(
-                    "Очистить",
+                    "Clear",
                     on_click=lambda: self.do_clear(dialog),
                     color="negative",
                 )
@@ -106,4 +111,4 @@ class JournalPage:
         dialog.close()
         self.clear_all_journals_fn(self.memory)
         self.refresh()
-        ui.notify("Журнал очищен.", type="warning")
+        ui.notify("Journal cleared.", type="warning")

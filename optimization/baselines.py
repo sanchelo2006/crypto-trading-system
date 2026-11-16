@@ -1,4 +1,4 @@
-"""Базовая линия Фазы 0: что даёт сам рынок за тот же период."""
+"""Phase 0 baseline: what the market itself gives over the same period."""
 from __future__ import annotations
 from typing import Dict
 

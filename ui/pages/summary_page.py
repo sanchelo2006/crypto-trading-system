@@ -1,5 +1,5 @@
 """
-Страница общей сводки по монетам.
+Overall coin summary page.
 """
 
 from __future__ import annotations
@@ -9,11 +9,11 @@ from nicegui import ui
 
 class SummaryPage:
     """
-    Сводная страница по всем монетам.
+    Summary page across all coins.
 
-    Зависимости передаются явно:
+    Dependencies are passed explicitly:
     - memory;
-    - функция получения состояния авторежима.
+    - the function that returns the auto mode state.
     """
 
     def __init__(self, memory, auto_mode_get_state):
@@ -28,16 +28,16 @@ class SummaryPage:
         self.container.visible = True
 
     def build_ui(self):
-        ui.label("📊 Общая сводка по монетам").classes("text-h6")
+        ui.label("📊 Overall coin summary").classes("text-h6")
 
         self.summary_table = ui.table(
             columns=[
-                {"name": "symbol", "label": "Монета", "field": "symbol", "align": "left"},
-                {"name": "status", "label": "Статус", "field": "status", "align": "left"},
-                {"name": "setup", "label": "Сетап", "field": "setup", "align": "left"},
-                {"name": "signal", "label": "Сигнал", "field": "signal", "align": "left"},
-                {"name": "position", "label": "Позиция", "field": "position", "align": "left"},
-                {"name": "last_analysis", "label": "Последний анализ", "field": "last_analysis", "align": "left"},
+                {"name": "symbol", "label": "Coin", "field": "symbol", "align": "left"},
+                {"name": "status", "label": "Status", "field": "status", "align": "left"},
+                {"name": "setup", "label": "Setup", "field": "setup", "align": "left"},
+                {"name": "signal", "label": "Signal", "field": "signal", "align": "left"},
+                {"name": "position", "label": "Position", "field": "position", "align": "left"},
+                {"name": "last_analysis", "label": "Last analysis", "field": "last_analysis", "align": "left"},
             ],
             rows=[],
             row_key="symbol",
@@ -62,13 +62,13 @@ class SummaryPage:
             auto_state = self.auto_mode_get_state(sym)
 
             if auto_state and auto_state.get("is_running"):
-                status = "🟢 Авто"
+                status = "🟢 Auto"
             elif cm.is_day_closed():
-                status = "🔒 Закрыт"
+                status = "🔒 Closed"
             elif cm.is_initialized():
-                status = "✅ Готов"
+                status = "✅ Ready"
             else:
-                status = "⚠️ Не иниц."
+                status = "⚠️ Not init."
 
             setup_info = ""
             setup = state.get("last_setup")

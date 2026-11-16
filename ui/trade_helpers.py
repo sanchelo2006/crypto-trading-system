@@ -264,6 +264,7 @@ def parse_rules_from_text(text: str) -> Tuple[List[str], List[str]]:
     Section headers are detected case-insensitively by keyword, so all of
     these work: "## Trading Rules", "### Trading rules",
     "## Risk Management", "### Risk-Management".
+    Legacy Russian headers are recognized as well.
 
     Supported list markers: "-", "*", "•", "1.", "2)", "10." ...
     """
@@ -284,9 +285,10 @@ def parse_rules_from_text(text: str) -> Tuple[List[str], List[str]]:
         if line.startswith("#"):
             lowered = line.lower()
             # Risk is checked first: "Risk Management Rules" contains both keywords.
-            if "risk" in lowered:
+            # Russian keywords are kept for rules files written before the migration.
+            if "risk" in lowered or "риск" in lowered:
                 current_section = "risk"
-            elif "trading" in lowered or "rule" in lowered:
+            elif "trading" in lowered or "rule" in lowered or "правил" in lowered:
                 current_section = "trading"
             continue
 

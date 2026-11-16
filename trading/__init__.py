@@ -1,1 +1,1 @@
-"""Пакет автоматической торговли через Bybit API."""
+"""Automatic trading package via the Bybit API."""

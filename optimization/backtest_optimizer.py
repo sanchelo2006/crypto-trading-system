@@ -1,8 +1,8 @@
 """
-Итеративный оптимизатор стратегии с train/test walk-forward разбиением.
+Iterative strategy optimizer with train/test walk-forward splitting.
 
-После рефакторинга: основной координирующий класс,
-вся логика вынесена в модули-помощники.
+After refactoring: main coordinating class,
+all logic moved to helper modules.
 """
 
 import copy
@@ -56,7 +56,7 @@ class BacktestOptimizer:
         self.ai_client = ai_client
         self.memory = memory
 
-        # Инициализация модулей-помощников
+        # Initialize helper modules
         self.data_utils = OptimizerDataUtils(engine)
         self.scoring = OptimizerScoring()
         self.robustness = OptimizerRobustness()
@@ -66,7 +66,7 @@ class BacktestOptimizer:
 
     @staticmethod
     def _spec_fingerprint(spec: Dict) -> str:
-        """Отпечаток spec для дедупликации."""
+        """Fingerprint of spec for deduplication."""
         def _norm(x):
             if isinstance(x, dict):
                 return {k: _norm(v) for k, v in sorted(x.items())}
@@ -82,7 +82,7 @@ class BacktestOptimizer:
 
     @staticmethod
     def _inherit_engine_controls(new_spec: Dict, base_spec: Dict) -> Dict:
-        """Сохраняет служебные блоки движка (risk_controls, management, frozen_entries)."""
+        """Preserves engine service blocks (risk_controls, management, frozen_entries)."""
         if not isinstance(new_spec, dict):
             return base_spec
         merged = json.loads(json.dumps(new_spec, ensure_ascii=False))
@@ -104,8 +104,8 @@ class BacktestOptimizer:
     @staticmethod
     def _enforce_frozen_entries(candidate: Dict, base: Dict) -> Dict:
         """
-        Если base имеет флаг frozen_entries, принудительно восстанавливает
-        условия входа из base в candidate. Риск-параметры кандидата сохраняются.
+        If base has the frozen_entries flag, forcibly restores entry conditions
+        from base into candidate. Candidate's risk parameters are preserved.
         """
         if not isinstance(base, dict) or not base.get("frozen_entries"):
             return candidate
@@ -131,8 +131,8 @@ class BacktestOptimizer:
     @staticmethod
     def _enforce_exit_corridor(candidate: Dict, base: Dict) -> Dict:
         """
-        Если base имеет exit_corridor, обрезает стопы/тейки/холд в его пределы.
-        Трейлинг и безубыток фиксируются на null (лабораторный запрет).
+        If base has exit_corridor, clips stops/takes/hold to its bounds.
+        Trailing and breakeven are fixed to null (laboratory restriction).
         """
         if not isinstance(base, dict) or "exit_corridor" not in base:
             return candidate
@@ -145,25 +145,25 @@ class BacktestOptimizer:
             if not isinstance(cand_side, dict):
                 continue
             
-            # Стоп
+            # Stop
             if "stop_loss_atr_mult" in cand_side and "stop_loss_atr_mult" in corridor:
                 lo, hi = corridor["stop_loss_atr_mult"]
                 val = cand_side["stop_loss_atr_mult"]
                 cand_side["stop_loss_atr_mult"] = round(max(lo, min(hi, val)), 2)
             
-            # Тейк
+            # Take
             if "take_profit_atr_mult" in cand_side and "take_profit_atr_mult" in corridor:
                 lo, hi = corridor["take_profit_atr_mult"]
                 val = cand_side["take_profit_atr_mult"]
                 cand_side["take_profit_atr_mult"] = round(max(lo, min(hi, val)), 2)
             
-            # Менеджмент
+            # Management
             mgmt = cand_side.get("management")
             if isinstance(mgmt, dict):
-                # Трейлинг и безубыток — всегда null (лабораторный запрет)
+                # Trailing and breakeven — always null (laboratory restriction)
                 mgmt["trailing_atr_mult"] = None
                 mgmt["move_to_breakeven_at_tp_pct"] = None
-                # Холд
+                # Hold
                 if "max_hold_candles" in mgmt and "max_hold_candles" in corridor:
                     lo, hi = corridor["max_hold_candles"]
                     val = mgmt["max_hold_candles"]
@@ -176,7 +176,7 @@ class BacktestOptimizer:
         self, *, spec, rules, splits, full_df, symbol,
         initial_capital, commission_pct
     ) -> Dict:
-        """Оценка spec на всех TRAIN/TEST окнах."""
+        """Evaluates spec on all TRAIN/TEST windows."""
         fold_results = []
         for fold_index, split in enumerate(splits, start=1):
             train_df = full_df[
@@ -190,7 +190,7 @@ class BacktestOptimizer:
 
             if len(train_df) < 60 or len(test_df) < 60:
                 return {'error': (
-                    f'Недостаточно свечей в окне {fold_index}: '
+                    f'Not enough candles in window {fold_index}: '
                     f'TRAIN={len(train_df)}, TEST={len(test_df)}.'
                 )}
 
@@ -201,7 +201,7 @@ class BacktestOptimizer:
                 start_date=split['train_start'], end_date=split['train_end'],
             )
             if 'error' in train_result:
-                return {'error': f'TRAIN, окно {fold_index}: {train_result["error"]}'}
+                return {'error': f'TRAIN, window {fold_index}: {train_result["error"]}'}
 
             test_result = self.engine.run_on_dataframe(
                 df=test_df, symbol=symbol, strategy_spec=spec,
@@ -210,7 +210,7 @@ class BacktestOptimizer:
                 start_date=split['test_start'], end_date=split['test_end'],
             )
             if 'error' in test_result:
-                return {'error': f'TEST, окно {fold_index}: {test_result["error"]}'}
+                return {'error': f'TEST, window {fold_index}: {test_result["error"]}'}
 
             fold_results.append({
                 'split': split,
@@ -226,8 +226,8 @@ class BacktestOptimizer:
     @staticmethod
     def _aggregate_fold_results(fold_results: List[Dict]) -> Dict:
         """
-        TEST агрегируется по всем окнам (они не пересекаются).
-        TRAIN берётся ТОЛЬКО из последнего окна.
+        TEST is aggregated across all windows (they do not overlap).
+        TRAIN is taken ONLY from the last window.
         """
         test_trades_all = []
         test_stats_list = []
@@ -269,7 +269,7 @@ class BacktestOptimizer:
         acceptable: bool,
         window_robustness: Dict,
     ) -> Dict:
-        """Подробная диагностика score."""
+        """Detailed score diagnostics."""
         train_return = float(train_stats.get("return_pct", 0) or 0)
         test_return = float(test_stats.get("return_pct", 0) or 0)
 
@@ -360,7 +360,7 @@ class BacktestOptimizer:
         robust_max_worst_window_return_pct: float,
         robust_min_stability_score: float,
     ) -> Dict:
-        """Сводка для AI."""
+        """Summary for AI."""
         def compact(stats: Dict) -> Dict:
             return {
                 "total_trades": stats.get("total_trades", 0),
@@ -421,7 +421,7 @@ class BacktestOptimizer:
         score_breakdown["robustness_warnings"] = robustness_assessment.get("warnings", [])
         score_breakdown["robustness_reasons"] = robustness_assessment.get("reasons", [])
 
-        # Собираем текстовые описания последних 3 НЕУДАЧНЫХ изменений вместо сырых JSON
+        # Collect text descriptions of the last 3 FAILED changes instead of raw JSON
         rejected_changes = []
         for h in reversed(history):
             if not h.get('acceptable') and h.get('changes_summary'):
@@ -433,13 +433,13 @@ class BacktestOptimizer:
             "iteration": iteration,
             "rejected_specs_count": rejected_count,
             "selection_goal": (
-                "Максимизировать суммарный P&L на TEST (total_pnl_pct) при "
-                "умеренной просадке. Доходность = expectancy × число сделок: "
-                "и слишком мало сделок, и отрицательный expectancy — одинаково "
-                "провал. Кандидат пригоден только при PF>1.1 на TEST, PF>1.0 на "
-                "TRAIN, expectancy>0 на обоих и не менее 10 сделок на TEST. "
-                "Изучи iteration_history: продолжай изменения, повышавшие "
-                "selection_score, и не повторяй ухудшавшие."
+                "Maximize total P&L on TEST (total_pnl_pct) with moderate drawdown. "
+                "Return = expectancy × number of trades: both too few trades and "
+                "negative expectancy are equally failures. A candidate is acceptable "
+                "only if PF>1.1 on TEST, PF>1.0 on TRAIN, expectancy>0 on both, "
+                "and at least 10 trades on TEST. Study iteration_history: continue "
+                "changes that raised selection_score, and do not repeat those that "
+                "worsened it."
             ),
             "train_stats": compact(train_stats),
             "test_stats": compact(test_stats),
@@ -462,7 +462,7 @@ class BacktestOptimizer:
                 "acceptable": acceptable,
             },
             "iteration_history": self.summary.compact_history(history),
-            "rejected_changes": rejected_changes,  # <--- НОВОЕ ПОЛЕ
+            "rejected_changes": rejected_changes,  # <--- NEW FIELD
             "train_trade_summary": self.summary.summarize_trades(train_trades, self.summary.derived),
             "test_trade_summary": self.summary.summarize_trades(test_trades, self.summary.derived),
         }
@@ -497,13 +497,13 @@ class BacktestOptimizer:
         block_fragile_best_candidate: bool = BLOCK_FRAGILE_BEST_CANDIDATE,
     ) -> Dict:
         """
-        Основной метод оптимизации с полным циклом:
-        1. Загрузка данных
-        2. Разбиение на optimization/holdout
-        3. TRAIN/TEST walk-forward окна
-        4. Итеративная оптимизация через AI + локальный поиск
-        5. Holdout-проверка финального кандидата
-        6. Сохранение лучшей стратегии
+        Main optimization method with the full cycle:
+        1. Data loading
+        2. Split into optimization/holdout
+        3. TRAIN/TEST walk-forward windows
+        4. Iterative optimization via AI + local search
+        5. Holdout validation of the final candidate
+        6. Saving the best strategy
         """
 
         self.last_report_path = ""
@@ -516,7 +516,7 @@ class BacktestOptimizer:
             if progress_callback:
                 progress_callback({'message': message})
 
-        emit(f'Подробный отчёт оптимизации: {report.path}')
+        emit(f'Detailed optimization report: {report.path}')
 
         cm = self.memory.get(symbol)
         min_test_trades = max(int(min_test_trades or 0), MIN_ACCEPT_TEST_TRADES)
@@ -527,32 +527,32 @@ class BacktestOptimizer:
             current_spec = ensure_engine_defaults(current_spec)
         current_rules = cm.get_rules() or ''
 
-        # Управление заморозкой входов из UI.
-        # True  → принудительно заморозить входы.
-        # False → принудительно разморозить (удалить флаг из спеки).
-        # None  → использовать то, что уже в спеке (обратная совместимость).
+        # Entry freezing control from UI.
+        # True  → forcibly freeze entries.
+        # False → forcibly unfreeze (remove the flag from spec).
+        # None  → use what's already in spec (backward compatibility).
         if freeze_entries is True:
             current_spec["frozen_entries"] = True
         elif freeze_entries is False:
             current_spec.pop("frozen_entries", None)
 
-        # Явный сид-архетип требует Фазы 0: именно там берутся его лучшие
-        # параметры на оптимизационном периоде.
+        # Explicit seed archetype requires Phase 0: that's where its best
+        # parameters on the optimization period are taken.
         if seed_archetype and not phase0_screen:
             phase0_screen = True
-            emit('Задан сид-архетип: включаю Фазу 0 для получения его лучших параметров.')
+            emit('Seed archetype specified: enabling Phase 0 to get its best parameters.')
 
         csv_dir = Path(csv_path)
 
         emit(
-            f'Оптимизация: период {start_date.strftime("%Y-%m-%d")} → '
-            f'{end_date.strftime("%Y-%m-%d")}, итераций: {max_iterations}, '
-            f'walk-forward окон: {walk_forward_folds}, '
-            f'локальных мутаций на итерацию: {local_search_mutations}.'
+            f'Optimization: period {start_date.strftime("%Y-%m-%d")} → '
+            f'{end_date.strftime("%Y-%m-%d")}, iterations: {max_iterations}, '
+            f'walk-forward windows: {walk_forward_folds}, '
+            f'local mutations per iteration: {local_search_mutations}.'
         )
 
-        # 1. Загрузка данных
-        emit('Загрузка исторических свечей и расчёт индикаторов...')
+        # 1. Data loading
+        emit('Loading historical candles and computing indicators...')
         prepared = self.data_utils.load_prepared_dataframe(
             symbol=symbol, category=category,
             start_date=start_date, end_date=end_date,
@@ -561,18 +561,18 @@ class BacktestOptimizer:
             return {'error': prepared['error'], 'history': []}
 
         full_df = prepared['df']
-        emit(f'Исторические данные готовы: {prepared["candles_count"]} свечей.')
+        emit(f'Historical data ready: {prepared["candles_count"]} candles.')
 
-        # --- БАЗОВАЯ ЛИНИЯ: buy&hold за период (дёшево, всегда) ---
+        # --- BASELINE: buy&hold over the period (cheap, always) ---
         from optimization.baselines import buy_and_hold
         bh = buy_and_hold(full_df)
         emit(
-            f'BASELINE buy&hold за период: {bh["return_pct"]:+.2f}%, '
+            f'BASELINE buy&hold over period: {bh["return_pct"]:+.2f}%, '
             f'DD={bh["max_drawdown_pct"]:.1f}%.'
         )
         report.section("BASELINE / BUY&HOLD", bh)
 
-        # --- ФАЗА 0: скрининг архетипов (по запросу, долго) ---
+        # --- PHASE 0: archetype screening (on request, slow) ---
         if phase0_screen:
             from optimization.screen_runner import run_screen
             screen_text, screen_results = run_screen(
@@ -584,14 +584,15 @@ class BacktestOptimizer:
             )
             for _line in screen_text.splitlines():
                 emit(_line)
-            report.section("ФАЗА 0 / СКРИНИНГ АРХЕТИПОВ", screen_text)
+            report.section("PHASE 0 / ARCHETYPE SCREENING", screen_text)
 
-            # --- Выбор стартового архетипа ---
-            # Явный сид из UI применяется БЕЗУСЛОВНО: пользователь сознательно
-            # задаёт стартовую точку, и она не обязана обгонять buy&hold на
-            # скрининге (иначе сид молча подменялся спекой из памяти).
-            # Авто-выбор работает только когда сид не задан и требует PF > 1.0
-            # и превосходства над базовой линией.
+            # --- Select starting archetype ---
+            # Explicit seed from UI is applied UNCONDITIONALLY: the user
+            # consciously sets the starting point, and it does not have to
+            # beat buy&hold on screening (otherwise the seed would be silently
+            # replaced by the spec from memory).
+            # Auto-selection works only when seed is not set and requires PF > 1.0
+            # and superiority over the baseline.
             bh_return = float(bh.get("return_pct", 0.0) or 0.0)
 
             forced_arch = None
@@ -599,8 +600,8 @@ class BacktestOptimizer:
                 forced_arch = (screen_results.get("by_name") or {}).get(seed_archetype)
                 if forced_arch is None:
                     emit(
-                        f'ФАЗА 0: архетип {seed_archetype} не найден в результатах '
-                        f'скрининга — обычный отбор.'
+                        f'PHASE 0: archetype {seed_archetype} not found in screening '
+                        f'results — normal selection.'
                     )
 
             best_arch = forced_arch if forced_arch is not None else screen_results.get("overall")
@@ -613,24 +614,24 @@ class BacktestOptimizer:
 
             if forced_arch is not None or beats_baseline:
                 emit(
-                    f'ФАЗА 0: старт с архетипа {best_arch["name"]} '
+                    f'PHASE 0: starting from archetype {best_arch["name"]} '
                     f'(P&L={best_arch["return_pct"]:+.2f}%, PF={best_arch["pf"]:.2f}, '
-                    f'сделок={best_arch["trades"]}). AI будет улучшать его.'
+                    f'trades={best_arch["trades"]}). AI will improve it.'
                 )
                 current_spec = ensure_engine_defaults(best_arch["spec"])
-                # Повторно применяем заморозку после Фазы 0, потому что
-                # ensure_engine_defaults или скрининг могли потерять флаг.
+                # Re-apply freezing after Phase 0, because ensure_engine_defaults
+                # or screening could lose the flag.
                 if freeze_entries is True:
                     current_spec["frozen_entries"] = True
                 elif freeze_entries is False:
                     current_spec.pop("frozen_entries", None)
-                current_rules = f"Стартовая стратегия на базе архетипа {best_arch['name']}."
+                current_rules = f"Starting strategy based on archetype {best_arch['name']}."
             else:
                 emit(
-                    'ФАЗА 0: ни один архетип не превзошёл базовую линию с PF > 1.0. '
-                    'Используем текущую стратегию из памяти.'
+                    'PHASE 0: no archetype beat the baseline with PF > 1.0. '
+                    'Using the current strategy from memory.'
                 )
-        # 2. Разбиение на optimization/holdout
+        # 2. Split into optimization/holdout
         optimization_df, holdout_df, holdout_meta = self.data_utils.split_optimization_and_holdout(
             full_df,
             holdout_ratio=0.15,
@@ -643,17 +644,17 @@ class BacktestOptimizer:
 
         if holdout_meta.get("enabled"):
             emit(
-                f'HOLDOUT зарезервирован: '
-                f'{holdout_meta.get("holdout_candles", 0)} свечей '
+                f'HOLDOUT reserved: '
+                f'{holdout_meta.get("holdout_candles", 0)} candles '
                 f'({holdout_period.get("start")} → {holdout_period.get("end")}).'
             )
         else:
             emit(
-                f'HOLDOUT отключён: {holdout_meta.get("reason", "unknown")}.'
+                f'HOLDOUT disabled: {holdout_meta.get("reason", "unknown")}.'
             )
 
         emit(
-            f'OPTIMIZATION период: '
+            f'OPTIMIZATION period: '
             f'{optimization_period.get("start")} → {optimization_period.get("end")}.'
         )
 
@@ -665,7 +666,7 @@ class BacktestOptimizer:
             fallback_end=end_date,
         )
 
-        # 3. TRAIN/TEST окна
+        # 3. TRAIN/TEST windows
         splits = self.data_utils.make_splits(
             start_date=optimization_start_dt,
             end_date=optimization_end_dt,
@@ -673,13 +674,13 @@ class BacktestOptimizer:
             walk_forward_folds=walk_forward_folds,
         )
         if not splits:
-            return {'error': 'Не удалось сформировать TRAIN/TEST разбиение.',
+            return {'error': 'Failed to form TRAIN/TEST split.',
                     'history': []}
 
-        emit(f'Количество split-окон: {len(splits)}.')
+        emit(f'Number of split windows: {len(splits)}.')
         for idx, split in enumerate(splits, start=1):
             emit(
-                f'Окно {idx}/{len(splits)}: '
+                f'Window {idx}/{len(splits)}: '
                 f'TRAIN {split["train_start"].strftime("%Y-%m-%d")} → '
                 f'{split["train_end"].strftime("%Y-%m-%d")} | '
                 f'TEST {split["test_start"].strftime("%Y-%m-%d")} → '
@@ -689,10 +690,10 @@ class BacktestOptimizer:
         history = []
         best = None
         rejected_fingerprints = set()
-        last_changes = 'исходный spec'
+        last_changes = 'original spec'
 
         def record_candidate(label, spec, rules, evaluation, changes):
-            """Оценивает кандидата, пишет history/CSV, обновляет best."""
+            """Evaluates the candidate, writes history/CSV, updates best."""
             nonlocal best
 
             agg = evaluation['aggregated']
@@ -745,14 +746,14 @@ class BacktestOptimizer:
 
             soft_warnings = []
             if window_robustness.get("profitable_windows_ratio", 0) < 0.5:
-                soft_warnings.append("Прибыльных окон < 50%")
+                soft_warnings.append("Profitable windows < 50%")
             if window_robustness.get("positive_expectancy_windows_ratio", 0) < 0.5:
-                soft_warnings.append("Окон с положительным expectancy < 50%")
+                soft_warnings.append("Windows with positive expectancy < 50%")
             if window_robustness.get("pf_pass_windows_ratio", 0) < 0.5:
-                soft_warnings.append("Окон с PF > 1 < 50%")
+                soft_warnings.append("Windows with PF > 1 < 50%")
             if window_robustness.get("worst_window_return_pct", 0) < -10:
                 soft_warnings.append(
-                    f'Худшее окно {window_robustness.get("worst_window_return_pct", 0):+.1f}%'
+                    f'Worst window {window_robustness.get("worst_window_return_pct", 0):+.1f}%'
                 )
 
             history.append({
@@ -794,19 +795,19 @@ class BacktestOptimizer:
             )
 
             emit(
-                f'[{label}] TRAIN: сделок={train_stats.get("total_trades", 0)}, '
+                f'[{label}] TRAIN: trades={train_stats.get("total_trades", 0)}, '
                 f'P&L={train_stats.get("total_pnl_pct", 0):+.2f}%, '
                 f'Exp={train_exp:+.4f}%, PF={train_stats.get("profit_factor", 0):.2f}.'
             )
             emit(
-                f'[{label}] TEST: сделок={test_stats.get("total_trades", 0)}, '
+                f'[{label}] TEST: trades={test_stats.get("total_trades", 0)}, '
                 f'P&L={test_stats.get("total_pnl_pct", 0):+.2f}%, '
                 f'Exp={test_exp:+.4f}%, PF={test_stats.get("profit_factor", 0):.2f}, '
                 f'DD={test_stats.get("max_drawdown_pct", 0):.2f}%, '
                 f'RawScore={raw_selection_score:+.4f}, '
                 f'WindowPenalty={window_penalty:+.4f}, '
                 f'Score={selection_score:+.4f}, '
-                f'{"ПРИНЯТ" if acceptable else "не принят"}.'
+                f'{"ACCEPTED" if acceptable else "not accepted"}.'
             )
 
             if soft_warnings:
@@ -822,7 +823,7 @@ class BacktestOptimizer:
                 emit(
                     f'[{label}] WINDOW PENALTY: {window_penalty:+.4f}'
                     + (
-                        f' | причины: {" | ".join(penalty_reasons)}'
+                        f' | reasons: {" | ".join(penalty_reasons)}'
                         if penalty_reasons else ''
                     )
                 )
@@ -859,12 +860,12 @@ class BacktestOptimizer:
             is_fragile = robustness_assessment.get("fragile", False)
 
             if can_be_best and (best is None or selection_score > best['selection_score']):
-                # Если новый кандидат fragile, а текущий best — robust, требуем заметного улучшения
+                # If the new candidate is fragile, and the current best is robust, require a noticeable improvement
                 if is_fragile and best is not None:
                     current_robust = best.get("window_robustness_assessment", {}).get("status") == "robust"
                     if current_robust and selection_score < best['selection_score'] * 1.10:
-                        # Fragile должен быть на 10% лучше, чтобы вытеснить robust
-                        emit(f'[{label}] Fragile-кандидат не вытесняет robust best: нужно +10% по score.')
+                        # Fragile must be 10% better to displace robust
+                        emit(f'[{label}] Fragile candidate does not displace robust best: needs +10% score.')
                         can_be_best = False
 
             if can_be_best and (best is None or selection_score > best['selection_score']):
@@ -892,13 +893,13 @@ class BacktestOptimizer:
                     'window_robustness_assessment': robustness_assessment,
                     'holdout_summary': None,
                 }
-                emit(f'[{label}] Новый лучший кандидат по TEST-score.')
+                emit(f'[{label}] New best candidate by TEST-score.')
 
             return train_stats, test_stats, train_trades_all, test_trades_all, selection_score, fold_results
 
-        # 4. Основной цикл итераций
+        # 4. Main iteration loop
         for iteration in range(1, max_iterations + 1):
-            emit(f'Итерация {iteration}/{max_iterations}: прогон TRAIN/TEST...')
+            emit(f'Iteration {iteration}/{max_iterations}: running TRAIN/TEST...')
             rejected_fingerprints.add(self._spec_fingerprint(current_spec))
 
             evaluation = self._evaluate_spec_on_splits(
@@ -919,7 +920,7 @@ class BacktestOptimizer:
             ) = record_candidate(
                 iteration, current_spec, current_rules, evaluation, last_changes)
 
-            # Локальный поиск
+            # Local search
             if local_search_mutations > 0:
                 refined = self.mutations.local_search(
                     spec=current_spec, rules=current_rules, splits=splits,
@@ -937,7 +938,7 @@ class BacktestOptimizer:
                     r_spec, r_eval = refined
                     rejected_fingerprints.add(self._spec_fingerprint(r_spec))
                     label = f'{iteration}-local'
-                    emit(f'Локальный поиск улучшил TRAIN-score, фиксирую {label}.')
+                    emit(f'Local search improved TRAIN-score, fixing {label}.')
 
                     (
                         train_stats,
@@ -947,12 +948,12 @@ class BacktestOptimizer:
                         selection_score,
                         current_fold_results,
                     ) = record_candidate(
-                        label, r_spec, current_rules, r_eval, 'Локальная мутация числовых параметров.')
+                        label, r_spec, current_rules, r_eval, 'Local mutation of numeric parameters.')
 
                     current_spec = r_spec
 
             if iteration >= max_iterations:
-                emit('Достигнут лимит итераций оптимизации.')
+                emit('Optimization iteration limit reached.')
                 break
 
             # Hill-climbing
@@ -975,9 +976,9 @@ class BacktestOptimizer:
                     base_train_trades = best['train_trades']
                     base_test_trades = best['test_trades']
                     base_fold_results = best['fold_results']
-                    emit('Откат к лучшему spec.')
+                    emit('Rollback to best spec.')
 
-            # AI формирует следующий spec
+            # AI forms the next spec
             summary = self._build_optimization_summary(
                 train_stats=base_train_stats,
                 test_stats=base_test_stats,
@@ -994,21 +995,21 @@ class BacktestOptimizer:
                 robust_max_worst_window_return_pct=robust_max_worst_window_return_pct,
                 robust_min_stability_score=robust_min_stability_score,
             )
-            emit(f'Итерация {iteration}: AI анализирует результаты...')
+            emit(f'Iteration {iteration}: AI analyzes results...')
 
             new_spec = None
-            changes_summary = 'AI изменила strategy_spec.'
+            changes_summary = 'AI changed strategy_spec.'
             new_rules_candidate = base_rules
             max_ai_attempts = 3
 
             for attempt in range(1, max_ai_attempts + 1):
                 extra_instruction = "" if attempt == 1 else (
-                    "Предыдущее предложение было невалидным или совпало с уже "
-                    "проверенным. Внеси качественно иное изменение."
+                    "The previous suggestion was invalid or matched an already "
+                    "tested one. Make a qualitatively different change."
                 )
 
                 report.section(
-                    f"ИТЕРАЦИЯ {iteration} / ВХОДНЫЕ ДАННЫЕ AI",
+                    f"ITERATION {iteration} / AI INPUT DATA",
                     {
                         "base_spec": base_spec,
                         "base_rules": base_rules,
@@ -1027,7 +1028,7 @@ class BacktestOptimizer:
                 )
 
                 report.section(
-                    f"ИТЕРАЦИЯ {iteration} / ОТВЕТ AI",
+                    f"ITERATION {iteration} / AI RESPONSE",
                     optimization_result,
                 )
 
@@ -1049,7 +1050,7 @@ class BacktestOptimizer:
                 candidate_spec = self._enforce_exit_corridor(
                     candidate_spec, base_spec)
                 candidate_spec = ensure_engine_defaults(candidate_spec)
-                # ensure_engine_defaults может стереть флаги — восстанавливаем из базы
+                # ensure_engine_defaults may erase flags — restore from base
                 if base_spec.get("frozen_entries"):
                     candidate_spec["frozen_entries"] = True
                 if "exit_corridor" in base_spec:
@@ -1065,9 +1066,9 @@ class BacktestOptimizer:
                     'changes_summary', changes_summary)
                 break
 
-            # Fallback: программная мутация
+            # Fallback: programmatic mutation
             if new_spec is None:
-                emit('AI не дала новый spec — применяю программную мутацию.')
+                emit('AI did not provide a new spec — applying programmatic mutation.')
                 for _ in range(PROGRAM_MUTATION_ATTEMPTS):
                     candidate = ensure_engine_defaults(
                         self.mutations.mutate_numeric(base_spec))
@@ -1077,26 +1078,26 @@ class BacktestOptimizer:
                         candidate, base_spec)
                     err = validate_strategy_spec(candidate)
                     if err is not None:
-                        emit(f'Fallback: невалидный кандидат: {err}')
+                        emit(f'Fallback: invalid candidate: {err}')
                         continue
                     if self._spec_fingerprint(candidate) in rejected_fingerprints:
-                        emit('Fallback: дубликат уже отклонённого кандидата.')
+                        emit('Fallback: duplicate of already rejected candidate.')
                         continue
                     new_spec = candidate
                     new_rules_candidate = base_rules
-                    changes_summary = 'Программная мутация числовых параметров.'
+                    changes_summary = 'Programmatic mutation of numeric parameters.'
                     break
 
             if new_spec is None:
-                emit('Не удалось сформировать новый spec. Оптимизация остановлена.')
+                emit('Failed to form a new spec. Optimization stopped.')
                 break
 
             current_spec = new_spec
             current_rules = new_rules_candidate
             last_changes = changes_summary
-            emit(f'Итерация {iteration}: новый spec принят.')
+            emit(f'Iteration {iteration}: new spec accepted.')
 
-        # 5. Holdout-проверка
+        # 5. Holdout validation
         holdout_summary = {
             "enabled": False,
             "reason": "not_run",
@@ -1108,7 +1109,7 @@ class BacktestOptimizer:
         }
 
         if best is not None and holdout_meta.get("enabled") and len(holdout_df) > 0:
-            emit('Финальная HOLDOUT-проверка лучшего кандидата...')
+            emit('Final HOLDOUT validation of the best candidate...')
 
             holdout_evaluation = self.holdout.evaluate_spec_on_holdout(
                 spec=best["spec"],
@@ -1135,14 +1136,14 @@ class BacktestOptimizer:
                 )
 
                 emit(
-                    f'HOLDOUT: сделок={holdout_summary.get("total_trades", 0)}, '
+                    f'HOLDOUT: trades={holdout_summary.get("total_trades", 0)}, '
                     f'P&L={holdout_summary.get("return_pct", 0):+.2f}%, '
                     f'Status={holdout_summary.get("status", "failed")}.'
                 )
 
                 best["holdout_summary"] = holdout_summary
             else:
-                emit(f'HOLDOUT: ошибка — {holdout_evaluation.get("error")}')
+                emit(f'HOLDOUT: error — {holdout_evaluation.get("error")}')
                 best["holdout_summary"] = {
                     "enabled": True,
                     "reason": "evaluation_error",
@@ -1152,7 +1153,7 @@ class BacktestOptimizer:
         elif best is not None:
             best["holdout_summary"] = holdout_summary
 
-        # 6. Сохранение лучшей стратегии
+        # 6. Save the best strategy
         holdout_status = holdout_summary.get("status", "not_run")
         holdout_blocks_save = (
             holdout_meta.get("enabled")
@@ -1175,20 +1176,20 @@ class BacktestOptimizer:
             cm.save()
             bt = best['aggregated_test_stats']
             emit(
-                f'Сохранена лучшая стратегия: итерация {best["iteration"]}, '
+                f'Best strategy saved: iteration {best["iteration"]}, '
                 f'TEST P&L={bt.get("total_pnl_pct", 0):+.2f}%.'
             )
         elif best is None:
-            emit('Ни одна стратегия не прошла требования.')
+            emit('No strategy passed the requirements.')
         elif holdout_is_weak_but_blocked:
-            emit('Лучшая стратегия не сохранена: holdout имеет статус weak_pass.')
+            emit('Best strategy not saved: holdout has weak_pass status.')
         elif holdout_blocks_save:
-            emit('Лучшая стратегия не сохранена: holdout не пройден.')
+            emit('Best strategy not saved: holdout not passed.')
 
-        report.section("ФИНАЛ / ЛУЧШИЙ КАНДИДАТ", best)
-        report.section("ФИНАЛ / HOLDOUT", holdout_summary)
-        report.section("ФИНАЛ / ВСЯ ИСТОРИЯ ИТЕРАЦИЙ", history)
-        emit(f'Отчёт сохранён: {report.path}')
+        report.section("FINAL / BEST CANDIDATE", best)
+        report.section("FINAL / HOLDOUT", holdout_summary)
+        report.section("FINAL / FULL ITERATION HISTORY", history)
+        emit(f'Report saved: {report.path}')
 
         return {
             'history': history,

@@ -1,14 +1,14 @@
 """
-Страница автоматической торговли.
+Auto trading page.
 
-Позволяет пользователю:
-- Выбрать монеты для автоторговли
-- Настроить доли капитала, размер позиции, плечо
-- Установить лимиты убытков (дневной / месячный)
-- Указать период для оптимизации при месячном убытке
-- Запускать / останавливать торговлю
-- Закрывать позиции (по монете или все)
-- Видеть текущее состояние торговли и логи
+Allows the user to:
+- Select coins for auto trading
+- Configure capital shares, position size, leverage
+- Set loss limits (daily / monthly)
+- Specify the optimization period used on a monthly loss
+- Start / stop trading
+- Close positions (per coin or all)
+- See the current trading state and logs
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 class AutoTradingPage:
     """
-    UI-страница автоматической торговли.
+    Auto trading UI page.
     """
 
     def __init__(
@@ -60,7 +60,7 @@ class AutoTradingPage:
         self.app_settings = app_settings
         self.notify_fn = notify_fn
 
-        # Executor создаётся один раз
+        # The executor is created once
         self.executor = BybitExecutor(
             testnet=config.BYBIT_TESTNET,
             default_leverage=10,
@@ -74,55 +74,53 @@ class AutoTradingPage:
 
         self.container.visible = False
 
-        # Таймер обновления состояния
+        # State refresh timer
         ui.timer(3.0, self._refresh_state)
 
-        # Таймер обновления баланса (раз в 15 минут)
+        # Balance refresh timer (once every 15 minutes)
         ui.timer(900.0, self._load_balance_async)
-        
-        # Загружаем баланс сразу при открытии страницы (с задержкой 0.5 сек)
-        ui.timer(0.5, self._load_balance_async, once=True)
 
-    
+        # Load the balance right when the page opens (with a 0.5 sec delay)
+        ui.timer(0.5, self._load_balance_async, once=True)
 
     def build_ui(self):
         # ================================================================
-        # Заголовок
+        # Header
         # ================================================================
-        ui.label("🤖 Автоматическая торговля").classes("text-h5 q-mb-sm")
+        ui.label("🤖 Auto trading").classes("text-h5 q-mb-sm")
         ui.label(
-            "Торговля на фьючерсном рынке Bybit (linear perpetual). "
-            "Стратегия берётся из памяти монеты (strategy_spec). "
-            "Максимум 1 одновременно открытая позиция на монету."
+            "Trading on the Bybit futures market (linear perpetual). "
+            "The strategy is taken from the coin's memory (strategy_spec). "
+            "At most 1 open position per coin at a time."
         ).classes("text-caption text-grey q-mb-md")
 
         # ================================================================
-        # Предупреждение о конфликте с авторежимом
+        # Conflict warning with auto mode
         # ================================================================
         self.conflict_warning = ui.label("").classes(
             "text-warning text-bold q-mb-md"
         ).style("display: none;")
 
         # ================================================================
-        # Общий капитал
+        # Total capital
         # ================================================================
         with ui.card().classes("w-full q-mb-md"):
-            ui.label("💰 Общий капитал").classes("text-subtitle1")
+            ui.label("💰 Total capital").classes("text-subtitle1")
 
             with ui.row().classes("gap-4 items-center"):
                 self.total_capital_input = ui.number(
-                    "Капитал для торговли (USDT)",
+                    "Capital for trading (USDT)",
                     value=1000.0,
                     min=1,
                     format="%.2f",
                 ).classes("w-64")
-                
-                # Метка с балансом биржи (обновляется каждые 30 сек)
-                self.balance_label = ui.label("🔄 Загрузка баланса...").classes(
+
+                # Exchange balance label (refreshed every 30 sec)
+                self.balance_label = ui.label("🔄 Loading balance...").classes(
                     "text-caption"
                 )
 
-                # Кнопка ручного обновления
+                # Manual refresh button
                 ui.button(
                     "🔄",
                     on_click=lambda: asyncio.create_task(
@@ -130,17 +128,17 @@ class AutoTradingPage:
                     ),
                 ).props("flat dense").classes("q-ml-xs").style(
                     "min-width: 32px; padding: 4px;"
-                ).tooltip("Обновить баланс с биржи")
+                ).tooltip("Refresh balance from the exchange")
 
             with ui.row().classes("q-mt-xs"):
                 self.testnet_label = ui.label("").classes("text-caption")
                 self._update_testnet_label()
 
         # ================================================================
-        # Выбор монет и настройки
+        # Coin selection and settings
         # ================================================================
         with ui.card().classes("w-full q-mb-md"):
-            ui.label("📋 Монеты для торговли").classes("text-subtitle1")
+            ui.label("📋 Coins for trading").classes("text-subtitle1")
 
             symbols = list(self.memory.get_all_symbols())
 
@@ -152,7 +150,7 @@ class AutoTradingPage:
                     with ui.column().classes("gap-2 w-full"):
                         with ui.row().classes("gap-4"):
                             capital_share = ui.number(
-                                "Доля общего капитала (%)",
+                                "Share of total capital (%)",
                                 value=30.0,
                                 min=5,
                                 max=100,
@@ -160,7 +158,7 @@ class AutoTradingPage:
                             ).classes("w-48")
 
                             position_size = ui.number(
-                                "Размер позиции (% капитала монеты)",
+                                "Position size (% of coin capital)",
                                 value=10.0,
                                 min=10,
                                 max=100,
@@ -168,7 +166,7 @@ class AutoTradingPage:
                             ).classes("w-56")
 
                             leverage = ui.number(
-                                "Плечо (1–100)",
+                                "Leverage (1–100)",
                                 value=1,
                                 min=1,
                                 max=100,
@@ -177,7 +175,7 @@ class AutoTradingPage:
 
                         with ui.row().classes("gap-4"):
                             daily_loss = ui.number(
-                                "Дневной лимит убытка (%)",
+                                "Daily loss limit (%)",
                                 value=1.0,
                                 min=1,
                                 max=50,
@@ -185,7 +183,7 @@ class AutoTradingPage:
                             ).classes("w-48")
 
                             monthly_loss = ui.number(
-                                "Месячный лимит убытка (%)",
+                                "Monthly loss limit (%)",
                                 value=15.0,
                                 min=5,
                                 max=100,
@@ -193,7 +191,7 @@ class AutoTradingPage:
                             ).classes("w-48")
 
                             opt_days = ui.number(
-                                "Период оптимизации (дней)",
+                                "Optimization period (days)",
                                 value=180,
                                 min=30,
                                 max=365,
@@ -202,7 +200,7 @@ class AutoTradingPage:
 
                         with ui.row().classes("gap-4"):
                             opt_iterations = ui.number(
-                                "Итераций оптимизации",
+                                "Optimization iterations",
                                 value=8,
                                 min=5,
                                 max=30,
@@ -210,7 +208,7 @@ class AutoTradingPage:
                             ).classes("w-48")
 
                             opt_folds = ui.number(
-                                "TEST-окон (walk-forward)",
+                                "TEST windows (walk-forward)",
                                 value=3,
                                 min=1,
                                 max=8,
@@ -229,35 +227,35 @@ class AutoTradingPage:
                     }
 
         # ================================================================
-        # Кнопки управления
+        # Control buttons
         # ================================================================
         with ui.card().classes("w-full q-mb-md"):
-            ui.label("🎮 Управление").classes("text-subtitle1 q-mb-sm")
+            ui.label("🎮 Controls").classes("text-subtitle1 q-mb-sm")
 
             with ui.row().classes("gap-2 flex-wrap"):
                 self.start_btn = ui.button(
-                    "🚀 Начать торговлю (выбранные монеты)",
+                    "🚀 Start trading (selected coins)",
                     on_click=self._start_selected,
                 ).classes("bg-positive text-white")
 
                 self.stop_btn = ui.button(
-                    "⏹ Остановить торговлю (выбранные монеты)",
+                    "⏹ Stop trading (selected coins)",
                     on_click=self._stop_selected,
                 ).classes("bg-negative text-white")
 
             with ui.row().classes("gap-2 flex-wrap q-mt-sm"):
                 ui.button(
-                    "🔒 Закрыть все позиции (все монеты)",
+                    "🔒 Close all positions (all coins)",
                     on_click=self._close_all_positions,
                 ).classes("bg-warning text-white")
 
                 ui.button(
-                    "🔒 Закрыть позиции (выбранные монеты)",
+                    "🔒 Close positions (selected coins)",
                     on_click=self._close_selected_positions,
                 ).classes("bg-orange text-white")
 
-            # Чекбоксы выбора монет
-            ui.label("Выбор монет:").classes("text-bold q-mt-md")
+            # Coin selection checkboxes
+            ui.label("Coin selection:").classes("text-bold q-mt-md")
             self.symbol_checkboxes = {}
             with ui.row().classes("gap-4"):
                 for symbol in self.memory.get_all_symbols():
@@ -266,28 +264,27 @@ class AutoTradingPage:
                     )
 
         # ================================================================
-        # Текущее состояние
+        # Current state
         # ================================================================
         with ui.card().classes("w-full q-mb-md"):
-            ui.label("📊 Текущее состояние").classes("text-subtitle1 q-mb-sm")
+            ui.label("📊 Current state").classes("text-subtitle1 q-mb-sm")
 
             self.state_table = ui.table(
                 columns=[
-                    {"name": "symbol", "label": "Монета", "field": "symbol", "align": "left"},
-                    {"name": "status", "label": "Статус", "field": "status", "align": "left"},
-                    {"name": "positions", "label": "Позиции", "field": "positions", "align": "center"},
-                    {"name": "capital", "label": "Капитал", "field": "capital", "align": "right"},
-                    {"name": "daily_pnl", "label": "Дневной P&L", "field": "daily_pnl", "align": "right"},
-                    {"name": "monthly_pnl", "label": "Месячный P&L", "field": "monthly_pnl", "align": "right"},
-                    {"name": "message", "label": "Сообщение", "field": "message", "align": "left"},
+                    {"name": "symbol", "label": "Coin", "field": "symbol", "align": "left"},
+                    {"name": "status", "label": "Status", "field": "status", "align": "left"},
+                    {"name": "positions", "label": "Positions", "field": "positions", "align": "center"},
+                    {"name": "capital", "label": "Capital", "field": "capital", "align": "right"},
+                    {"name": "daily_pnl", "label": "Daily P&L", "field": "daily_pnl", "align": "right"},
+                    {"name": "monthly_pnl", "label": "Monthly P&L", "field": "monthly_pnl", "align": "right"},
+                    {"name": "message", "label": "Message", "field": "message", "align": "left"},
                 ],
                 rows=[],
                 row_key="symbol",
             ).classes("w-full")
 
-
     # ----------------------------------------------------------------
-    # Обработчики кнопок
+    # Button handlers
     # ----------------------------------------------------------------
 
     def _get_selected_symbols(self) -> list:
@@ -302,30 +299,30 @@ class AutoTradingPage:
     def _start_selected(self):
         selected = self._get_selected_symbols()
         if not selected:
-            ui.notify("Выберите хотя бы одну монету.", type="warning")
+            ui.notify("Select at least one coin.", type="warning")
             return
 
-        # Проверка конфликта с авторежимом
+        # Check for a conflict with auto mode
         for sym in selected:
             auto_state = AutoModeState.get_state(sym)
             if auto_state and auto_state.get("is_running"):
                 ui.notify(
-                    f"Авторежим включён для {sym}. "
-                    "Остановите его перед запуском автоторговли.",
+                    f"Auto mode is enabled for {sym}. "
+                    "Stop it before starting auto trading.",
                     type="warning",
                 )
                 return
 
             if is_auto_trading_running(sym):
                 ui.notify(
-                    f"Автоторговля для {sym} уже запущена.",
+                    f"Auto trading for {sym} is already running.",
                     type="info",
                 )
                 return
 
         total_capital = self._get_total_capital()
 
-        # Проверка суммы долей
+        # Check the sum of capital shares
         total_share = 0.0
         for sym in selected:
             cfg_inputs = self._coin_configs.get(sym, {})
@@ -334,7 +331,7 @@ class AutoTradingPage:
 
         if total_share > 100:
             ui.notify(
-                f"Сумма долей капитала ({total_share}%) превышает 100%.",
+                f"Total capital share ({total_share}%) exceeds 100%.",
                 type="warning",
             )
             return
@@ -371,34 +368,34 @@ class AutoTradingPage:
                         total_capital_usdt=self._get_total_capital(),
                     )
                 except Exception as e:
-                    logger.exception(f"Ошибка запуска автоторговли {s}")
-                    self.notify_fn(f"Ошибка запуска {s}: {e}", "negative")
+                    logger.exception(f"Auto trading start error {s}")
+                    self.notify_fn(f"Start error {s}: {e}", "negative")
 
             asyncio.create_task(asyncio.to_thread(worker))
 
-        ui.notify(f"Запуск автоторговли для: {', '.join(selected)}", type="positive")
+        ui.notify(f"Starting auto trading for: {', '.join(selected)}", type="positive")
 
     def _stop_selected(self):
         selected = self._get_selected_symbols()
         if not selected:
-            ui.notify("Выберите хотя бы одну монету.", type="warning")
+            ui.notify("Select at least one coin.", type="warning")
             return
 
         for sym in selected:
             if is_auto_trading_running(sym):
                 stop_auto_trading(sym, close_positions=False, reason="manual")
             else:
-                ui.notify(f"Автоторговля для {sym} не запущена.", type="info")
+                ui.notify(f"Auto trading for {sym} is not running.", type="info")
 
     def _close_all_positions(self):
         with ui.dialog() as dialog, ui.card():
-            ui.label("Закрыть ВСЕ позиции по ВСЕМ монетам?")
-            ui.label("Это действие необратимо!").classes("text-negative")
+            ui.label("Close ALL positions for ALL coins?")
+            ui.label("This action cannot be undone!").classes("text-negative")
 
             with ui.row().classes("justify-end q-mt-md"):
-                ui.button("Отмена", on_click=dialog.close)
+                ui.button("Cancel", on_click=dialog.close)
                 ui.button(
-                    "Закрыть все",
+                    "Close all",
                     on_click=lambda: self._do_close_all(dialog),
                     color="negative",
                 )
@@ -408,69 +405,68 @@ class AutoTradingPage:
     def _do_close_all(self, dialog):
         dialog.close()
         close_all_positions_all_symbols()
-        ui.notify("Все позиции закрыты.", type="warning")
+        ui.notify("All positions closed.", type="warning")
 
     def _close_selected_positions(self):
         selected = self._get_selected_symbols()
         if not selected:
-            ui.notify("Выберите хотя бы одну монету.", type="warning")
+            ui.notify("Select at least one coin.", type="warning")
             return
 
         for sym in selected:
             close_all_positions_for_symbol(sym)
 
-        ui.notify(f"Позиции закрыты для: {', '.join(selected)}", type="info")
+        ui.notify(f"Positions closed for: {', '.join(selected)}", type="info")
 
     # ----------------------------------------------------------------
-    # Обновление состояния
+    # State refresh
     # ----------------------------------------------------------------
 
     def _refresh_state(self):
-        """Обновляет таблицу состояния (вызывается по таймеру)."""
+        """Refreshes the state table (called by the timer)."""
         states = get_all_states()
 
         rows = []
-        
 
         for sym, state in states.items():
             is_running = state.get("is_running", False)
             is_optimizing = state.get("is_optimizing", False)
 
             if is_optimizing:
-                status = "🔄 Оптимизация"
+                status = "🔄 Optimizing"
             elif is_running:
-                status = "🟢 Работает"
+                status = "🟢 Running"
             else:
-                status = "⏹ Остановлен"
-            
-            # --- HEARTBEAT: проверяем свежесть ---
+                status = "⏹ Stopped"
+
+            # --- HEARTBEAT: check freshness ---
             last_iter_ts = state.get("_last_iteration_ts")
             stale = False
             if is_running and last_iter_ts:
                 import time
                 age = time.time() - last_iter_ts
-                if age > 120:  # 2 минуты без обновлений
-                    status = "🟡 Нет данных (ошибка сети?)"
+                if age > 120:  # 2 minutes without updates
+                    status = "🟡 No data (network error?)"
                     stale = True
 
-            # Формируем строку детального статуса
+            # Build the detailed status line
             details = []
             if state.get("last_iteration_utc"):
-                details.append(f"Проверка: {state['last_iteration_utc']}")
+                details.append(f"Check: {state['last_iteration_utc']}")
             if state.get("last_candle_time"):
-                details.append(f"Свеча: {state['last_candle_time']}")
+                details.append(f"Candle: {state['last_candle_time']}")
             if state.get("last_price"):
-                details.append(f"Цена: {state['last_price']:.4f}")
+                details.append(f"Price: {state['last_price']:.4f}")
             if state.get("candles_processed"):
-                details.append(f"Обработано свечей: {state['candles_processed']}")
+                details.append(f"Candles processed: {state['candles_processed']}")
             if state.get("last_indicators_summary"):
                 details.append(state['last_indicators_summary'])
-            
+
             message_text = state.get("status_message", "")
             if details:
                 message_text += " | " + " | ".join(details)
 
-            # Форматируем PnL с процентами
+            # Format PnL with percentages
             current_cap = state.get("current_capital", state.get("allocated_capital", 0))
             daily_pnl_usdt = state.get("daily_pnl", 0)
             monthly_pnl_usdt = state.get("monthly_pnl", 0)
@@ -486,16 +482,15 @@ class AutoTradingPage:
                 "monthly_pnl": f"{monthly_pnl_usdt:+.2f} USDT ({monthly_pnl_pct:+.1f}%)",
                 "message": message_text,
             })
-    
 
         self.state_table.rows = rows
         self.state_table.update()
 
-        # Предупреждение о конфликте
+        # Conflict warning
         self._check_conflicts()
 
     def _check_conflicts(self):
-        """Проверяет конфликты между автоторговлей и авторежимом."""
+        """Checks conflicts between auto trading and auto mode."""
         warnings = []
 
         for sym in self.memory.get_all_symbols():
@@ -505,15 +500,15 @@ class AutoTradingPage:
 
             if auto_mode_running and auto_trading:
                 warnings.append(
-                    f"⚠️ {sym}: автоторговля и авторежим включены одновременно!"
+                    f"⚠️ {sym}: auto trading and auto mode are enabled at the same time!"
                 )
             elif auto_mode_running:
                 warnings.append(
-                    f"🔒 {sym}: авторежим включён — автоторговля недоступна."
+                    f"🔒 {sym}: auto mode is enabled — auto trading is unavailable."
                 )
             elif auto_trading:
                 warnings.append(
-                    f"🔒 {sym}: автоторговля включена — авторежим недоступен."
+                    f"🔒 {sym}: auto trading is enabled — auto mode is unavailable."
                 )
 
         if warnings:
@@ -526,45 +521,45 @@ class AutoTradingPage:
     def _update_testnet_label(self):
         if config.BYBIT_TESTNET:
             self.testnet_label.set_text(
-                "🧪 TESTNET — торговля на тестовом счёте."
+                "🧪 TESTNET — trading on a test account."
             )
             self.testnet_label.classes("text-warning")
         else:
             self.testnet_label.set_text(
-                "🔴 MAINNET — торговля на реальном счёте!"
+                "🔴 MAINNET — trading on a real account!"
             )
             self.testnet_label.classes("text-negative text-bold")
 
     def _load_balance_from_exchange(self):
         """
-        Загружает USDT-баланс с биржи и обновляет метку.
-        НЕ перезаписывает поле ввода — пользователь может вручную
-        указать меньшую сумму (для контроля риска).
+        Loads the USDT balance from the exchange and updates the label.
+        Does NOT overwrite the input field — the user may manually
+        specify a smaller amount (for risk control).
         """
         success, balance = self.executor.get_usdt_balance()
-        
+
         if success and balance is not None:
             self.balance_label.set_text(
-                f"💰 Баланс на бирже: {balance:.2f} USDT"
+                f"💰 Exchange balance: {balance:.2f} USDT"
             )
             self.balance_label.classes("text-positive text-bold")
-            
-            # Автозаполнение поля при первой загрузке (если пользователь не менял)
+
+            # Autofill the field on first load (if the user has not changed it)
             current_value = float(self.total_capital_input.value or 0)
-            if current_value <= 1000.0:  # дефолтное значение — обновляем
+            if current_value <= 1000.0:  # default value — update it
                 self.total_capital_input.set_value(balance)
         else:
             self.balance_label.set_text(
-                "⚠️ Не удалось загрузить баланс с биржи"
+                "⚠️ Failed to load the balance from the exchange"
             )
             self.balance_label.classes("text-warning")
 
     async def _load_balance_async(self):
-        """Асинхронная обёртка для загрузки баланса (для ui.timer)."""
+        """Async wrapper for loading the balance (for ui.timer)."""
         await asyncio.to_thread(self._load_balance_from_exchange)
 
     def refresh(self):
-        """Обновляет список монет (при добавлении новых)."""
+        """Refreshes the coin list (when new coins are added)."""
         current_symbols = list(self.memory.get_all_symbols())
         for sym in current_symbols:
             if sym not in self.symbol_checkboxes:

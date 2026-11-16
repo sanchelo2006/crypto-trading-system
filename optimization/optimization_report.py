@@ -1,10 +1,10 @@
 """
-Подробный текстовый отчёт одной оптимизации.
+Detailed text report of a single optimization.
 
-Пишется потоково (append):
-  - не теряет данные при падении или отмене оптимизации;
-  - не зависит от UI;
-  - не влияет на размер промпта и расход токенов.
+Written in streaming mode (append):
+  - does not lose data on crash or optimization cancellation;
+  - does not depend on the UI;
+  - does not affect prompt size and token consumption.
 """
 from __future__ import annotations
 
@@ -19,16 +19,16 @@ logger = logging.getLogger(__name__)
 
 class OptimizationReport:
 
-    # Поля с большими массивами данных. В текстовом отчёте заменяются
-    # на строку-сводку «<N элементов>». Полные данные сохраняются
-    # в CSV-файлах через save_round().
+    # Fields with large data arrays. In the text report they are replaced
+    # with a summary string "<N items>". Full data is saved
+    # to CSV files via save_round().
     _SKIP_LIST_FIELDS = frozenset({
         "trades", "train_trades", "test_trades",
         "fold_results",
         "rejected_fingerprints", "rejected_specs",
     })
 
-    # Поля с длинным текстом, которые обрезаются до _MAX_TEXT_LEN.
+    # Fields with long text that are truncated to _MAX_TEXT_LEN.
     _TRUNCATE_FIELDS = frozenset({
         "reasoning",
     })
@@ -47,42 +47,42 @@ class OptimizationReport:
 
         self._append(
             "=" * 100 + "\n"
-            f"ОПТИМИЗАЦИЯ {symbol}\n"
+            f"OPTIMIZATION {symbol}\n"
             f"UTC: {datetime.now(timezone.utc).isoformat(timespec='seconds')}\n"
-            f"Файл отчёта: {self.path}\n"
+            f"Report file: {self.path}\n"
             + "=" * 100 + "\n\n"
         )
 
     def _append(self, text: str) -> None:
-        # Ошибка записи отчёта НИКОГДА не должна ронять оптимизацию.
+        # A report write error must NEVER crash the optimization.
         try:
             with self.path.open("a", encoding="utf-8") as f:
                 f.write(text)
         except Exception:
-            logger.exception("Не удалось записать отчёт: %s", self.path)
+            logger.exception("Failed to write report: %s", self.path)
 
     def line(self, message: str) -> None:
-        """Одна строка прогресса (то, что сейчас уходит в лог)."""
+        """One progress line (what currently goes to the log)."""
         stamp = datetime.now(timezone.utc).strftime("%H:%M:%S")
         self._append(f"[{stamp}] {message}\n")
 
     def _sanitize(self, data: Any) -> Any:
-        """Рекурсивно удаляет тяжёлые поля из данных для отчёта.
+        """Recursively removes heavy fields from data for the report.
 
-        - Списки сделок и результатов окон заменяются на счётчик.
-        - Длинные тексты (reasoning) обрезаются.
-        - Остальные данные проходят без изменений.
+        - Trade lists and window results are replaced with a counter.
+        - Long texts (reasoning) are truncated.
+        - Other data passes through unchanged.
         """
         if isinstance(data, dict):
             result = {}
             for key, value in data.items():
                 if key in self._SKIP_LIST_FIELDS and isinstance(value, list):
-                    result[key] = f"<{len(value)} элементов — полные данные в CSV>"
+                    result[key] = f"<{len(value)} items — full data in CSV>"
                 elif (key in self._TRUNCATE_FIELDS
                       and isinstance(value, str)
                       and len(value) > self._MAX_TEXT_LEN):
                     result[key] = (value[:self._MAX_TEXT_LEN]
-                                   + f"... (обрезано, всего {len(value)} символов)")
+                                   + f"... (truncated, {len(value)} chars total)")
                 else:
                     result[key] = self._sanitize(value)
             return result
@@ -92,17 +92,17 @@ class OptimizationReport:
 
 
     def section(self, title: str, data: Any) -> None:
-        """Структурированный блок: spec, метрики, ответ AI и т.д.
+        """Structured block: spec, metrics, AI response, etc.
 
-        Данные проходят через _sanitize(): тяжёлые массивы (сделки,
-        результаты окон) заменяются на счётчики, длинные тексты обрезаются.
+        Data passes through _sanitize(): heavy arrays (trades, window
+        results) are replaced with counters, long texts are truncated.
         """
         stamp = datetime.now(timezone.utc).strftime("%H:%M:%S")
         try:
             clean = self._sanitize(data)
             body = json.dumps(clean, ensure_ascii=False, indent=2, default=str)
         except Exception as exc:
-            body = f"<не удалось сериализовать: {exc}>\n{data!r}"
+            body = f"<failed to serialize: {exc}>\n{data!r}"
 
         self._append(
             f"\n{'-' * 100}\n"

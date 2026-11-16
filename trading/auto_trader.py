@@ -1,20 +1,20 @@
 """
-Главный цикл автоматической торговли.
+Main auto-trading loop.
 
-Управляет фоновыми потоками по каждой монете:
-- мониторинг новых свечей (15m)
-- детектирование сигналов по strategy_spec
-- открытие позиций с контролем лимитов
-- мониторинг открытых позиций и детектирование закрытий
-- контроль дневных и месячных лимитов убытков
-- запуск оптимизации стратегии при месячном лимите
-- обработка ошибок сети и баланса
+Manages background threads for each coin:
+- monitoring new candles (15m)
+- detecting signals based on strategy_spec
+- opening positions with limit controls
+- monitoring open positions and detecting closures
+- controlling daily and monthly loss limits
+- triggering strategy optimization on monthly limit
+- handling network and balance errors
 
-Лимиты:
-- Максимум 1 одновременно открытая позиция на монету
-- При дневном лимите убытка — закрыть позиции, остановить торговлю, ждать подтверждения
-- При месячном лимите убытка — приостановить торговлю, запустить оптимизацию,
-  после её завершения возобновить торговлю автоматически
+Limits:
+- Maximum 1 simultaneously open position per coin
+- On daily loss limit — close positions, stop trading, wait for confirmation
+- On monthly loss limit — pause trading, run optimization,
+  automatically resume trading after completion
 """
 import math
 import json
@@ -36,44 +36,44 @@ from ui.auto_mode import AutoModeState
 
 logger = logging.getLogger(__name__)
 
-# Глобальный реестр активных автотрейдеров по монетам
+# Global registry of active auto-traders by coin
 _active_traders: Dict[str, "AutoTraderSymbol"] = {}
 _active_traders_lock = threading.Lock()
 
 MAX_POSITIONS_PER_SYMBOL = 1
-# Лимит подряд идущих НЕ-сетевых исключений (баги в коде и т.п.),
-# после которого трейдер останавливается сам.
-# Сетевые сбои (ConnectionError) НЕ учитываются в этом счётчике и
-# никогда не останавливают торговлю автоматически.
+# Limit of consecutive NON-network exceptions (code bugs, etc.)
+# after which the trader stops itself.
+# Network failures (ConnectionError) are NOT counted in this counter and
+# never stop trading automatically.
 NETWORK_RETRY_LIMIT = 60
 
-# Дефолты для auto-sanitize strategy_spec.
-# Применяются только если поле ОТСУТСТВУЕТ или равно None.
-DEFAULT_TRAILING_ATR_MULT = 2.0        # ATR-множитель трейлинг-стопа
-DEFAULT_MAX_HOLD_CANDLES = 48          # 48 × 15m = 12 часов
+# Defaults for auto-sanitize strategy_spec.
+# Applied only if the field is MISSING or None.
+DEFAULT_TRAILING_ATR_MULT = 2.0        # ATR multiplier for trailing stop
+DEFAULT_MAX_HOLD_CANDLES = 48          # 48 × 15m = 12 hours
 
-# Максимальный разрыв между сохранением и загрузкой risk_controls.
-# Если приложение было остановлено дольше этого времени, состояние
-# сбрасывается: cooldown истёк бы сам, а «серия убытков» недельной
-# давности — уже не серия. 24 часа = 96 свечей 15m.
+# Maximum gap between saving and loading risk_controls.
+# If the application was stopped longer than this, the state is reset:
+# cooldown would have expired anyway, and a "loss streak" from a week ago
+# is no longer a streak. 24 hours = 96 candles of 15m.
 RISK_CONTROLS_MAX_STALENESS_HOURS = 24
 
-# Минимальный интервал между полными перезагрузками истории свечей.
-# Цикл автоторговли крутится чаще (раз в 15 сек) ради быстрого мониторинга
-# позиций, но полная выгрузка 15m+1h истории на каждой итерации упирается
-# в rate limit Bybit. Данные обновляются по свечам (15m), поэтому
-# перезагружать их чаще, чем раз в несколько минут, смысла нет.
-DATA_FETCH_MIN_INTERVAL_SEC = 240  # 4 минуты
+# Minimum interval between full candle history reloads.
+# The auto-trading cycle runs more often (every 15 sec) for fast position
+# monitoring, but a full 15m+1h history download on every iteration hits
+# Bybit rate limits. Data updates by candles (15m), so reloading them more
+# often than every few minutes makes no sense.
+DATA_FETCH_MIN_INTERVAL_SEC = 240  # 4 minutes
 
 
 def is_auto_trading_running(symbol: Optional[str] = None) -> bool:
     """
-    Проверяет, запущена ли автоторговля.
+    Checks if auto-trading is running.
     
-    Если передан символ — проверяет по конкретной монете.
-    Иначе — запущена ли хотя бы одна.
+    If a symbol is provided, checks the specific coin.
+    Otherwise, checks if at least one is running.
     
-    Используется для защиты от одновременного запуска с авторежимом.
+    Used to prevent simultaneous launch with auto mode.
     """
     with _active_traders_lock:
         if symbol is None:
@@ -84,19 +84,19 @@ def is_auto_trading_running(symbol: Optional[str] = None) -> bool:
 
 
 def get_all_states() -> Dict[str, Dict]:
-    """Возвращает состояния всех автотрейдеров (для UI)."""
+    """Returns states of all auto-traders (for UI)."""
     with _active_traders_lock:
         return {
             symbol: trader.get_state()
             for symbol, trader in _active_traders.items()
         }
 
-# Файл для автовосстановления трейдеров после перезапуска
+# File for auto-restoring traders after restart
 _ACTIVE_TRADERS_FILE = config.DATA_DIR / "auto_trading" / "active_traders.json"
 
 
 def _save_active_trader(symbol: str, cfg: AutoTraderConfig) -> None:
-    """Сохраняет конфигурацию запущенного трейдера для автовосстановления."""
+    """Saves the configuration of a running trader for auto-restore."""
     try:
         _ACTIVE_TRADERS_FILE.parent.mkdir(parents=True, exist_ok=True)
         data = {}
@@ -126,11 +126,11 @@ def _save_active_trader(symbol: str, cfg: AutoTraderConfig) -> None:
             json.dump(data, f, ensure_ascii=False, indent=2)
         os.replace(tmp, _ACTIVE_TRADERS_FILE)
     except Exception:
-        logger.exception(f"[{symbol}] Не удалось сохранить активного трейдера")
+        logger.exception(f"[{symbol}] Failed to save active trader")
 
 
 def _remove_active_trader(symbol: str) -> None:
-    """Удаляет трейдера из файла автовосстановления."""
+    """Removes the trader from the auto-restore file."""
     try:
         if not _ACTIVE_TRADERS_FILE.exists():
             return
@@ -144,23 +144,23 @@ def _remove_active_trader(symbol: str) -> None:
             json.dump(data, f, ensure_ascii=False, indent=2)
         os.replace(tmp, _ACTIVE_TRADERS_FILE)
     except Exception:
-        logger.exception(f"[{symbol}] Не удалось удалить трейдера из файла")
+        logger.exception(f"[{symbol}] Failed to remove trader from file")
 
 
 def _load_active_traders() -> Dict[str, dict]:
-    """Загружает список трейдеров для автовосстановления."""
+    """Loads the list of traders for auto-restore."""
     if not _ACTIVE_TRADERS_FILE.exists():
         return {}
     try:
         with open(_ACTIVE_TRADERS_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     except (json.JSONDecodeError, OSError):
-        logger.warning("Не удалось прочитать файл активных трейдеров")
+        logger.warning("Failed to read active traders file")
         return {}
 
 
 class AutoTraderConfig:
-    """Конфигурация автоторговли для одной монеты."""
+    """Auto-trading configuration for a single coin."""
     
     def __init__(
         self,
@@ -193,7 +193,7 @@ class AutoTraderConfig:
 
 class AutoTraderSymbol:
     """
-    Автотрейдер для одной монеты. Работает в собственном фоновом потоке.
+    Auto-trader for a single coin. Runs in its own background thread.
     """
     
     def __init__(
@@ -221,14 +221,14 @@ class AutoTraderSymbol:
 
         self.symbol = cfg.symbol
 
-        # Выделенный капитал монеты
+        # Allocated capital for the coin
         self.allocated_capital = total_capital_usdt * (cfg.capital_share_pct / 100.0)
 
-        # Taker-ставка (в процентах). Дефолт — стандартная для Bybit
-        # linear perpetuals, перезаписывается после get_fee_rates().
+        # Taker fee rate (in percent). Default is standard for Bybit
+        # linear perpetuals, overwritten after get_fee_rates().
         self._taker_fee_pct: float = 0.055
 
-        # Компоненты
+        # Components
         self.signal_detector = SignalDetector()
         self.position_manager = PositionManager(
             executor, self.symbol, cfg.category,
@@ -242,99 +242,98 @@ class AutoTraderSymbol:
         )
         self.trade_logger = TradeLogger(self.symbol)
 
-        # Состояние
+        # State
         self.is_running = False
         self.is_optimizing = False
         self.consecutive_network_errors = 0
         self._non_network_errors = 0
         self.last_processed_candle_time = None
-        self.status_message = "Инициализация..."
+        self.status_message = "Initializing..."
         self.log_lines: List[str] = []
         self._thread: Optional[threading.Thread] = None
 
-        # Идентификаторы уже зачтённых записей Closed-PnL
+        # IDs of already consumed Closed-PnL records
         self._consumed_closed_pnl_ids: set = set()
 
-        # --- risk_controls (пауза после серий убытков) ---
+        # --- risk_controls (pause after loss streaks) ---
         self._consecutive_losses = 0
         self._recent_loss_flags: List[int] = []
-        self._cooldown_remaining = 0  # сколько свечей ещё пауза
+        self._cooldown_remaining = 0  # how many candles remain paused
         
-        # --- HEARTBEAT для UI ---
+        # --- HEARTBEAT for UI ---
         self.last_iteration_utc: Optional[datetime] = None
         self.last_candle_time = None
         self.last_price: Optional[float] = None
         self.last_indicators_summary = ""
         self.candles_processed = 0
 
-        # Кэш последних успешно загруженных индикаторов
+        # Cache of last successfully loaded indicators
         self._cached_indicators: Optional[Dict] = None
         self._cached_prev_indicators: Optional[Dict] = None
         self._cached_candle_time = None
         self._cached_at_utc: Optional[datetime] = None
 
-        # Время последней сетевой выгрузки истории (для throttle)
+        # Time of the last network history download (for throttling)
         self._last_data_fetch_utc: Optional[datetime] = None
 
-        # --- Персистентное состояние позиций ---
-        # Файл переживает перезапуск приложения: на старте мы восстанавливаем
-        # список открытых позиций, чтобы отличить «наши» позиции от внешних
-        # (orphan), а также чтобы после сбоя связи догнать закрытия.
+        # --- Persistent position state ---
+        # The file survives application restart: on startup we restore
+        # the list of open positions to distinguish "our" positions from external
+        # (orphan) ones, and also to catch up on closures after connection failure.
         self._state_dir = config.DATA_DIR / "auto_trading" / "positions"
         self._state_path = self._state_dir / f"{self.symbol}.json"
 
-        # --- Отслеживание лимитных ордеров ---
-        # Храним активные лимитные ордера для мониторинга филла.
-        # Формат: [{ "order_id", "direction", "qty", "price", "side_spec",
+        # --- Limit order tracking ---
+        # Store active limit orders for fill monitoring.
+        # Format: [{ "order_id", "direction", "qty", "price", "side_spec",
         #            "reasons", "indicators", "candle_ts", "placed_at" }]
         self._pending_limit_orders: List[Dict] = []
 
-        # Загружаем сохранённое состояние ДО первого _loop_iteration.
+        # Load saved state BEFORE the first _loop_iteration.
         self._load_state()
     
     # ----------------------------------------------------------------
-    # Управление жизненным циклом
+    # Lifecycle management
     # ----------------------------------------------------------------
     
     def start(self):
         """
-        Запускает фоновый поток торговли.
+        Starts the background trading thread.
 
         Returns:
-            True — трейдер реально запущен.
-            False — старт отклонён (уже запущен / авторежим / настройки
-                    не позволяют открыть позицию).
+            True — trader actually started.
+            False — start rejected (already running / auto mode /
+                    settings do not allow opening a position).
         """
         if self.is_running:
             return False
 
-        # Защита от одновременного запуска с авторежимом
+        # Protection against simultaneous launch with auto mode
         auto_state = AutoModeState.get_state(self.symbol)
         if auto_state and auto_state.get("is_running"):
             self.notify_fn(
-                f"[{self.symbol}] Невозможно запустить автоторговлю: "
-                "уже включён авторежим.",
+                f"[{self.symbol}] Cannot start auto-trading: "
+                "auto mode is already enabled.",
                 "warning",
             )
             return False
 
-        # Санитизация strategy_spec: заполняем недостающие поля
-        # в management безопасными дефолтами (max_hold_candles, а при
-        # отсутствии любого сопровождения — и trailing_atr_mult).
-        # Делается ДО запуска цикла, чтобы живая торговля сразу
-        # работала с полной спекой.
+        # Sanitize strategy_spec: fill missing fields in management with safe
+        # defaults (max_hold_candles, and if no management at all — trailing_atr_mult).
+        # Done BEFORE starting the loop so live trading immediately works
+        # with the full spec.
         try:
             self._sanitize_strategy_spec()
         except Exception:
             logger.exception(
-                f"[{self.symbol}] Ошибка санитизации strategy_spec"
+                f"[{self.symbol}] Error sanitizing strategy_spec"
             )
-            # Не блокируем запуск из-за неудачи санитизации.
+            # Do not block startup due to sanitization failure.
         
-        # Пред-проверка настроек: пробуем ли мы вообще открыть сделку,
-        # которая пройдёт по минимуму биржи. Делаем это ДО запуска цикла.
-        # Если настройки не позволяют открыть позицию — отказываемся
-        # стартовать, а не крутим цикл впустую (см. SOLUSDT в логах).
+        # Pre-check settings: can we even open a trade that passes
+        # the exchange minimum. Do this BEFORE starting the loop.
+        # If settings do not allow opening a position — refuse to start
+        # instead of spinning the loop in vain (see SOLUSDT in logs).
         try:
             ok, price = self.executor.get_ticker_price(self.symbol)
             if ok and price:
@@ -346,53 +345,53 @@ class AutoTraderSymbol:
                     entry_price=price,
                 )
                 if not valid:
-                    msg = warning or "Настройки не позволяют открыть позицию."
+                    msg = warning or "Settings do not allow opening a position."
                     self._log_event("CONFIG_REJECT", msg)
                     self._notify(
-                        f"[{self.symbol}] Автоторговля НЕ запущена: {msg}",
+                        f"[{self.symbol}] Auto-trading NOT started: {msg}",
                         "negative",
                     )
-                    self.status_message = f"Отказ старта: {msg}"
+                    self.status_message = f"Start rejected: {msg}"
                     return False
         except Exception:
-            logger.exception(f"[{self.symbol}] Ошибка пред-проверки настроек")
+            logger.exception(f"[{self.symbol}] Pre-check settings error")
 
         self.is_running = True
-        # Сохраняем для автовосстановления после перезапуска
+        # Save for auto-restore after restart
         _save_active_trader(self.symbol, self.cfg)
         self._thread = threading.Thread(target=self._run_loop, daemon=True)
         self._thread.start()
 
-        self._log_event("START", f"Автоторговля запущена для {self.symbol}")
-        self._notify(f"Автоторговля {self.symbol} запущена", "positive")
+        self._log_event("START", f"Auto-trading started for {self.symbol}")
+        self._notify(f"Auto-trading {self.symbol} started", "positive")
         return True
     
     def stop(self, close_positions: bool = False, reason: str = "manual"):
-        """Останавливает торговлю."""
+        """Stops trading."""
         self.is_running = False
-        self.status_message = f"Остановлено ({reason})"
+        self.status_message = f"Stopped ({reason})"
         
         if close_positions:
             self._close_all_positions(reason=f"stop_{reason}")
         
-        self._log_event("STOP", f"Автоторговля остановлена: {reason}")
-        self._notify(f"Автоторговля {self.symbol} остановлена", "warning")
+        self._log_event("STOP", f"Auto-trading stopped: {reason}")
+        self._notify(f"Auto-trading {self.symbol} stopped", "warning")
         
         with _active_traders_lock:
             _active_traders.pop(self.symbol, None)
         
-        # Удаляем из файла автовосстановления
+        # Remove from auto-restore file
         _remove_active_trader(self.symbol)
     
     # ----------------------------------------------------------------
-    # Главный цикл
+    # Main loop
     # ----------------------------------------------------------------
     
     def _run_loop(self):
-        """Основной фоновый цикл торговли."""
-        logger.info(f"[{self.symbol}] Поток автоторговли запущен")
+        """Main background trading loop."""
+        logger.info(f"[{self.symbol}] Auto-trading thread started")
 
-        # Инициализация плеча и режима маржи
+        # Initialize leverage and margin mode
         if not self._setup_leverage():
             self.stop(reason="leverage_setup_failed")
             return
@@ -402,23 +401,22 @@ class AutoTraderSymbol:
                 self._loop_iteration()
 
             except ConnectionError as e:
-                # СЕТЕВОЙ СБОЙ. НИКОГДА не останавливаем торговлю
-                # автоматически — только сам пользователь может это сделать
-                # кнопкой. Ждём восстановления связи и пробуем снова.
+                # NETWORK FAILURE. NEVER stop trading automatically —
+                # only the user can do this via button. Wait for connection
+                # restoration and try again.
                 #
-                # Экспоненциальный backoff с потолком 300 сек:
+                # Exponential backoff with 300 sec ceiling:
                 # 15 → 30 → 60 → 120 → 240 → 300 → 300 → ...
-                # Так не бомбим биржу запросами при долгом сбое.
+                # This way we do not spam the exchange during long outages.
                 self.consecutive_network_errors += 1
-                # Сетевой сбой — не признак бага в коде. Сбрасываем
-                # счётчик «прочих» ошибок, чтобы трейдер не остановился
-                # из-за чередования: одна кодовая ошибка → пропала сеть →
-                # ещё ошибка → ...
+                # Network failure is not a code bug. Reset the "other" error
+                # counter so the trader does not stop due to alternation:
+                # one code error → network gone → another error → ...
                 self._non_network_errors = 0
                 self._log_event(
                     "NETWORK",
-                    f"Ошибка сети #{self.consecutive_network_errors}: {e}. "
-                    "Торговля продолжается, ждём восстановления связи.",
+                    f"Network error #{self.consecutive_network_errors}: {e}. "
+                    "Trading continues, waiting for connection restoration.",
                 )
                 backoff = min(
                     15 * (2 ** min(self.consecutive_network_errors - 1, 4)),
@@ -428,21 +426,21 @@ class AutoTraderSymbol:
                 continue
 
             except Exception as e:
-                # ПРОЧИЕ ОШИБКИ (баги в коде, неожиданные состояния).
-                # Считаем отдельным счётчиком и останавливаемся только
-                # при исчерпании лимита, чтобы не зациклиться на битом коде.
-                logger.exception(f"[{self.symbol}] Ошибка в цикле автоторговли")
+                # OTHER ERRORS (code bugs, unexpected states).
+                # Count separately and stop only when the limit is exhausted,
+                # to avoid looping on broken code.
+                logger.exception(f"[{self.symbol}] Error in auto-trading loop")
                 self._non_network_errors += 1
                 self._log_event(
                     "ERROR",
-                    f"Ошибка цикла ({self._non_network_errors}/"
+                    f"Loop error ({self._non_network_errors}/"
                     f"{NETWORK_RETRY_LIMIT}): {e}",
                 )
 
                 if self._non_network_errors >= NETWORK_RETRY_LIMIT:
                     self._notify(
-                        f"[{self.symbol}] {NETWORK_RETRY_LIMIT} не-сетевых "
-                        "ошибок подряд. Торговля остановлена.",
+                        f"[{self.symbol}] {NETWORK_RETRY_LIMIT} non-network "
+                        "errors in a row. Trading stopped.",
                         "negative",
                     )
                     self.stop(close_positions=False, reason="repeated_errors")
@@ -452,30 +450,30 @@ class AutoTraderSymbol:
                 continue
 
             else:
-                # Успешная итерация — сбрасываем оба счётчика. После
-                # длительного сбоя связи следующая успешная итерация
-                # вызовет _monitor_positions → _detect_closed_positions,
-                # и все сделки, закрытые пока не было сети, будут
-                # залогированы (Closed-PnL хранится на бирже до 7 дней).
+                # Successful iteration — reset both counters. After a long
+                # connection outage, the next successful iteration will call
+                # _monitor_positions → _detect_closed_positions, and all
+                # trades closed while offline will be logged (Closed-PnL
+                # is stored on the exchange for up to 7 days).
                 self.consecutive_network_errors = 0
                 self._non_network_errors = 0
 
-            time.sleep(15)  # Пауза между итерациями
+            time.sleep(15)  # Pause between iterations
 
-        logger.info(f"[{self.symbol}] Поток автоторговли завершён")
+        logger.info(f"[{self.symbol}] Auto-trading thread finished")
     
     def _setup_leverage(self) -> bool:
-        """Устанавливает плечо и режим маржи для монеты."""
-        self.status_message = "Настройка плеча..."
+        """Sets leverage and margin mode for the coin."""
+        self.status_message = "Setting leverage..."
         
         success, err = self.executor.set_leverage(self.symbol, self.cfg.leverage)
         if not success:
-            self._log_event("ERROR", f"Не удалось установить плечо: {err}")
-            self._notify(f"[{self.symbol}] Не удалось установить плечо", "negative")
+            self._log_event("ERROR", f"Failed to set leverage: {err}")
+            self._notify(f"[{self.symbol}] Failed to set leverage", "negative")
             return False
 
-        # Taker-ставка комиссии — нужна и для вычитания при закрытии,
-        # и для оптимизации (backtest должен считать с той же ставкой).
+        # Taker fee rate — needed both for deduction on close and for
+        # optimization (backtest should use the same rate).
         try:
             ok, rates = self.executor.get_fee_rates(self.symbol)
             if ok and rates:
@@ -483,43 +481,43 @@ class AutoTraderSymbol:
                 self.position_manager.set_taker_fee_pct(self._taker_fee_pct)
                 self._log_event(
                     "FEE_RATE",
-                    f"Taker-комиссия {self.symbol}: "
+                    f"Taker fee {self.symbol}: "
                     f"{self._taker_fee_pct:.4f}%",
                 )
             else:
                 self._log_event(
                     "FEE_RATE",
-                    f"Не удалось получить taker-ставку ({rates}). "
-                    f"Использую дефолт {self._taker_fee_pct:.4f}%",
+                    f"Failed to get taker rate ({rates}). "
+                    f"Using default {self._taker_fee_pct:.4f}%",
                 )
         except Exception:
             logger.exception(
-                f"[{self.symbol}] Ошибка получения taker-ставки, "
-                f"использую {self._taker_fee_pct:.4f}%"
+                f"[{self.symbol}] Error getting taker rate, "
+                f"using {self._taker_fee_pct:.4f}%"
             )
 
         return True
 
     def _sanitize_strategy_spec(self) -> bool:
         """
-        Дополняет strategy_spec безопасными дефолтами перед запуском торговли.
+        Fills strategy_spec with safe defaults before starting trading.
 
-        Что чиним (только если поле ОТСУТСТВУЕТ или None):
+        What we fix (only if the field is MISSING or None):
           - management.max_hold_candles → DEFAULT_MAX_HOLD_CANDLES
-            Защита от зависших сделок. Не зависит от монеты,
-            зависит от таймфрейма (15m × 48 = 12 часов).
+            Protection against stuck trades. Does not depend on the coin,
+            depends on the timeframe (15m × 48 = 12 hours).
 
           - management.trailing_atr_mult → DEFAULT_TRAILING_ATR_MULT
-            ТОЛЬКО если в management нет ни одного другого механизма
-            сопровождения (breakeven / exit_on_*). Если модель осознанно
-            выбрала move_to_breakeven_at_tp_pct (случай HYPEUSDT) —
-            trailing не навязываем, это её решение.
+            ONLY if management has no other management mechanism
+            (breakeven / exit_on_*). If the model consciously chose
+            move_to_breakeven_at_tp_pct (HYPEUSDT case) — we do not force
+            trailing, that's its decision.
 
-        НЕ перезаписывает существующие значения. НЕ трогает другие поля.
+        Does NOT overwrite existing values. Does NOT touch other fields.
 
         Returns:
-            True, если spec был изменён и сохранён.
-            False, если изменений не потребовалось.
+            True if spec was changed and saved.
+            False if no changes were needed.
         """
         try:
             cm = self.memory.get(self.symbol)
@@ -541,15 +539,15 @@ class AutoTraderSymbol:
                     mgmt = {}
                     side["management"] = mgmt
 
-                # --- 1. max_hold_candles: добавляем ВСЕГДА, если не задано ---
-                # Это защита от зависших сделок, не стратегия.
-                # Живёт вне зависимости от монеты.
+                # --- 1. max_hold_candles: add ALWAYS if not set ---
+                # This is protection against stuck trades, not strategy.
+                # Lives regardless of the coin.
                 #
-                # ВАЖНО: запоминаем, был ли тайм-стоп задан ОСОЗНАННО
-                # (до санитизации). Если стратегия сама установила
-                # max_hold_candles — это уже механизм выхода, и навязывать
-                # трейлинг поверх него нельзя (сломает свинг-стратегии,
-                # где трейлинг убивает сделки на откатах).
+                # IMPORTANT: remember if time-stop was set CONSCIOUSLY
+                # (before sanitization). If the strategy itself set
+                # max_hold_candles — that's already an exit mechanism, and
+                # forcing trailing on top of it would break swing strategies
+                # where trailing kills trades on pullbacks.
                 had_explicit_max_hold = mgmt.get("max_hold_candles") is not None
 
                 if mgmt.get("max_hold_candles") is None:
@@ -558,10 +556,10 @@ class AutoTraderSymbol:
                         f"{side_key}.management.max_hold_candles"
                     )
 
-                # --- 2. trailing_atr_mult: только если нет другого ---
-                #     механизма сопровождения ---
-                # Осознанно заданный max_hold_candles считается механизмом
-                # выхода — в этом случае трейлинг не навязываем.
+                # --- 2. trailing_atr_mult: only if there's no other ---
+                #     management mechanism ---
+                # Consciously set max_hold_candles counts as an exit
+                # mechanism — in this case we do not force trailing.
                 has_any_management = had_explicit_max_hold or any(
                     mgmt.get(key) not in (None, False, 0)
                     for key in (
@@ -599,16 +597,16 @@ class AutoTraderSymbol:
             cm.save()
 
             logger.info(
-                f"[{self.symbol}] strategy_spec дополнен: "
+                f"[{self.symbol}] strategy_spec filled: "
                 f"{', '.join(changed_fields)}"
             )
             self._log_event(
                 "SPEC_SANITIZED",
-                f"strategy_spec дополнен дефолтами: "
+                f"strategy_spec filled with defaults: "
                 f"{', '.join(changed_fields)}",
             )
             self._notify(
-                f"[{self.symbol}] В strategy_spec добавлены дефолты: "
+                f"[{self.symbol}] Defaults added to strategy_spec: "
                 f"{', '.join(changed_fields)}",
                 "warning",
             )
@@ -616,23 +614,23 @@ class AutoTraderSymbol:
 
         except Exception:
             logger.exception(
-                f"[{self.symbol}] Ошибка санитизации strategy_spec"
+                f"[{self.symbol}] Error sanitizing strategy_spec"
             )
             return False
     
     def _loop_iteration(self):
-        """Одна итерация основного цикла."""
+        """One iteration of the main loop."""
         if self.is_optimizing:
-            self.status_message = "Оптимизация стратегии..."
+            self.status_message = "Optimizing strategy..."
             self._monitor_positions()
             return
 
-        self.status_message = "Мониторинг рынка..."
+        self.status_message = "Monitoring market..."
 
-        # 1. Загружаем свежие свечи и индикаторы — НЕ ЧАЩЕ, ЧЕМ РАЗ В N СЕКУНД.
-        #    Между загрузками используем кэш. Это критично: полная выгрузка
-        #    истории = ~10-12 запросов, и если делать её каждые 15 сек,
-        #    Bybit отвечает 10006 (rate limit).
+        # 1. Load fresh candles and indicators — NO MORE OFTEN THAN EVERY N SECONDS.
+        #    Between loads we use the cache. This is critical: a full history
+        #    download = ~10-12 requests, and if done every 15 sec, Bybit
+        #    responds with 10006 (rate limit).
         now_utc = datetime.now(timezone.utc)
         should_fetch = (
             self._last_data_fetch_utc is None
@@ -645,8 +643,8 @@ class AutoTraderSymbol:
             self._last_data_fetch_utc = now_utc
 
             if indicators is None:
-                # Пытаемся обойтись кэшем — трейдер продолжает мониторить
-                # уже открытые позиции, но новые сигналы не генерирует.
+                # Try to use cache — the trader continues monitoring
+                # already open positions but does not generate new signals.
                 cache_age = None
                 if self._cached_at_utc is not None:
                     cache_age = (now_utc - self._cached_at_utc).total_seconds()
@@ -655,36 +653,36 @@ class AutoTraderSymbol:
                     self.consecutive_network_errors += 1
                     self._log_event(
                         "NETWORK",
-                        f"Индикаторы недоступны, кэш отсутствует или устарел. "
-                        f"Ошибка {self.consecutive_network_errors}/{NETWORK_RETRY_LIMIT}",
+                        f"Indicators unavailable, cache missing or stale. "
+                        f"Error {self.consecutive_network_errors}/{NETWORK_RETRY_LIMIT}",
                     )
-                    raise ConnectionError("Не удалось загрузить индикаторы")
+                    raise ConnectionError("Failed to load indicators")
 
                 self.consecutive_network_errors += 1
                 self._log_event(
                     "NETWORK",
-                    f"Индикаторы недоступны, использую кэш ({int(cache_age)}с). "
-                    f"Ошибка {self.consecutive_network_errors}/{NETWORK_RETRY_LIMIT}",
+                    f"Indicators unavailable, using cache ({int(cache_age)}s). "
+                    f"Error {self.consecutive_network_errors}/{NETWORK_RETRY_LIMIT}",
                 )
                 indicators = self._cached_indicators
                 prev_indicators = self._cached_prev_indicators
                 candle_time = self._cached_candle_time
             else:
-                # Сброс счётчика при успешной загрузке
+                # Reset counter on successful load
                 self.consecutive_network_errors = 0
                 self._cached_indicators = indicators
                 self._cached_prev_indicators = prev_indicators
                 self._cached_candle_time = candle_time
                 self._cached_at_utc = now_utc
         else:
-            # Отдаём кэш без сетевого запроса.
+            # Return cache without network request.
             indicators = self._cached_indicators
             prev_indicators = self._cached_prev_indicators
             candle_time = self._cached_candle_time
 
             if indicators is None:
-                # Первой загрузки ещё не было — пропускаем итерацию.
-                # Это может быть только на самом старте.
+                # First load has not happened yet — skip iteration.
+                # This can only happen at the very start.
                 time.sleep(5)
                 return
         
@@ -703,16 +701,16 @@ class AutoTraderSymbol:
                     pass
         self.last_indicators_summary = ", ".join(parts)
 
-        # 2. Мониторим открытые позиции (сопровождение + детект закрытий)
+        # 2. Monitor open positions (management + detect closures)
         self._monitor_positions(indicators=indicators)
 
-        # 2.5. Мониторим лимитные ордера
+        # 2.5. Monitor limit orders
         self._monitor_pending_limit_orders()    
 
-        # 3. Проверяем, не наступил ли новый день/месяц
+        # 3. Check if a new day/month has started
         self.risk_manager._check_rollover()
         
-        # 4. ПРОВЕРЯЕМ РИСК-ЛИМИТЫ ВСЕГДА (даже если позиций нет)
+        # 4. CHECK RISK LIMITS ALWAYS (even if no positions)
         unrealized = (
             self._get_unrealized_pnl()
             if self.position_manager.positions else 0.0
@@ -722,36 +720,36 @@ class AutoTraderSymbol:
             self._handle_daily_stop()
             return
 
-        # 5. Проверяем месячный лимит (запуск оптимизации)
+        # 5. Check monthly limit (trigger optimization)
         if self.risk_manager.should_optimize_monthly():
             self._trigger_optimization()
             return
 
-        # 6. Обрабатываем сигналы только на новой закрытой свече.
-        #    CANDLE-события больше не пишем в events: они дублировали
-        #    SIGNAL_CHECK на каждой свече и засоряли лог.
+        # 6. Process signals only on a new closed candle.
+        #    CANDLE events are no longer written to events: they duplicated
+        #    SIGNAL_CHECK on every candle and polluted the log.
         if candle_time != self.last_processed_candle_time:
             self.last_processed_candle_time = candle_time
             self.candles_processed += 1
             self._process_signals(indicators, prev_indicators)
     
     # ----------------------------------------------------------------
-    # Индикаторы
+    # Indicators
     # ----------------------------------------------------------------
     
     def _fetch_indicators(self):
         """
-        Загружает свежие свечи и рассчитывает индикаторы.
+        Loads fresh candles and calculates indicators.
 
-        Возвращает:
-            (текущие индикаторы, время последней свечи, предыдущие индикаторы)
-            или (None, None, None) при ошибке
+        Returns:
+            (current indicators, last candle time, previous indicators)
+            or (None, None, None) on error
 
-        Грузим только 15m-историю за 5 дней:
-          - индикаторам нужно максимум ~100 свечей (SMA50, avg_volume_96);
-          - daily-пивоты требуют минимум 2-3 полных дня;
-          - 1h-признаки считаются ресэмплингом внутри _build_indicator_frame,
-            отдельная выгрузка 1h НЕ НУЖНА и только съедает rate limit.
+        Load only 15m history for 5 days:
+          - indicators need at most ~100 candles (SMA50, avg_volume_96);
+          - daily pivots require at least 2-3 full days;
+          - 1h features are computed by resampling inside _build_indicator_frame,
+            a separate 1h download is NOT needed and only eats rate limit.
         """
         try:
             now = datetime.now(timezone.utc)
@@ -774,7 +772,7 @@ class AutoTraderSymbol:
             if len(df) < 2:
                 return None, None, None
 
-            # Последняя свеча может быть незакрытой — используем предпоследнюю
+            # The last candle may be unclosed — use the second-to-last
             records = df.to_dict("records")
             current = records[-2]
             prev = records[-3] if len(records) >= 3 else {}
@@ -784,43 +782,42 @@ class AutoTraderSymbol:
             return current, candle_time, prev
 
         except Exception as e:
-            logger.exception(f"[{self.symbol}] Ошибка загрузки индикаторов")
-            raise ConnectionError(f"Ошибка загрузки индикаторов: {e}")
+            logger.exception(f"[{self.symbol}] Error loading indicators")
+            raise ConnectionError(f"Error loading indicators: {e}")
     
     # ----------------------------------------------------------------
-    # Сигналы и открытие позиций
+    # Signals and position opening
     # ----------------------------------------------------------------
     
     def _process_signals(self, indicators: Dict, prev_indicators: Dict):
-        """Обрабатывает торговые сигналы."""
+        """Processes trading signals."""
         cm = self.memory.get(self.symbol)
         strategy_spec = cm.get_state().get("strategy_spec")
 
         if not strategy_spec:
             self._log_event(
                 "ERROR",
-                "Нет strategy_spec для монеты. Торговля невозможна.",
+                "No strategy_spec for the coin. Trading impossible.",
             )
             self.stop(reason="no_strategy")
             return
 
-        # --- Проверка cooldown после серии убытков ---
+        # --- Check cooldown after loss streak ---
         if self._cooldown_remaining > 0:
             self._cooldown_remaining -= 1
             self._log_event(
                 "COOLDOWN",
-                f"Пауза после серии убытков. Осталось свечей: {self._cooldown_remaining}",
+                f"Pause after loss streak. Candles remaining: {self._cooldown_remaining}",
             )
-            # Персистим уменьшенное значение, чтобы рестарт
-            # не откатил cooldown назад.
+            # Persist the decremented value so restart does not roll back cooldown.
             self._save_state()
             return
 
 
-        # --- ДИАГНОСТИКА УСЛОВИЙ ВХОДА ---
-        # Логируем всё одной группой (привязанной к свече): глобальные
-        # фильтры + LONG + SHORT. Это склеивает все сигнальные события
-        # одной итерации в один блок в HTML-логе.
+        # --- ENTRY CONDITION DIAGNOSTICS ---
+        # Log everything in one group (tied to the candle): global filters
+        # + LONG + SHORT. This glues all signal events of one iteration
+        # into one block in the HTML log.
         candle_group = (
             str(self.last_candle_time)
             if self.last_candle_time is not None
@@ -841,14 +838,14 @@ class AutoTraderSymbol:
         if not signals:
             return
         
-        # Проверяем лимит открытых позиций
+        # Check open position limit
         open_count = len(self.position_manager.positions)
         available_slots = MAX_POSITIONS_PER_SYMBOL - open_count
         
         if available_slots <= 0:
             self._log_event(
                 "OPEN",
-                f"Сигнал есть, но лимит позиций ({MAX_POSITIONS_PER_SYMBOL}) достигнут. Пропуск.",
+                f"Signal exists, but position limit ({MAX_POSITIONS_PER_SYMBOL}) reached. Skipping.",
             )
             return
         
@@ -857,8 +854,8 @@ class AutoTraderSymbol:
 
     def _get_risk_controls(self) -> Dict:
         """
-        Читает risk_controls из strategy_spec.
-        Нормализует значения так же, как backtest_engine._get_risk_controls.
+        Reads risk_controls from strategy_spec.
+        Normalizes values the same way as backtest_engine._get_risk_controls.
         """
         try:
             cm = self.memory.get(self.symbol)
@@ -881,8 +878,8 @@ class AutoTraderSymbol:
 
     def _should_pause_after_loss(self, result_pct: float, controls: Dict) -> bool:
         """
-        Решает, нужно ли активировать паузу после закрытия убыточной сделки.
-        Логика идентична backtest_engine._should_pause_after_loss.
+        Decides whether to activate a pause after closing a losing trade.
+        Logic identical to backtest_engine._should_pause_after_loss.
         """
         if not controls.get("enabled"):
             return False
@@ -908,22 +905,21 @@ class AutoTraderSymbol:
         group: Optional[str] = None,
     ):
         """
-        Логирует проверку условий входа для LONG и SHORT.
+        Logs entry condition checks for LONG and SHORT.
 
-        Поддерживает обе формы спецификации:
-          - "entry": [cond, ...] — одна группа, все условия по AND;
-          - "entry_any": [[cond, ...], [cond, ...]] — OR-группы.
+        Supports both specification forms:
+          - "entry": [cond, ...] — one group, all conditions AND;
+          - "entry_any": [[cond, ...], [cond, ...]] — OR groups.
 
         Args:
-            group: ключ группы для HTML-разделителя. Обычно — timestamp
-                свечи, чтобы FILTERS + LONG + SHORT склеились в один
-                визуальный блок.
+            group: group key for the HTML separator. Usually the candle
+                timestamp, so FILTERS + LONG + SHORT glue into one visual block.
         """
         from strategy_spec import evaluate_conditions
 
         def _check_and_format(conditions: List, label: str) -> str:
             if not conditions:
-                return f"{label}: нет условий"
+                return f"{label}: no conditions"
 
             passed = []
             failed = []
@@ -995,26 +991,26 @@ class AutoTraderSymbol:
                         ("✓ " if result else "✗ ") + desc
                     )
 
-            summary = f"{label}: {len(passed)}/{len(conditions)} условий"
+            summary = f"{label}: {len(passed)}/{len(conditions)} conditions"
             if passed:
                 summary += f"\n  PASSED: {'; '.join(passed[:3])}"
                 if len(passed) > 3:
-                    summary += f" ... и ещё {len(passed) - 3}"
+                    summary += f" ... and {len(passed) - 3} more"
             if failed:
                 summary += f"\n  FAILED: {'; '.join(failed[:3])}"
                 if len(failed) > 3:
-                    summary += f" ... и ещё {len(failed) - 3}"
+                    summary += f" ... and {len(failed) - 3} more"
 
             return summary
 
-        # --- Глобальные фильтры ---
+        # --- Global filters ---
         filters = strategy_spec.get("filters") or []
         if filters:
             filters_result = evaluate_conditions(filters, indicators, prev)
             filters_summary = _check_and_format(filters, "FILTERS")
             self._log_event(
                 "SIGNAL_CHECK",
-                f"Глобальные фильтры: "
+                f"Global filters: "
                 f"{'PASSED' if filters_result else 'FAILED'}\n"
                 f"{filters_summary}",
                 group=group,
@@ -1022,7 +1018,7 @@ class AutoTraderSymbol:
             if not filters_result:
                 return
 
-        # --- LONG и SHORT ---
+        # --- LONG and SHORT ---
         for side in ("long", "short"):
             side_spec = strategy_spec.get(side) or {}
             label = side.upper()
@@ -1055,18 +1051,18 @@ class AutoTraderSymbol:
                 )
     
     def _open_position_from_signal(self, signal: Dict, indicators: Dict):
-        """Открывает позицию по сигналу."""
+        """Opens a position on a signal."""
         direction = signal["direction"]
         side_spec = signal["side_spec"]
         reasons = signal["reasons"]
         
-        # Получаем текущую цену
+        # Get current price
         success, current_price = self.executor.get_ticker_price(self.symbol)
         if not success or current_price is None:
-            self._log_event("ERROR", f"Не удалось получить цену для открытия: {current_price}")
+            self._log_event("ERROR", f"Failed to get price for opening: {current_price}")
             return
         
-        # Рассчитываем размер позиции
+        # Calculate position size
         position_value = self.allocated_capital * (self.cfg.position_size_pct / 100.0)
         
         success, qty = self.executor.calculate_position_size(
@@ -1077,21 +1073,21 @@ class AutoTraderSymbol:
         )
 
         if not success or qty is None or qty <= 0:
-            # qty-ошибка от calculate_position_size может содержать конкретную
-            # причину (например, notional < min). Пробрасываем её в лог и UI.
-            detail = qty if isinstance(qty, str) else "Не удалось рассчитать размер позиции"
+            # qty error from calculate_position_size may contain the specific
+            # reason (e.g. notional < min). Propagate it to the log and UI.
+            detail = qty if isinstance(qty, str) else "Failed to calculate position size"
             self._log_event("ORDER_TOO_SMALL", detail)
             self._notify(
-                f"[{self.symbol}] Ордер не пройдёт: {detail}",
+                f"[{self.symbol}] Order will not pass: {detail}",
                 "warning",
             )
             return
         
-        # Определяем режим входа: лимитный (мейкер) или рыночный (тейкер)
+        # Determine entry mode: limit (maker) or market (taker)
         use_limit_entry = self._should_use_limit_entry(indicators)
 
         if use_limit_entry:
-            # ЛИМИТНЫЙ ВХОД (мейкер, низкая комиссия)
+            # LIMIT ENTRY (maker, low fee)
             success, order_id_or_err, limit_price = (
                 self.position_manager.open_position_limit(
                     direction=direction,
@@ -1101,11 +1097,11 @@ class AutoTraderSymbol:
                     indicators=indicators,
                     entry_candle_ts=self.last_candle_time,
                     price_offset_ticks=0,
-                    timeout_seconds=900,  # 15 минут
+                    timeout_seconds=900,  # 15 minutes
                 )
             )
             if success:
-                # Сохраняем ордер для мониторинга
+                # Save order for monitoring
                 self._pending_limit_orders.append({
                     "order_id": order_id_or_err,
                     "direction": direction,
@@ -1124,25 +1120,25 @@ class AutoTraderSymbol:
                 )
                 self._log_event(
                     "OPEN",
-                    f"Лимитный ордер размещён: {direction.upper()} {qty} "
+                    f"Limit order placed: {direction.upper()} {qty} "
                     f"@ {limit_price} (Post-Only)",
                     group=candle_group,
                 )
                 self._save_state()
                 return
             else:
-                # Лимитный вход не удался — фоллбэк на рыночный
+                # Limit entry failed — fallback to market
                 self._log_event(
                     "WARNING",
-                    f"Лимитный вход не удался ({order_id_or_err}). "
-                    f"Переключаюсь на рыночный.",
+                    f"Limit entry failed ({order_id_or_err}). "
+                    f"Switching to market.",
                 )
                 success, current_price = self.executor.get_ticker_price(self.symbol)
                 if not success or current_price is None:
-                    self._log_event("ERROR", f"Не удалось получить цену: {current_price}")
+                    self._log_event("ERROR", f"Failed to get price: {current_price}")
                     return
 
-        # РЫНОЧНЫЙ ВХОД (тейкер, как раньше)
+        # MARKET ENTRY (taker, as before)
         success, err = self.position_manager.open_position(
             direction=direction,
             qty=qty,
@@ -1154,8 +1150,8 @@ class AutoTraderSymbol:
         )
         
         if success:
-            # Сохраняем состояние сразу после успешного открытия — чтобы
-            # при рестарте позиция была в файле и не считалась orphan.
+            # Save state immediately after successful opening — so on restart
+            # the position is in the file and not counted as orphan.
             self._save_state()
 
             candle_group = (
@@ -1165,12 +1161,12 @@ class AutoTraderSymbol:
             )
             self._log_event(
                 "OPEN",
-                f"Позиция открыта: {direction.upper()} {qty} @ {current_price:.4f}",
+                f"Position opened: {direction.upper()} {qty} @ {current_price:.4f}",
                 group=candle_group,
             )
 
-            # Проверяем, удалось ли выставить защиту.
-            # PositionManager кладёт ошибку в поле tpsl_error последней позиции.
+            # Check if protection was set successfully.
+            # PositionManager puts the error in the tpsl_error field of the last position.
             last_pos = (
                 self.position_manager.positions[-1]
                 if self.position_manager.positions else None
@@ -1180,90 +1176,90 @@ class AutoTraderSymbol:
             if tpsl_error:
                 self._log_event(
                     "TPSL_FAILED",
-                    f"TP/SL НЕ установлены для {direction.upper()} позиции: {tpsl_error}. "
-                    f"Позиция открыта БЕЗ защиты.",
+                    f"TP/SL NOT set for {direction.upper()} position: {tpsl_error}. "
+                    f"Position opened WITHOUT protection.",
                 )
                 self._notify(
-                    f"[{self.symbol}] ВНИМАНИЕ: {direction.upper()} открыта без TP/SL. "
-                    f"Проверьте позицию вручную.",
+                    f"[{self.symbol}] WARNING: {direction.upper()} opened without TP/SL. "
+                    f"Check the position manually.",
                     "negative",
                 )
             else:
                 self._notify(
-                    f"[{self.symbol}] Открыта {direction.upper()} позиция @ {current_price:.4f}",
+                    f"[{self.symbol}] Opened {direction.upper()} position @ {current_price:.4f}",
                     "positive",
                 )
         else:
-            self._log_event("ERROR", f"Не удалось открыть позицию: {err}")
+            self._log_event("ERROR", f"Failed to open position: {err}")
             
-            # Если причина — недостаток средств, останавливаем торговлю
+            # If the reason is insufficient funds, stop trading
             if err and ("insufficient" in str(err).lower() or "balance" in str(err).lower()):
                 self._notify(
-                    f"[{self.symbol}] Недостаточно средств. Торговля остановлена.",
+                    f"[{self.symbol}] Insufficient funds. Trading stopped.",
                     "negative",
                 )
-                self._log_event("INSUFFICIENT_BALANCE", "Недостаточно средств для открытия позиции")
+                self._log_event("INSUFFICIENT_BALANCE", "Insufficient funds to open position")
                 self.stop(close_positions=False, reason="insufficient_balance")
 
     def _should_use_limit_entry(self, indicators: Dict) -> bool:
         """
-        Определяет, использовать ли лимитный вход (мейкер).
+        Determines whether to use limit entry (maker).
 
-        Лимитный вход используется когда:
-        1. Стратегия не требует немедленного входа (свинг, не скальпинг).
-        2. Волатильность не экстремальная (иначе ордер не исполнится).
+        Limit entry is used when:
+        1. Strategy does not require immediate entry (swing, not scalping).
+        2. Volatility is not extreme (otherwise the order will not fill).
 
-        Для свинг-стратегий на 4H — всегда лимитный.
-        Для скальпинга на 15m — рыночный.
+        For swing strategies on 4H — always limit.
+        For scalping on 15m — market.
         """
-        # Если в спеке указан таймфрейм 4h или выше — лимитный вход
-        # Определяем по величине ATR: на 4H ATR значительно больше
+        # If the spec specifies a 4h or higher timeframe — limit entry
+        # Determine by ATR magnitude: on 4H ATR is significantly larger
         atr = indicators.get("atr_14")
         close = indicators.get("close")
         if atr and close and close > 0:
             atr_pct = (atr / close) * 100
-            # На 15m ATR обычно < 0.5%, на 4H > 1%
+            # On 15m ATR is usually < 0.5%, on 4H > 1%
             if atr_pct > 0.8:
                 return True
 
-        # По умолчанию — рыночный вход (безопаснее)
+        # Default — market entry (safer)
         return False
     
     # ----------------------------------------------------------------
-    # Мониторинг позиций
+    # Position monitoring
     # ----------------------------------------------------------------
     
     def _monitor_positions(self, indicators: Optional[Dict] = None):
         """
-        Мониторит открытые позиции:
-        0) Синхронизация с биржей (подхватывает orphan-позиции после рестарта)
-        1) Сопровождение (breakeven, trailing) — обновляет SL на бирже
-        2) Детект закрытий
+        Monitors open positions:
+        0) Synchronization with the exchange (picks up orphan positions after restart)
+        1) Management (breakeven, trailing) — updates SL on the exchange
+        2) Closure detection
         """
-        # 0) Всегда синхронизируем локальное состояние с биржей.
-        #    Это нужно, чтобы UI показывал реальное число позиций даже
-        #    после рестарта трейдера (когда локальный список пуст,
-        #    но позиции на бирже остались).
+        # 0) Always synchronize local state with the exchange.
+        #    This is needed so the UI shows the real number of positions even
+        #    after trader restart (when the local list is empty but positions
+        #    remain on the exchange).
         try:
             self.position_manager.sync_with_exchange()
         except Exception:
-            logger.exception(f"[{self.symbol}] Ошибка sync_with_exchange")
+            logger.exception(f"[{self.symbol}] sync_with_exchange error")
 
         if not self.position_manager.positions:
             return
 
-        # 1) Сопровождение открытых позиций по management-правилам
+        # 1) Manage open positions by management rules
         if indicators is not None:
             self._apply_live_management(indicators)
 
-        # 2) Синхронизация с биржей и детект закрытий
+        # 2) Synchronization with the exchange and closure detection
         self._detect_closed_positions()
 
     def _monitor_pending_limit_orders(self):
         """
-        Проверяет статус лимитных ордеров:
-        - Исполнен → завершаем открытие позиции
-        - Таймаут → отменяем ордер, пропускаем сигнал
+        Checks the status of limit orders:
+        - Filled → finalize position opening
+        - Timeout → cancel order, skip signal
         """
         if not self._pending_limit_orders:
             return
@@ -1274,19 +1270,19 @@ class AutoTraderSymbol:
         for order_info in self._pending_limit_orders:
             order_id = order_info["order_id"]
             placed_at = order_info["placed_at"]
-            timeout = 900  # 15 минут
+            timeout = 900  # 15 minutes
 
-            # Проверяем таймаут
+            # Check timeout
             elapsed = (now - placed_at).total_seconds()
             if elapsed > timeout:
                 self.executor.cancel_order(self.symbol, order_id)
                 self._log_event(
                     "ORDER_TIMEOUT",
-                    f"Лимитный ордер {order_id} не исполнен за {timeout}с. Отменён.",
+                    f"Limit order {order_id} not filled in {timeout}s. Cancelled.",
                 )
                 continue
 
-            # Проверяем статус ордера
+            # Check order status
             success, order_data = self.executor.get_order_info(self.symbol, order_id)
             if not success or order_data is None:
                 still_pending.append(order_info)
@@ -1295,7 +1291,7 @@ class AutoTraderSymbol:
             status = order_data.get("orderStatus", "")
 
             if status == "Filled":
-                # Ордер исполнен → завершаем открытие позиции
+                # Order filled → finalize position opening
                 filled_qty = float(order_data.get("cumExecQty", 0) or 0)
                 avg_price = float(order_data.get("avgPrice", 0) or 0)
 
@@ -1314,69 +1310,69 @@ class AutoTraderSymbol:
                         self._save_state()
                         self._log_event(
                             "OPEN",
-                            f"Лимитная позиция открыта: "
+                            f"Limit position opened: "
                             f"{order_info['direction'].upper()} {filled_qty} "
                             f"@ {avg_price:.4f}",
                         )
                         self._notify(
-                            f"[{self.symbol}] Лимитный вход исполнен "
+                            f"[{self.symbol}] Limit entry filled "
                             f"@ {avg_price:.4f}",
                             "positive",
                         )
                     else:
                         self._log_event(
                             "ERROR",
-                            f"Ошибка завершения лимитного входа: {err}",
+                            f"Error finalizing limit entry: {err}",
                         )
-                # Не добавляем в still_pending — ордер обработан
+                # Do not add to still_pending — order processed
 
             elif status == "Cancelled":
                 self._log_event(
                     "ORDER_CANCELLED",
-                    f"Лимитный ордер {order_id} был отменён биржей.",
+                    f"Limit order {order_id} was cancelled by the exchange.",
                 )
-                # Не добавляем в still_pending
+                # Do not add to still_pending
 
             elif status in ("New", "PartiallyFilled"):
                 still_pending.append(order_info)
 
             else:
-                # Неизвестный статус — оставляем в ожидании
+                # Unknown status — leave pending
                 still_pending.append(order_info)
 
         self._pending_limit_orders = still_pending
         
     def _apply_live_management(self, candle: Dict):
         """
-        Применяет management-правила к открытым позициям:
-        1) Сопровождение SL (breakeven, trailing) — set_trading_stop на бирже.
-        2) Мягкие выходы (time_stop, exit_on_*) — при срабатывании позиция
-           закрывается market-ордером.
+        Applies management rules to open positions:
+        1) SL management (breakeven, trailing) — set_trading_stop on the exchange.
+        2) Soft exits (time_stop, exit_on_*) — when triggered, the position
+           is closed by a market order.
 
-        Оба действия выполняются один раз на свечу.
+        Both actions are performed once per candle.
         """
         candle_ts = candle.get("timestamp")
         if candle_ts is None:
             return
 
         for position in list(self.position_manager.positions):
-            # Orphan-позиции не сопровождаем — у них нет реальных SL/TP.
+            # Do not manage orphan positions — they have no real SL/TP.
             if position.get("is_orphan"):
                 continue
 
             last_ts = position.get("_last_managed_candle_ts")
             if last_ts is not None and candle_ts <= last_ts:
-                continue  # эту свечу для этой позиции уже обработали
+                continue  # this candle for this position is already processed
 
             try:
                 self._apply_management_to_position(position, candle)
             except Exception:
                 logger.exception(
-                    f"[{self.symbol}] Ошибка сопровождения позиции "
+                    f"[{self.symbol}] Error managing position "
                     f"{position.get('position_id')}"
                 )
 
-            # --- Мягкие выходы (time_stop, exit_on_*) ---
+            # --- Soft exits (time_stop, exit_on_*) ---
             try:
                 exit_price, reason = self.position_manager.check_soft_exit(
                     position, candle
@@ -1385,7 +1381,7 @@ class AutoTraderSymbol:
                     self._close_by_soft_exit(position, reason, exit_price)
             except Exception:
                 logger.exception(
-                    f"[{self.symbol}] Ошибка проверки soft exit для "
+                    f"[{self.symbol}] Error checking soft exit for "
                     f"{position.get('position_id')}"
                 )
 
@@ -1393,9 +1389,9 @@ class AutoTraderSymbol:
 
     def _apply_management_to_position(self, position: Dict, candle: Dict):
         """
-        Пересчитывает SL для одной позиции и, если он изменился,
-        отправляет обновление на биржу через set_trading_stop.
-        TP не трогаем — оставляем как было при открытии.
+        Recalculates SL for one position and, if it changed, sends the
+        update to the exchange via set_trading_stop.
+        TP is not touched — left as it was at opening.
         """
         mgmt = position.get("management", {}) or {}
         if not mgmt:
@@ -1471,52 +1467,52 @@ class AutoTraderSymbol:
                             new_sl = trail_sl
                             trailing_applied = True
 
-        # --- 3. Проверки перед отправкой на биржу ---
+        # --- 3. Checks before sending to the exchange ---
         if new_sl is None:
             return
 
-        # Получаем tickSize. Если недоступен — НЕ отправляем set_trading_stop
-        # с неокруглённым SL: биржа может отклонить такой запрос,
-        # и SL молча останется старым. Лучше пропустить свечу и попробовать
-        # на следующей, чем создать видимость обновления.
+        # Get tickSize. If unavailable — DO NOT send set_trading_stop
+        # with an unrounded SL: the exchange may reject such a request,
+        # and SL will silently remain old. Better to skip the candle and
+        # try on the next one than to create the appearance of an update.
         success_info, info = self.executor.get_instrument_info(self.symbol)
 
         if not success_info or not info or not info.get("tickSize"):
             self._log_event(
                 "ERROR",
-                f"SL не обновлён ({direction.upper()}): tickSize недоступен "
-                f"({info}). Пропуск до следующей свечи.",
+                f"SL not updated ({direction.upper()}): tickSize unavailable "
+                f"({info}). Skipping until next candle.",
             )
             return
 
         new_sl = self.executor.round_price(new_sl, info["tickSize"])
 
-        # ВАЖНО: сравниваем УЖЕ ОКРУГЛЁННЫЙ new_sl со старым SL.
-        # Раньше сравнение шло до округления: "сырое" 88.8798 != 88.88
-        # пропускало запрос дальше, после округления биржа видела то же
-        # самое 88.88 и отвечала 34040 — и так каждую свечу.
+        # IMPORTANT: compare the ALREADY ROUNDED new_sl with the old SL.
+        # Previously the comparison was before rounding: "raw" 88.8798 != 88.88
+        # passed the request through, after rounding the exchange saw the same
+        # 88.88 and responded with 34040 — and so every candle.
         if new_sl == current_sl:
             return
 
-        # Проверка стороны SL относительно текущей цены.
-        # Биржа отклонит SL, если он с неверной стороны от LastPrice
-        # (ErrCode 10001): для long SL должен быть НИЖЕ цены, для short — ВЫШЕ.
-        # Берём close последней закрытой свечи как прокси текущей цены —
-        # отдельный запрос ticker избыточен.
+        # Check SL side relative to the current price.
+        # The exchange will reject SL if it's on the wrong side of LastPrice
+        # (ErrCode 10001): for long SL must be BELOW price, for short — ABOVE.
+        # Take close of the last closed candle as a proxy for current price —
+        # a separate ticker request is redundant.
         close_price = candle.get("close")
         if close_price is not None:
             if direction == "long" and new_sl >= close_price:
                 self._log_event(
                     "MGMT",
-                    f"SL пропущен ({direction.upper()}): {new_sl:.4f} >= "
-                    f"close {close_price:.4f}. Ждём следующую свечу.",
+                    f"SL skipped ({direction.upper()}): {new_sl:.4f} >= "
+                    f"close {close_price:.4f}. Waiting for next candle.",
                 )
                 return
             if direction == "short" and new_sl <= close_price:
                 self._log_event(
                     "MGMT",
-                    f"SL пропущен ({direction.upper()}): {new_sl:.4f} <= "
-                    f"close {close_price:.4f}. Ждём следующую свечу.",
+                    f"SL skipped ({direction.upper()}): {new_sl:.4f} <= "
+                    f"close {close_price:.4f}. Waiting for next candle.",
                 )
                 return
 
@@ -1531,7 +1527,7 @@ class AutoTraderSymbol:
             position["stop_loss"] = new_sl
             self._save_state()
 
-            # Определяем причину сдвига для отдельного лога sl_updates.
+            # Determine the reason for the shift for a separate sl_updates log.
             if breakeven_applied and trailing_applied:
                 reason = "breakeven+trailing"
             elif breakeven_applied:
@@ -1541,8 +1537,8 @@ class AutoTraderSymbol:
             else:
                 reason = ""
 
-            # Отдельная запись в sl_updates с position_id — чтобы по логу
-            # можно было однозначно связать движение SL с конкретной сделкой.
+            # Separate entry in sl_updates with position_id — so the log
+            # can unambiguously link SL movement to a specific trade.
             try:
                 self.trade_logger.log_sl_update(
                     position_id=position.get("position_id", ""),
@@ -1558,32 +1554,32 @@ class AutoTraderSymbol:
                 )
             except Exception:
                 logger.exception(
-                    f"[{self.symbol}] Не удалось записать sl_update "
-                    f"для {position.get('position_id')}"
+                    f"[{self.symbol}] Failed to write sl_update "
+                    f"for {position.get('position_id')}"
                 )
 
             self._log_event(
                 "MGMT",
-                f"SL обновлён ({direction.upper()}): {old:.4f} → {new_sl:.4f} "
+                f"SL updated ({direction.upper()}): {old:.4f} → {new_sl:.4f} "
                 f"[{reason or 'n/a'}]",
             )
         else:
             self._log_event(
                 "ERROR",
-                f"Не удалось обновить SL ({direction.upper()}): {err}",
+                f"Failed to update SL ({direction.UPPER()}): {err}",
             )
 
     def _close_by_soft_exit(self, position: Dict, reason: str, exit_price: float):
         """
-        Закрывает позицию по мягкому выходу (time_stop / exit_on_*).
+        Closes a position on a soft exit (time_stop / exit_on_*).
 
-        Отправляет reduce-only market-ордер через PositionManager.close_position,
-        затем сам регистрирует сделку в risk_manager и trade_logger,
-        как это делает _close_all_positions.
+        Sends a reduce-only market order via PositionManager.close_position,
+        then registers the trade itself in risk_manager and trade_logger,
+        as _close_all_positions does.
         """
         self._log_event(
             "SOFT_EXIT",
-            f"Мягкий выход ({position['direction'].upper()}): "
+            f"Soft exit ({position['direction'].upper()}): "
             f"{reason} @ ~{exit_price:.4f}",
         )
 
@@ -1593,7 +1589,7 @@ class AutoTraderSymbol:
         if not success:
             self._log_event(
                 "ERROR",
-                f"Не удалось закрыть по soft exit ({reason}): {result}",
+                f"Failed to close on soft exit ({reason}): {result}",
             )
             return
 
@@ -1608,7 +1604,7 @@ class AutoTraderSymbol:
         )
         self.trade_logger.log_trade(trade)
 
-        # Учёт risk_controls (как в _register_closed_position)
+        # risk_controls accounting (as in _register_closed_position)
         controls = self._get_risk_controls()
         pnl_pct = trade["result_pct"]
         if pnl_pct <= 0:
@@ -1624,7 +1620,7 @@ class AutoTraderSymbol:
             self._cooldown_remaining = controls["pause_candles_after_losses"]
             self._log_event(
                 "COOLDOWN_ACTIVATED",
-                f"Активирована пауза на {self._cooldown_remaining} свечей",
+                f"Activated pause for {self._cooldown_remaining} candles",
             )
 
         self._save_state()
@@ -1632,7 +1628,7 @@ class AutoTraderSymbol:
         close_event_type = "CLOSE_WIN" if pnl_pct > 0 else "CLOSE_LOSS"
         self._log_event(
             close_event_type,
-            f"Позиция закрыта ({reason}): "
+            f"Position closed ({reason}): "
             f"{trade['direction'].upper()} @ {trade['exit_price']:.4f}, "
             f"PnL={pnl_pct:+.2f}% "
             f"({trade['pnl_usdt']:+.2f} USDT)",
@@ -1641,15 +1637,15 @@ class AutoTraderSymbol:
     
     def _detect_closed_positions(self):
         """
-        Детектирует позиции, закрытые на бирже (по исполнению ордеров).
+        Detects positions closed on the exchange (by order execution).
         
-        Если размер позиции на бирже стал 0 — логируем закрытие.
+        If the position size on the exchange became 0 — log the closure.
         """
         success, exchange_positions = self.executor.get_position_info(self.symbol)
         if not success:
             return
         
-        # Строим карту: размер на бирже по направлению
+        # Build a map: size on the exchange by direction
         exchange_size_by_side = {}
         for pos in exchange_positions or []:
             side = pos.get("side", "").lower()
@@ -1659,10 +1655,10 @@ class AutoTraderSymbol:
         
         for position in list(self.position_manager.positions):
 
-            # ГРЕЙС-ПЕРИОД: биржа регистрирует позицию с задержкой.
-            # Не проверяем закрытие первые 2 минуты после открытия.
-            # Для orphan'ов entry_time = время рестарта трекера, грейс
-            # тоже уместен — биржа могла не успеть отдать свежие данные.
+            # GRACE PERIOD: the exchange registers the position with a delay.
+            # Do not check closure in the first 2 minutes after opening.
+            # For orphans, entry_time = tracker restart time, grace is also
+            # appropriate — the exchange may not have had time to return fresh data.
             opened_at = position.get("entry_time")
             if opened_at is not None:
                 try:
@@ -1677,24 +1673,25 @@ class AutoTraderSymbol:
             side_key = "buy" if direction == "long" else "sell"
             exchange_size = exchange_size_by_side.get(side_key, 0)
 
-            # Если на бирже позиции этого направления нет (или она
-            # радикально меньше локально записанной) — считаем закрытой.
-            # Это работает и для orphan'ов: у них qty = размер с биржи,
-            # так что 0 < qty*0.5 → True сразу после исчезновения позиции.
+            # If there is no position in this direction on the exchange (or it's
+            # radically smaller than locally recorded) — consider it closed.
+            # This also works for orphans: their qty = size from the exchange,
+            # so 0 < qty*0.5 → True immediately after the position disappears.
             if exchange_size < position["qty"] * 0.5:
                 self._register_closed_position(position)
     
     def _register_closed_position(self, position: Dict):
         """
-        Регистрирует закрытие позиции.
+        Registers a position closure.
 
-        Точные данные берём из Closed-PnL API биржи. Запись подбираем по:
-        - стороне (Buy/Sell),
-        - совпадению размера (±50%),
-        - времени (не раньше времени входа минус 60 сек),
-        - записи, которые уже были использованы ранее, отбрасываем.
+        Exact data is taken from the exchange's Closed-PnL API. The record is
+        matched by:
+        - side (Buy/Sell),
+        - size match (±50%),
+        - time (not earlier than entry time minus 60 sec),
+        - records that were already used earlier are discarded.
 
-        В risk_manager регистрируем РОВНО ОДИН раз на реальное закрытие.
+        In risk_manager we register EXACTLY ONCE per real closure.
         """
         direction = position["direction"]
         entry_price = position["entry_price"]
@@ -1704,7 +1701,7 @@ class AutoTraderSymbol:
         exit_price = None
         order_id = None
 
-        # 1) Подбираем подходящую запись в Closed-PnL
+        # 1) Find a matching record in Closed-PnL
         success, closed = self.executor.get_closed_pnl(self.symbol, limit=20)
         if success and closed:
             expected_side = "Buy" if direction == "long" else "Sell"
@@ -1763,14 +1760,14 @@ class AutoTraderSymbol:
                     pnl_usdt = None
                     exit_price = None
 
-        # 2) Fallback — тикер (только если биржа не отдала данные)
+        # 2) Fallback — ticker (only if the exchange did not return data)
         if exit_price is None:
             ok, current_price = self.executor.get_ticker_price(self.symbol)
             exit_price = current_price if ok and current_price else entry_price
 
         position_value = qty * entry_price
 
-        # 3) Считаем процент
+        # 3) Calculate percentage
         if pnl_usdt is not None and position_value > 0:
             pnl_pct = pnl_usdt / position_value * 100.0
         else:
@@ -1779,19 +1776,19 @@ class AutoTraderSymbol:
             else:
                 pnl_pct = (entry_price - exit_price) / entry_price * 100.0
 
-        # Комиссии: taker на входе и выходе. Bybit closedPnl торговые
-        # комиссии НЕ включает — вычитаем вручную, чтобы результат
-        # совпадал с backtest_engine._close_position.
+        # Commissions: taker on entry and exit. Bybit closedPnl does NOT
+        # include trading commissions — subtract manually so the result
+        # matches backtest_engine._close_position.
         pnl_pct -= 2.0 * self._taker_fee_pct
         pnl_usdt = position_value * (pnl_pct / 100.0)
 
-        # 4) Определяем exit_reason
+        # 4) Determine exit_reason
         exit_reason = self._infer_exit_reason(position, exit_price)
 
-        # 5) Фиксируем ОДИН раз в риск-менеджере
+        # 5) Register EXACTLY ONCE in the risk manager
         self.risk_manager.record_closed_trade(pnl_pct, position_value)
 
-        # 6) Логируем сделку
+        # 6) Log the trade
         trade = {
             "position_id": position["position_id"],
             "entry_time": position["entry_time"],
@@ -1816,7 +1813,7 @@ class AutoTraderSymbol:
         }
         self.trade_logger.log_trade(trade)
 
-        # 7) Учёт для risk_controls (см. Fix 4)
+        # 7) Accounting for risk_controls (see Fix 4)
         controls = self._get_risk_controls()
         if pnl_pct <= 0:
             self._consecutive_losses += 1
@@ -1833,34 +1830,35 @@ class AutoTraderSymbol:
             self._cooldown_remaining = controls["pause_candles_after_losses"]
             self._log_event(
                 "COOLDOWN_ACTIVATED",
-                f"Активирована пауза на {self._cooldown_remaining} свечей",
+                f"Activated pause for {self._cooldown_remaining} candles",
             )
 
-        # 8) Удаляем из локального состояния и синхронно сохраняем на диск.
-        #    Важно: сначала персистим УДАЛЕНИЕ, потом логируем CLOSE.
-        #    Если процесс упадёт между этими шагами, при следующем
-        #    старте позиции в файле уже не будет и дубля CLOSE не возникнет.
+        # 8) Remove from local state and synchronously save to disk.
+        #    Important: first persist the REMOVAL, then log CLOSE.
+        #    If the process crashes between these steps, on the next start
+        #    the position will already be gone from the file and no duplicate
+        #    CLOSE will occur.
         self.position_manager.positions = [
             p for p in self.position_manager.positions
             if p["position_id"] != position["position_id"]
         ]
         self._save_state()
 
-        # Разделяем на два event_type: HTML-лог раскрасит прибыльные
-        # сделки зелёным, убыточные — красным.
+        # Split into two event_type: the HTML log will color profitable
+        # trades green, losing trades red.
         close_event_type = "CLOSE_WIN" if pnl_pct > 0 else "CLOSE_LOSS"
 
         self._log_event(
             close_event_type,
-            f"Позиция закрыта: {direction.upper()} @ {exit_price:.4f}, "
+            f"Position closed: {direction.upper()} @ {exit_price:.4f}, "
             f"PnL={pnl_pct:+.2f}% ({pnl_usdt:+.2f} USDT), reason={exit_reason}",
         )
 
     def _infer_exit_reason(self, position: Dict, exit_price: float) -> str:
         """
-        Определяет причину выхода по сравнением цены выхода с известными
-        уровнями позиции. Точная причина в Closed-PnL не приходит,
-        но этого достаточно для диагностики.
+        Determines the exit reason by comparing the exit price with known
+        position levels. The exact reason does not come in Closed-PnL,
+        but this is sufficient for diagnostics.
         """
         if exit_price is None:
             return "unknown"
@@ -1875,7 +1873,7 @@ class AutoTraderSymbol:
         entry = position.get("entry_price")
 
         if _close(exit_price, sl):
-            # Если SL ≈ entry (с точностью до 0.2%) — это breakeven
+            # If SL ≈ entry (within 0.2%) — that's breakeven
             if _close(exit_price, entry, tol_pct=0.2):
                 return "breakeven"
             return "stop_loss"
@@ -1884,7 +1882,7 @@ class AutoTraderSymbol:
         return "manual_or_other"
     
     def _get_unrealized_pnl(self) -> float:
-        """Возвращает нереализованный ПнЛ открытых позиций в USDT."""
+        """Returns the unrealized P&L of open positions in USDT."""
         success, exchange_positions = self.executor.get_position_info(self.symbol)
         if not success:
             return 0.0
@@ -1900,14 +1898,14 @@ class AutoTraderSymbol:
         return total_unrealized
     
     def _handle_daily_stop(self):
-        """Обработка дневного лимита убытка."""
+        """Handles the daily loss limit."""
         self._log_event(
             "DAILY_STOP",
-            f"Достигнут дневной лимит убытка. Закрытие позиций и остановка торговли.",
+            f"Daily loss limit reached. Closing positions and stopping trading.",
         )
         self._notify(
-            f"[{self.symbol}] Достигнут дневной лимит убытка. "
-            "Позиции закрыты, торговля остановлена. Для возобновления нажмите «Начать торговлю».",
+            f"[{self.symbol}] Daily loss limit reached. "
+            "Positions closed, trading stopped. To resume, press 'Start trading'.",
             "negative",
         )
         
@@ -1915,33 +1913,33 @@ class AutoTraderSymbol:
         self.stop(reason="daily_loss_limit")
     
     # ----------------------------------------------------------------
-    # Оптимизация
+    # Optimization
     # ----------------------------------------------------------------
     
     def _trigger_optimization(self):
-        """Запускает оптимизацию стратегии при месячном лимите убытка."""
+        """Triggers strategy optimization on monthly loss limit."""
         if self.is_optimizing:
             return
         
         self.is_optimizing = True
-        self.status_message = "Запуск оптимизации..."
+        self.status_message = "Starting optimization..."
         
         self._log_event(
             "OPTIMIZATION_START",
-            f"Месячный лимит убытка достигнут. Запуск оптимизации "
-            f"за последние {self.cfg.optimization_days_back} дней.",
+            f"Monthly loss limit reached. Starting optimization "
+            f"for the last {self.cfg.optimization_days_back} days.",
         )
         self._notify(
-            f"[{self.symbol}] Месячный лимит убытка достигнут. "
-            "Запущена оптимизация стратегии. Торговля приостановлена.",
+            f"[{self.symbol}] Monthly loss limit reached. "
+            "Strategy optimization started. Trading paused.",
             "warning",
         )
         
-        # Запускаем оптимизацию в отдельном потоке, чтобы не блокировать мониторинг
+        # Run optimization in a separate thread to not block monitoring
         threading.Thread(target=self._run_optimization, daemon=True).start()
     
     def _run_optimization(self):
-        """Выполняет оптимизацию стратегии и возобновляет торговлю."""
+        """Performs strategy optimization and resumes trading."""
         try:
             now = datetime.now(timezone.utc)
             start_date = now - timedelta(days=self.cfg.optimization_days_back)
@@ -1960,11 +1958,11 @@ class AutoTraderSymbol:
                 save_best_to_memory=True,
             )
             
-            # Определяем, была ли сохранена новая стратегия
+            # Determine if a new strategy was saved
             best = result.get("best")
             new_strategy_saved = best is not None
             
-            # Логируем результат оптимизации
+            # Log the optimization result
             log_result = {
                 "trigger_reason": "monthly_loss_limit",
                 "history": result.get("history", []),
@@ -1976,54 +1974,54 @@ class AutoTraderSymbol:
             if new_strategy_saved:
                 self._log_event(
                     "OPTIMIZATION_DONE",
-                    "Оптимизация завершена успешно. Новая стратегия сохранена.",
+                    "Optimization completed successfully. New strategy saved.",
                 )
                 self._notify(
-                    f"[{self.symbol}] Оптимизация завершена. "
-                    "Новая стратегия применена, торговля возобновляется.",
+                    f"[{self.symbol}] Optimization completed. "
+                    "New strategy applied, trading resuming.",
                     "positive",
                 )
             else:
                 self._log_event(
                     "OPTIMIZATION_DONE",
-                    "Оптимизация завершена, но подходящая стратегия не найдена.",
+                    "Optimization completed, but no suitable strategy found.",
                 )
                 self._notify(
-                    f"[{self.symbol}] Оптимизация завершена, но новая стратегия не найдена. "
-                    "Торговля продолжается со старой стратегией.",
+                    f"[{self.symbol}] Optimization completed, but no new strategy found. "
+                    "Trading continues with the old strategy.",
                     "warning",
                 )
             
-            # Флаг НЕ сбрасываем — оптимизация запустится снова только
-            # при смене месяца (_check_rollover сбросит его автоматически)
+            # Do NOT reset the flag — optimization will trigger again only
+            # on month change (_check_rollover will reset it automatically)
             self.is_optimizing = False
-            self.status_message = "Торговля возобновлена после оптимизации"
+            self.status_message = "Trading resumed after optimization"
         
         except Exception as e:
-            logger.exception(f"[{self.symbol}] Ошибка оптимизации")
-            self._log_event("ERROR", f"Ошибка оптимизации: {e}")
-            self._notify(f"[{self.symbol}] Ошибка оптимизации: {e}", "negative")
+            logger.exception(f"[{self.symbol}] Optimization error")
+            self._log_event("ERROR", f"Optimization error: {e}")
+            self._notify(f"[{self.symbol}] Optimization error: {e}", "negative")
             self.is_optimizing = False
     
     # ----------------------------------------------------------------
-    # Закрытие позиций
+    # Closing positions
     # ----------------------------------------------------------------
     
     def _close_all_positions(self, reason: str = "manual"):
-        """Закрывает все открытые позиции."""
+        """Closes all open positions."""
         if not self.position_manager.positions:
             return
         
-        self.status_message = "Закрытие позиций..."
+        self.status_message = "Closing positions..."
         
         trades = self.position_manager.close_all_positions(reason=reason)
         
         for trade in trades:
-            # Регистрируем в риск-менеджере
+            # Register in the risk manager
             position_value = trade["qty"] * trade["entry_price"]
             self.risk_manager.record_closed_trade(trade["result_pct"], position_value)
             
-            # Логируем сделку
+            # Log the trade
             trade["position_value_usdt"] = round(position_value, 2)
             trade["pnl_usdt"] = round(position_value * (trade["result_pct"] / 100.0), 2)
             self.trade_logger.log_trade(trade)
@@ -2031,20 +2029,20 @@ class AutoTraderSymbol:
         self._save_state()
         self._log_event(
             "CLOSE",
-            f"Закрыто {len(trades)} позиций по причине: {reason}",
+            f"Closed {len(trades)} positions for reason: {reason}",
         )
     
     def close_all_public(self):
-        """Публичный метод для закрытия всех позиций (вызывается из UI)."""
+        """Public method to close all positions (called from UI)."""
         self._close_all_positions(reason="manual_from_ui")
-        self._notify(f"[{self.symbol}] Все позиции закрыты вручную", "info")
+        self._notify(f"[{self.symbol}] All positions closed manually", "info")
     
     def close_positions_public(self):
-        """Синоним для close_all_public (закрытие по монете)."""
+        """Synonym for close_all_public (close by coin)."""
         self.close_all_public()
     
     # ----------------------------------------------------------------
-    # Вспомогательные
+    # Helpers
     # ----------------------------------------------------------------
     
     def _log_event(
@@ -2054,31 +2052,31 @@ class AutoTraderSymbol:
         details: Optional[str] = None,
         group: Optional[str] = None,
     ):
-        """Логирует событие в файл и в локальный лог."""
+        """Logs an event to file and to the local log."""
         self.trade_logger.log_event(event_type, message, details, group=group)
         self.log_lines.append(
             f"[{datetime.now(timezone.utc).strftime('%H:%M:%S')}] {message}"
         )
-        # Ограничиваем размер локального лога
+        # Limit the local log size
         if len(self.log_lines) > 100:
             self.log_lines = self.log_lines[-100:]
     
     def _notify(self, message: str, ntype: str):
-        """Отправляет уведомление в UI."""
+        """Sends a notification to the UI."""
         try:
             self.notify_fn(message, ntype)
         except Exception as e:
-            logger.error(f"Не удалось отправить уведомление: {e}")
+            logger.error(f"Failed to send notification: {e}")
 
     # ----------------------------------------------------------------
-    # Персистентность позиций
+    # Position persistence
     # ----------------------------------------------------------------
 
     def _serialize_position(self, pos: Dict) -> Dict:
-        """Готовит позицию к JSON-сериализации."""
+        """Prepares a position for JSON serialization."""
         out = {}
         for key, value in pos.items():
-            # Транзиентные поля (например _last_managed_candle_ts) не сохраняем.
+            # Transient fields (e.g. _last_managed_candle_ts) are not saved.
             if key.startswith("_"):
                 continue
             if isinstance(value, datetime):
@@ -2089,7 +2087,7 @@ class AutoTraderSymbol:
 
     @staticmethod
     def _deserialize_position(raw: Dict) -> Dict:
-        """Обратное преобразование из JSON."""
+        """Reverse transformation from JSON."""
         out = {}
         for key, value in raw.items():
             if isinstance(value, dict) and "__dt__" in value:
@@ -2103,14 +2101,14 @@ class AutoTraderSymbol:
 
     def _save_state(self):
         """
-        Атомарно сохраняет список позиций, consumed Closed-PnL ids
-        и состояние risk_controls (серия убытков, окно, cooldown).
-        Падение записи не должно ломать торговлю.
+        Atomically saves the list of positions, consumed Closed-PnL ids,
+        and risk_controls state (loss streak, window, cooldown).
+        A write failure must not break trading.
         """
         try:
             self._state_dir.mkdir(parents=True, exist_ok=True)
 
-            # Сериализуем лимитные ордера
+            # Serialize limit orders
             serialized_orders = []
             for order in self._pending_limit_orders:
                 serialized_orders.append({
@@ -2119,8 +2117,8 @@ class AutoTraderSymbol:
                     "qty": order["qty"],
                     "price": order["price"],
                     "placed_at": order["placed_at"].isoformat(),
-                    # side_spec, reasons, indicators не сериализуем —
-                    # при рестарте ордер будет отменён, позиция не откроется.
+                    # side_spec, reasons, indicators are not serialized —
+                    # on restart the order will be cancelled, position will not open.
                 })
 
             payload = {
@@ -2146,14 +2144,14 @@ class AutoTraderSymbol:
             os.replace(tmp_path, self._state_path)
         except Exception:
             logger.exception(
-                f"[{self.symbol}] Не удалось сохранить состояние позиций"
+                f"[{self.symbol}] Failed to save position state"
             )
 
     def _load_state(self):
         """
-        Загружает сохранённые позиции с диска.
-        Восстановленные позиции помечаются как «наши» (is_orphan не ставим),
-        потому что у них сохранены bybit_order_id и реальные SL/TP.
+        Loads saved positions from disk.
+        Restored positions are marked as "ours" (is_orphan is not set),
+        because they have saved bybit_order_id and real SL/TP.
         """
         if not self._state_path.exists():
             return
@@ -2165,7 +2163,7 @@ class AutoTraderSymbol:
             positions_raw = payload.get("positions", []) or []
             loaded = [self._deserialize_position(p) for p in positions_raw]
 
-            # Защита от битого формата: у позиции должны быть обязательные поля.
+            # Protection against broken format: a position must have required fields.
             valid = []
             for pos in loaded:
                 if not all(
@@ -2175,11 +2173,11 @@ class AutoTraderSymbol:
                     )
                 ):
                     logger.warning(
-                        f"[{self.symbol}] Пропущена некорректная запись позиции: {pos}"
+                        f"[{self.symbol}] Skipped invalid position record: {pos}"
                     )
                     continue
-                # orphan-флаг у восстановленных с диска не должен быть True:
-                # в файл попадают только «наши» позиции.
+                # orphan flag should not be True for restored from disk:
+                # only "our" positions get into the file.
                 pos["is_orphan"] = bool(pos.get("is_orphan", False))
                 valid.append(pos)
 
@@ -2188,11 +2186,11 @@ class AutoTraderSymbol:
             consumed = payload.get("consumed_closed_pnl_ids", []) or []
             self._consumed_closed_pnl_ids = set(str(x) for x in consumed)
 
-            # Восстанавливаем risk_controls только если файл свежий.
-            # Если приложение было выключено дольше
-            # RISK_CONTROLS_MAX_STALENESS_HOURS, состояние сбрасывается:
-            # cooldown в свечах при выключенном боте не тикает, а серия
-            # убытков «выветривается» естественным образом.
+            # Restore risk_controls only if the file is fresh.
+            # If the application was turned off longer than
+            # RISK_CONTROLS_MAX_STALENESS_HOURS, the state is reset:
+            # cooldown in candles does not tick when the bot is off, and the
+            # loss streak "wears off" naturally.
             rc = payload.get("risk_controls_state") or {}
             rc_restored = False
             rc_stale = False
@@ -2219,19 +2217,19 @@ class AutoTraderSymbol:
                 ):
                     rc_stale = True
                     logger.info(
-                        f"[{self.symbol}] risk_controls_state устарел "
-                        f"({age_hours:.1f}ч > "
-                        f"{RISK_CONTROLS_MAX_STALENESS_HOURS}ч). "
-                        f"Сброс: consecutive_losses, recent_loss_flags, "
+                        f"[{self.symbol}] risk_controls_state is stale "
+                        f"({age_hours:.1f}h > "
+                        f"{RISK_CONTROLS_MAX_STALENESS_HOURS}h). "
+                        f"Reset: consecutive_losses, recent_loss_flags, "
                         f"cooldown_remaining."
                     )
                     self._log_event(
                         "RISK_CONTROLS_RESET",
-                        f"Состояние risk_controls сброшено "
-                        f"(пауза {age_hours:.1f}ч без торговли).",
+                        f"risk_controls state reset "
+                        f"(pause {age_hours:.1f}h without trading).",
                     )
                 else:
-                    # Свежее состояние — восстанавливаем.
+                    # Fresh state — restore.
                     try:
                         self._consecutive_losses = int(
                             rc.get("consecutive_losses", 0)
@@ -2251,9 +2249,9 @@ class AutoTraderSymbol:
                         self._cooldown_remaining = 0
                     rc_restored = True
 
-            # Восстановление лимитных ордеров: при рестарте мы НЕ можем
-            # гарантировать, что индикаторы и спека актуальны.
-            # Поэтому просто отменяем все незавершённые ордера.
+            # Restore limit orders: on restart we CANNOT guarantee that
+            # indicators and spec are current. Therefore we simply cancel
+            # all unfinished orders.
             pending_orders = payload.get("pending_limit_orders", []) or []
             for po in pending_orders:
                 oid = po.get("order_id")
@@ -2261,36 +2259,35 @@ class AutoTraderSymbol:
                     self.executor.cancel_order(self.symbol, oid)
                     self._log_event(
                         "ORDER_CANCELLED",
-                        f"Ордер {oid} отменён при перезапуске.",
+                        f"Order {oid} cancelled on restart.",
                     )
             self._pending_limit_orders = []        
 
             if valid or consumed or rc_restored:
                 logger.info(
-                    f"[{self.symbol}] Восстановлено из состояния на диске: "
-                    f"позиций={len(valid)}, "
+                    f"[{self.symbol}] Restored from state on disk: "
+                    f"positions={len(valid)}, "
                     f"consumed_closed_pnl_ids={len(consumed)}, "
                     f"consecutive_losses={self._consecutive_losses}, "
                     f"cooldown_remaining={self._cooldown_remaining}"
                 )
                 detail = (
-                    f"Восстановлено из файла: {len(valid)} позиций, "
-                    f"{len(consumed)} зачтённых Closed-PnL записей"
+                    f"Restored from file: {len(valid)} positions, "
+                    f"{len(consumed)} consumed Closed-PnL records"
                 )
                 if rc_restored:
                     detail += (
-                        f", серия убытков={self._consecutive_losses}, "
-                        f"cooldown={self._cooldown_remaining} свечей"
+                        f", loss streak={self._consecutive_losses}, "
+                        f"cooldown={self._cooldown_remaining} candles"
                     )
                 elif rc_stale:
-                    detail += ", риск-контроль сброшен (устарел)"
+                    detail += ", risk controls reset (stale)"
                 detail += "."
                 self._log_event("STATE_LOADED", detail)
 
-            # ОДНОразовая диагностика по orderId: если сохранённый ордер
-            # уже отменён/отклонён биржей — предупреждаем пользователя.
-            # Делаем это только при загрузке, а не каждую итерацию, чтобы
-            # не тратить rate limit.
+            # ONE-TIME diagnostics by orderId: if the saved order is already
+            # cancelled/rejected by the exchange — warn the user.
+            # Do this only on load, not every iteration, to not waste rate limit.
             for pos in valid:
                 order_id = pos.get("bybit_order_id")
                 if not order_id:
@@ -2300,22 +2297,22 @@ class AutoTraderSymbol:
                     status = str(info.get("orderStatus", ""))
                     if status in ("Cancelled", "Rejected", "Deactivated"):
                         logger.warning(
-                            f"[{self.symbol}] Сохранённый ордер {order_id} "
-                            f"для позиции {pos['position_id']} имеет статус "
-                            f"{status} — стоит проверить позицию вручную."
+                            f"[{self.symbol}] Saved order {order_id} "
+                            f"for position {pos['position_id']} has status "
+                            f"{status} — worth checking the position manually."
                         )
                         self._log_event(
                             "STATE_WARNING",
-                            f"Ордер {order_id} в статусе {status}. "
-                            "Проверьте позицию вручную.",
+                            f"Order {order_id} in status {status}. "
+                            "Check the position manually.",
                         )
         except Exception:
             logger.exception(
-                f"[{self.symbol}] Не удалось загрузить состояние позиций"
+                f"[{self.symbol}] Failed to load position state"
             )
     
     def get_state(self) -> Dict:
-        """Возвращает текущее состояние трейдера (для UI)."""
+        """Returns the current state of the trader (for UI)."""
         return {
             "symbol": self.symbol,
             "is_running": self.is_running,
@@ -2351,7 +2348,7 @@ class AutoTraderSymbol:
 
     @staticmethod
     def _format_condition(cond: Dict, indicators: Dict) -> str:
-        """Форматирует условие для лога."""
+        """Formats a condition for the log."""
         try:
             ctype = cond.get("type")
             if ctype == "compare":
@@ -2392,7 +2389,7 @@ class AutoTraderSymbol:
 
 
 # ----------------------------------------------------------------
-# Глобальные функции управления
+# Global management functions
 # ----------------------------------------------------------------
 
 def start_auto_trading(
@@ -2408,11 +2405,11 @@ def start_auto_trading(
     total_capital_usdt: float,
 ) -> bool:
     """
-    Запускает автоторговлю для монеты.
+    Starts auto-trading for a coin.
 
-    Возвращает True, если трейдер реально стартовал.
-    False — если запуск отклонён (уже запущен / авторежим /
-    настройки не позволяют открыть позицию).
+    Returns True if the trader actually started.
+    False — if start was rejected (already running / auto mode /
+    settings do not allow opening a position).
     """
     with _active_traders_lock:
         existing = _active_traders.get(cfg.symbol)
@@ -2436,7 +2433,7 @@ def start_auto_trading(
     started = trader.start()
 
     if not started:
-        # Убираем из реестра, чтобы UI не показывал его как запущенный.
+        # Remove from registry so the UI does not show it as running.
         with _active_traders_lock:
             if _active_traders.get(cfg.symbol) is trader:
                 _active_traders.pop(cfg.symbol, None)
@@ -2445,7 +2442,7 @@ def start_auto_trading(
 
 
 def stop_auto_trading(symbol: str, close_positions: bool = False, reason: str = "manual"):
-    """Останавливает автоторговлю для монеты."""
+    """Stops auto-trading for a coin."""
     with _active_traders_lock:
         trader = _active_traders.get(symbol)
     
@@ -2454,7 +2451,7 @@ def stop_auto_trading(symbol: str, close_positions: bool = False, reason: str = 
 
 
 def close_all_positions_for_symbol(symbol: str):
-    """Закрывает все позиции по монете (без остановки торговли)."""
+    """Closes all positions for a coin (without stopping trading)."""
     with _active_traders_lock:
         trader = _active_traders.get(symbol)
     
@@ -2463,7 +2460,7 @@ def close_all_positions_for_symbol(symbol: str):
 
 
 def close_all_positions_all_symbols():
-    """Закрывает все позиции по всем монетам."""
+    """Closes all positions for all coins."""
     with _active_traders_lock:
         traders = list(_active_traders.values())
     

@@ -1,14 +1,14 @@
 """
-Создание и хранение основных сервисов приложения.
+Creation and storage of the application's core services.
 
-Этот модуль не создаёт UI-элементы и не зависит от NiceGUI.
-Он только собирает инфраструктурные зависимости приложения:
-- загрузчик рыночных данных;
-- AI-клиент;
-- память монет;
-- настройки;
-- движок бэктеста;
-- оптимизатор стратегии.
+This module does not create UI elements and does not depend on NiceGUI.
+It only assembles the application's infrastructure dependencies:
+- market data loader;
+- AI client;
+- coin memory;
+- settings;
+- backtest engine;
+- strategy optimizer.
 """
 
 from __future__ import annotations
@@ -32,11 +32,11 @@ logger = logging.getLogger(__name__)
 @dataclass
 class AppServices:
     """
-    Набор основных сервисов приложения.
+    Set of the application's core services.
 
-    На первом этапе рефакторинга nicegui_app.py ещё может хранить
-    ссылки на эти сервисы в глобальных переменных для обратной
-    совместимости. Позже этот объект станет единым AppContext.
+    At the first stage of the refactoring, nicegui_app.py may still keep
+    references to these services in global variables for backward
+    compatibility. Later this object will become the single AppContext.
     """
 
     fetcher: BybitDataFetcher
@@ -49,14 +49,14 @@ class AppServices:
 
 def create_services() -> AppServices:
     """
-    Создаёт и связывает все сервисы торгового приложения.
+    Creates and wires together all services of the trading application.
 
-    Исключения намеренно не подавляются: вызывающий код должен решить,
-    как показать ошибку пользователю — через UI, лог или завершение
-    приложения.
+    Exceptions are intentionally not suppressed: the calling code must decide
+    how to show the error to the user — via the UI, a log, or by shutting down
+    the application.
     """
-    # Данные — с mainnet (или testnet, если BYBIT_DATA_TESTNET=true).
-    # Исполнение ордеров — по BYBIT_TESTNET.
+    # Data comes from mainnet (or testnet if BYBIT_DATA_TESTNET=true).
+    # Order execution follows BYBIT_TESTNET.
     fetcher = BybitDataFetcher(testnet=config.BYBIT_DATA_TESTNET)
     ai_client = DeepSeekClient(model=config.DEEPSEEK_MODEL)
     memory = MemoryManager()
@@ -74,7 +74,7 @@ def create_services() -> AppServices:
         default_leverage=10,
     )
 
-    logger.info("Сервисы приложения созданы")
+    logger.info("Application services created")
 
     return AppServices(
         fetcher=fetcher,

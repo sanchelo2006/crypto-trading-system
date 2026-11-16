@@ -1,7 +1,6 @@
 """
-Анализ устойчивости стратегии по walk-forward окнам.
+Analysis of strategy robustness across walk-forward windows.
 """
-
 import logging
 from typing import Dict, List, Tuple
 
@@ -9,7 +8,7 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-# Константы для оценки робастности
+# Constants for robustness assessment
 ROBUST_MIN_PROFITABLE_WINDOWS_RATIO = 2 / 3
 ROBUST_MIN_POSITIVE_EXPECTANCY_WINDOWS_RATIO = 2 / 3
 ROBUST_MIN_PF_PASS_WINDOWS_RATIO = 2 / 3
@@ -22,14 +21,13 @@ class OptimizerRobustness:
     @staticmethod
     def compute_window_robustness(fold_results: List[Dict]) -> Dict:
         """
-        Считает устойчивость стратегии по отдельным TEST-окнам walk-forward.
-
-        Ничего не решает за оптимизатор, только возвращает диагностику:
-        - сколько окон было прибыльными;
-        - сколько окон имели положительный expectancy;
-        - сколько окон имели PF > 1;
-        - медианы и разброс по доходности/expectancy;
-        - худшее и лучшее окно.
+        Computes strategy robustness across individual TEST windows of walk-forward.
+        Does not decide for the optimizer, only returns diagnostics:
+        - how many windows were profitable;
+        - how many windows had positive expectancy;
+        - how many windows had PF > 1;
+        - medians and dispersion of return/expectancy;
+        - worst and best window.
         """
         logger.info(f"[ROBUST DEBUG] Computing robustness for {len(fold_results)} folds")
         for idx, fold in enumerate(fold_results):
@@ -118,21 +116,21 @@ class OptimizerRobustness:
     @staticmethod
     def compute_window_diagnostics(window_robustness: Dict) -> Dict:
         """
-        На основе window_robustness формирует human-readable diagnostics:
-        - предупреждения о хрупкости,
-        - оценку стабильности,
-        - рекомендации по изменению стратегии.
+        Based on window_robustness, forms human-readable diagnostics:
+        - fragility warnings,
+        - stability assessment,
+        - recommendations for strategy changes.
         """
         warnings = []
         recommendations = []
-        stability_score = 1.0  # 0..1, чем выше — тем устойчивее
+        stability_score = 1.0  # 0..1, higher means more stable
 
         windows_total = window_robustness.get("windows_total", 0)
         if windows_total == 0:
             return {
                 "stability_score": 0.0,
-                "warnings": ["Нет данных по окнам"],
-                "recommendations": ["Недостаточно walk-forward окон для оценки устойчивости"],
+                "warnings": ["No window data"],
+                "recommendations": ["Not enough walk-forward windows to assess robustness"],
             }
 
         profitable_ratio = window_robustness.get("profitable_windows_ratio", 0)
@@ -142,50 +140,50 @@ class OptimizerRobustness:
         return_std = window_robustness.get("return_std", 0)
         median_return = window_robustness.get("median_window_return_pct", 0)
 
-        # --- Штрафы за нестабильность ---
+        # --- Penalties for instability ---
         if profitable_ratio < 0.5:
-            warnings.append(f"Только {profitable_ratio:.0%} окон прибыльно — стратегия нестабильна")
+            warnings.append(f"Only {profitable_ratio:.0%} of windows are profitable — strategy is unstable")
             stability_score -= 0.25
         elif profitable_ratio < 0.7:
-            warnings.append(f"Прибыльных окон {profitable_ratio:.0%} — есть риск нестабильности")
+            warnings.append(f"Profitable windows {profitable_ratio:.0%} — there is instability risk")
             stability_score -= 0.1
 
         if exp_ratio < 0.5:
-            warnings.append(f"Только {exp_ratio:.0%} окон с положительным expectancy — стратегия хрупка")
+            warnings.append(f"Only {exp_ratio:.0%} of windows have positive expectancy — strategy is fragile")
             stability_score -= 0.2
         elif exp_ratio < 0.7:
-            warnings.append(f"Положительный expectancy только в {exp_ratio:.0%} окон")
+            warnings.append(f"Positive expectancy in only {exp_ratio:.0%} of windows")
             stability_score -= 0.1
 
         if pf_ratio < 0.5:
-            warnings.append(f"PF > 1 только в {pf_ratio:.0%} окон — стратегия не окупается")
+            warnings.append(f"PF > 1 in only {pf_ratio:.0%} of windows — strategy does not pay off")
             stability_score -= 0.2
 
         if worst_return < -10.0:
-            warnings.append(f"Худшее окно {worst_return:+.1f}% — возможны катастрофические провалы")
+            warnings.append(f"Worst window {worst_return:+.1f}% — catastrophic drawdowns possible")
             stability_score -= 0.2
         elif worst_return < -5.0:
-            warnings.append(f"Худшее окно {worst_return:+.1f}% — есть риски просадки")
+            warnings.append(f"Worst window {worst_return:+.1f}% — there are drawdown risks")
             stability_score -= 0.1
 
         if return_std > 10.0:
-            warnings.append(f"Высокая волатильность доходности ({return_std:.1f}% std) — стратегия непредсказуема")
+            warnings.append(f"Very high return volatility ({return_std:.1f}% std) — strategy is unpredictable")
             stability_score -= 0.15
         elif return_std > 5.0:
-            warnings.append(f"Умеренная волатильность доходности ({return_std:.1f}% std)")
+            warnings.append(f"Moderate return volatility ({return_std:.1f}% std)")
             stability_score -= 0.05
 
-        # --- Рекомендации ---
+        # --- Recommendations ---
         if profitable_ratio < 0.5:
-            recommendations.append("Ужесточить фильтры входа или увеличить stop-loss")
+            recommendations.append("Tighten entry filters or increase stop-loss")
         if exp_ratio < 0.5:
-            recommendations.append("Проверить логику входов: возможно, слишком много шумных сигналов")
+            recommendations.append("Check entry logic: possibly too many noisy signals")
         if pf_ratio < 0.5:
-            recommendations.append("Увеличить take_profit или улучшить управление позицией")
+            recommendations.append("Increase take_profit or improve position management")
         if worst_return < -5.0:
-            recommendations.append("Рассмотреть более агрессивный breakeven или trailing stop")
+            recommendations.append("Consider more aggressive breakeven or trailing stop")
         if return_std > 5.0:
-            recommendations.append("Проверить стратегию на более длинной истории и дополнительном holdout-периоде")
+            recommendations.append("Test the strategy on longer history and an additional holdout period")
 
         stability_score = max(0.0, min(1.0, stability_score))
 
@@ -198,7 +196,7 @@ class OptimizerRobustness:
     @staticmethod
     def window_stability_penalty(window_robustness: Dict) -> Tuple[float, List[str]]:
         """
-        Возвращает мягкий штраф к selection_score за неустойчивость по TEST-окнам.
+        Returns a soft penalty to selection_score for instability across TEST windows.
         """
         windows_total = int(window_robustness.get("windows_total", 0) or 0)
         if windows_total <= 1:
@@ -215,38 +213,38 @@ class OptimizerRobustness:
 
         if profitable_ratio < 0.5:
             penalty += 1.0
-            reasons.append("мало прибыльных окон")
+            reasons.append("too few profitable windows")
         elif profitable_ratio < 0.67:
             penalty += 0.4
-            reasons.append("пограничная доля прибыльных окон")
+            reasons.append("borderline share of profitable windows")
 
         if exp_ratio < 0.5:
             penalty += 0.9
-            reasons.append("мало окон с положительным expectancy")
+            reasons.append("too few windows with positive expectancy")
         elif exp_ratio < 0.67:
             penalty += 0.3
-            reasons.append("пограничная доля окон с положительным expectancy")
+            reasons.append("borderline share of windows with positive expectancy")
 
         if pf_ratio < 0.5:
             penalty += 0.8
-            reasons.append("мало окон с PF > 1")
+            reasons.append("too few windows with PF > 1")
         elif pf_ratio < 0.67:
             penalty += 0.3
-            reasons.append("пограничная доля окон с PF > 1")
+            reasons.append("borderline share of windows with PF > 1")
 
         if worst_return < -10.0:
             penalty += 0.8
-            reasons.append("есть очень плохое окно")
+            reasons.append("there is a very bad window")
         elif worst_return < -5.0:
             penalty += 0.4
-            reasons.append("есть слабое худшее окно")
+            reasons.append("there is a weak worst window")
 
         if return_std > 10.0:
             penalty += 0.6
-            reasons.append("очень высокий разброс доходности между окнами")
+            reasons.append("very high return dispersion between windows")
         elif return_std > 5.0:
             penalty += 0.3
-            reasons.append("повышенный разброс доходности между окнами")
+            reasons.append("elevated return dispersion between windows")
 
         penalty = round(min(penalty, 3.0), 4)
         return penalty, reasons
@@ -263,14 +261,13 @@ class OptimizerRobustness:
         min_stability_score: float = ROBUST_MIN_STABILITY_SCORE,
     ) -> Dict:
         """
-        Оценивает устойчивость стратегии по walk-forward окнам.
+        Assesses strategy robustness across walk-forward windows.
 
-        Статусы:
-        - robust: стратегия выглядит устойчивой;
-        - fragile: есть заметная хрупкость, но стратегия всё ещё пригодна;
-        - unstable: стратегия неустойчива.
+        Statuses:
+        - robust: strategy looks robust;
+        - fragile: there is noticeable fragility, but the strategy is still usable;
+        - unstable: strategy is not robust.
         """
-
         def _f(key: str, default: float = 0.0) -> float:
             try:
                 return float(window_robustness.get(key, default) or default)
@@ -293,7 +290,7 @@ class OptimizerRobustness:
                 "status": "unstable",
                 "passed": False,
                 "fragile": False,
-                "warnings": ["Нет данных по окнам walk-forward"],
+                "warnings": ["No walk-forward window data"],
                 "reasons": ["no_window_data"],
                 "profitable_windows_ratio": profitable_ratio,
                 "positive_expectancy_windows_ratio": expectancy_ratio,
@@ -304,27 +301,27 @@ class OptimizerRobustness:
             }
 
         if profitable_ratio < min_profitable_windows_ratio:
-            warnings.append(f"Прибыльных окон недостаточно: {profitable_ratio:.0%}")
+            warnings.append(f"Not enough profitable windows: {profitable_ratio:.0%}")
             reasons.append("profitable_windows_ratio_too_low")
 
         if expectancy_ratio < min_positive_expectancy_windows_ratio:
-            warnings.append(f"Окон с положительным expectancy недостаточно: {expectancy_ratio:.0%}")
+            warnings.append(f"Not enough windows with positive expectancy: {expectancy_ratio:.0%}")
             reasons.append("positive_expectancy_windows_ratio_too_low")
 
         if pf_ratio < min_pf_pass_windows_ratio:
-            warnings.append(f"Окон с PF > 1 недостаточно: {pf_ratio:.0%}")
+            warnings.append(f"Not enough windows with PF > 1: {pf_ratio:.0%}")
             reasons.append("pf_pass_windows_ratio_too_low")
 
         if median_return < min_median_window_return_pct:
-            warnings.append(f"Медианная доходность по окнам отрицательная: {median_return:+.2f}%")
+            warnings.append(f"Median window return is negative: {median_return:+.2f}%")
             reasons.append("median_window_return_negative")
 
         if worst_return < max_worst_window_return_pct:
-            warnings.append(f"Худшее окно слишком слабое: {worst_return:+.2f}%")
+            warnings.append(f"Worst window is too weak: {worst_return:+.2f}%")
             reasons.append("worst_window_return_too_low")
 
         if stability_score < min_stability_score:
-            warnings.append(f"Низкий stability_score: {stability_score:.3f}")
+            warnings.append(f"Low stability_score: {stability_score:.3f}")
             reasons.append("stability_score_too_low")
 
         strong_pass = (

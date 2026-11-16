@@ -1,5 +1,5 @@
 """
-Формирование сводок, отчётов и trade summaries.
+Generation of summaries, reports and trade summaries.
 """
 
 import json
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class OptimizerSummary:
     @staticmethod
     def derived(snapshot: Dict) -> Dict:
-        """Вычисляемые метрики из entry_snapshot."""
+        """Computed metrics from entry_snapshot."""
         d = {}
 
         if not snapshot:
@@ -47,11 +47,11 @@ class OptimizerSummary:
 
     @staticmethod
     def summarize_trades(trades: List[Dict], derived_func) -> Dict:
-        """Сводка по сделкам для LLM (оптимизирована по токенам)."""
+        """Trade summary for the LLM (token-optimized)."""
         if not trades:
             return {
                 "total": 0,
-                "note": "Сделок не было — условия входа слишком строгие, их нужно ОСЛАБИТЬ"
+                "note": "No trades — entry conditions are too strict, they need to be LOOSENED"
             }
         
         wins = [t for t in trades if t.get("result_pct", 0) > 0]
@@ -78,7 +78,7 @@ class OptimizerSummary:
                 res[key] = res.get(key, 0) + 1
             return res
 
-        # ВМЕСТО списка худших сделок (worst_trades) передаем агрегированные профили
+        # INSTEAD of a list of worst trades (worst_trades) we pass aggregated profiles
         loss_profile = avg_metrics(losses)
         win_profile = avg_metrics(wins)
 
@@ -89,13 +89,13 @@ class OptimizerSummary:
             "winrate": round(len(wins) / len(trades) * 100, 1) if trades else 0.0,
             "loss_by_direction": count_by(losses, "direction"),
             "loss_by_exit": count_by(losses, "exit_reason"),
-            "loss_profile": loss_profile,   # Средние индикаторы на входах, которые принесли убыток
-            "win_profile": win_profile,     # Средние индикаторы на входах, которые принесли прибыль
+            "loss_profile": loss_profile,   # Average indicators at entries that produced a loss
+            "win_profile": win_profile,     # Average indicators at entries that produced a profit
         }
 
     @staticmethod
     def compact_history(history: List[Dict], limit: int = 10) -> List[Dict]:
-        """Компактная история для LLM (без мусорных массивов)."""
+        """Compact history for the LLM (without junk arrays)."""
         out = []
         for h in history[-limit:]:
             score_breakdown = h.get('score_breakdown') or {}
@@ -106,13 +106,13 @@ class OptimizerSummary:
                 'test_pf': h.get('test_profit_factor'),
                 'score': h.get('selection_score'),
                 'accepted': h.get('acceptable'),
-                'changes': (h.get('changes_summary') or '')[:150], # Обрезаем длинные описания
+                'changes': (h.get('changes_summary') or '')[:150], # Truncate long descriptions
                 'robust_status': score_breakdown.get('robustness_status', ''),
                 'worst_window': score_breakdown.get('worst_window_return_pct', 0),
             }
-            # Метрики оконной устойчивости — в плоский вид строки:
-            # AI в промпте видит динамику стабильности между итерациями,
-            # а не только итоговый score.
+            # Window stability metrics — in flat row form:
+            # the AI in the prompt sees the stability dynamics between iterations,
+            # not just the final score.
             row.update(h.get('window_robustness') or {})
             out.append(row)
         return out
@@ -132,7 +132,7 @@ class OptimizerSummary:
         selection_score: float = 0.0,
         acceptable: bool = False,
     ):
-        """Сохраняет сводку и сделки одной итерации в CSV."""
+        """Saves the summary and trades of one iteration to CSV."""
         try:
             from datetime import datetime, timezone
             csv_dir.mkdir(parents=True, exist_ok=True)
@@ -238,5 +238,5 @@ class OptimizerSummary:
 
         except Exception as e:
             logger.warning(
-                f'[{symbol}] Не удалось сохранить CSV итерации {iteration}: {e}'
+                f'[{symbol}] Failed to save CSV for iteration {iteration}: {e}'
             )

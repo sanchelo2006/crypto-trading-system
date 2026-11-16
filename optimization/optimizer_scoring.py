@@ -1,5 +1,5 @@
 """
-Скоринг и оценка пригодности стратегий.
+Scoring and strategy fitness evaluation.
 """
 
 import logging
@@ -18,16 +18,16 @@ class OptimizerScoring:
         profit_concentration_func,
     ) -> float:
         """
-        Новая мягкая формула raw score с защитой от артефактов компаундирования.
+        New soft raw score formula with protection against compounding artifacts.
 
-        Принципы:
-        - TEST важнее TRAIN;
-        - train/test gap штрафуется мягко, а не разрушительно;
-        - концентрация прибыли штрафуется только при явном перекосе;
-        - score отвечает за ранжирование, а не за hard reject.
+        Principles:
+        - TEST is more important than TRAIN;
+        - train/test gap is penalized softly, not destructively;
+        - profit concentration is penalized only with explicit skew;
+        - score is responsible for ranking, not for hard reject.
         """
 
-        # ВАЖНО: ограничиваем return_pct разумными пределами
+        # IMPORTANT: limit return_pct to reasonable bounds
         def _safe_return(stats: Dict) -> float:
             r = float(stats.get("return_pct", stats.get("total_pnl_pct", 0.0)) or 0.0)
             return max(-100.0, min(r, 2000.0))  # cap [-100%, +2000%]
@@ -66,7 +66,7 @@ class OptimizerScoring:
         train_trades_count = _i(train_stats, "total_trades", 0)
         test_trades_count = _i(test_stats, "total_trades", 0)
 
-        # Ограничиваем gap разумными пределами
+        # Limit gap to reasonable bounds
         gap_return = min(abs(train_return - test_return), 200.0)
         gap_expectancy = abs(train_expectancy - test_expectancy)
 
@@ -74,40 +74,40 @@ class OptimizerScoring:
 
         score = 0.0
 
-        # 1) Главный приоритет — TEST
-        # Базовая доходность и качество
+        # 1) Main priority — TEST
+        # Base return and quality
         score += 3.0 * test_expectancy
         score += 1.5 * (min(test_pf, 2.5) - 1.0)
         score += 0.30 * test_return
         
-        # ЖЕСТКИЙ БОНУС ЗА ЧАСТОТУ СДЕЛОК
-        # Модель должна понимать: 40 сделок с PF=1.3 ЛУЧШЕ, чем 8 сделок с PF=3.0
+        # HARD BONUS FOR TRADE FREQUENCY
+        # The model must understand: 40 trades with PF=1.3 are BETTER than 8 trades with PF=3.0
         test_trades = min(test_trades_count, 80)
         if test_trades_count < 20:
-            # ШТРАФ за малое число сделок (переобучение)
+            # PENALTY for small number of trades (overfitting)
             score -= 5.0 
-            score += 0.02 * test_trades  # Слабый бонус
+            score += 0.02 * test_trades  # Weak bonus
         elif test_trades_count < 40:
-            score += 0.10 * test_trades  # Средний бонус
+            score += 0.10 * test_trades  # Medium bonus
         else:
-            score += 0.25 * test_trades  # Мощный бонус за частоту
+            score += 0.25 * test_trades  # Strong bonus for frequency
 
-        # 2) TRAIN — только как подтверждение
+        # 2) TRAIN — only as confirmation
         score += 1.5 * train_expectancy
         score += 0.8 * (min(train_pf, 2.5) - 1.0)
         score += 0.015 * min(train_trades_count, 80)
 
-        # 3) Мягкие штрафы
-        # Просадка: штрафуем только за DD выше 2%
+        # 3) Soft penalties
+        # Drawdown: penalize only for DD above 2%
         score -= 0.30 * max(test_dd - 2.0, 0.0)
 
-        # Разрыв TRAIN↔TEST по доходности: только если реально заметный
+        # TRAIN↔TEST return gap: only if really noticeable
         score -= 0.08 * max(gap_return - 10.0, 0.0)
 
-        # Разрыв TRAIN↔TEST по expectancy: очень мягко
+        # TRAIN↔TEST expectancy gap: very soft
         score -= 4.0 * max(gap_expectancy - 0.15, 0.0)
 
-        # Концентрация прибыли: штраф только если слишком высокая
+        # Profit concentration: penalty only if too high
         score -= 1.5 * max(test_profit_concentration - 0.60, 0.0)
 
         return round(score, 4)
@@ -121,7 +121,7 @@ class OptimizerScoring:
         profit_concentration_func,
     ) -> Tuple[float, bool, float, float]:
         """
-        Возвращает: (raw_selection_score, acceptable, train_expectancy, test_expectancy)
+        Returns: (raw_selection_score, acceptable, train_expectancy, test_expectancy)
         """
         train_exp = float(
             train_stats.get(
@@ -165,9 +165,9 @@ class OptimizerScoring:
         profit_concentration_func,
     ) -> float:
         """
-        Единая целевая функция по TEST: суммарный P&L со штрафом за просадку.
-        total_pnl = expectancy × число сделок, поэтому одновременно поощряются
-        и качество, и частота сделок.
+        Unified objective function on TEST: total P&L with drawdown penalty.
+        total_pnl = expectancy × number of trades, so both quality and trade
+        frequency are rewarded simultaneously.
         """
         total_pnl = float(test_stats.get('total_pnl_pct', 0) or 0)
         drawdown = float(test_stats.get('max_drawdown_pct', 0) or 0)
@@ -181,17 +181,17 @@ class OptimizerScoring:
 
         score = total_pnl - 0.5 * drawdown
 
-        # Слабый бонус за устойчивость (PF с потолком).
+        # Weak bonus for stability (PF with ceiling).
         capped_pf = max(0.0, min(profit_factor, 10.0))
         score += (capped_pf - 1.0) * 0.5
 
-        # Штраф за концентрацию прибыли на одной сделке.
+        # Penalty for profit concentration on a single trade.
         if test_trades and trades >= 8:
             concentration = profit_concentration_func(test_trades)
             if concentration > 0.5:
                 score -= (concentration - 0.5) * 40.0
 
-        # Штраф за сильный перекос по направлению.
+        # Penalty for strong directional skew.
         directional_total = long_trades + short_trades
         if directional_total >= 8:
             skew = abs(long_trades - short_trades) / directional_total
@@ -202,7 +202,7 @@ class OptimizerScoring:
 
     @staticmethod
     def train_score(train_stats: Dict) -> float:
-        """Score по TRAIN для локального поиска."""
+        """Score on TRAIN for local search."""
         trades = int(train_stats.get('total_trades', 0) or 0)
         if trades == 0:
             return -999.0
@@ -213,10 +213,10 @@ class OptimizerScoring:
     @staticmethod
     def profit_concentration(trades: List[Dict]) -> float:
         """
-        Доля самой крупной прибыльной сделки в суммарной прибыли (0..1).
+        Share of the largest profitable trade in total profit (0..1).
 
-        Высокое значение (например > 0.5) означает, что вся прибыль держится
-        на одной-двух сделках — статистически ненадёжная стратегия.
+        High value (e.g. > 0.5) means all profit depends on one or two trades —
+        a statistically unreliable strategy.
         """
         profits = [
             float(t.get("result_pct", 0))
@@ -234,11 +234,11 @@ class OptimizerScoring:
         trades_all: List[Dict],
     ) -> Dict:
         """
-        Считает агрегированную статистику по объединённым сделкам.
+        Calculates aggregated statistics on combined trades.
 
-        Доходность и максимальная просадка усредняются по окнам:
-        у каждого walk-forward окна собственный виртуальный капитал,
-        поэтому складывать return_pct между окнами некорректно.
+        Return and max drawdown are averaged across windows:
+        each walk-forward window has its own virtual capital,
+        so summing return_pct between windows is incorrect.
         """
         if not stats_list:
             return {
@@ -308,14 +308,14 @@ class OptimizerScoring:
             else 0.0
         )
 
-        # Компаундируем доходность последовательных окон вместо усреднения:
-        # окна TEST идут хронологически друг за другом.
+        # Compound return of consecutive windows instead of averaging:
+        # TEST windows go chronologically one after another.
         compounded = 1.0
         for stat in stats_list:
             compounded *= 1.0 + float(stat.get('return_pct', 0) or 0) / 100.0
         total_return = (compounded - 1.0) * 100.0
 
-        # Худшая просадка среди окон честнее среднего.
+        # Worst drawdown among windows is more honest than average.
         worst_drawdown = max(
             float(stat.get('max_drawdown_pct', 0) or 0)
             for stat in stats_list

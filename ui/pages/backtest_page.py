@@ -1,5 +1,5 @@
 """
-Страница бэктеста и оптимизации стратегии.
+Backtest and strategy optimization page.
 """
 
 from __future__ import annotations
@@ -19,12 +19,12 @@ from ui.app_context import app_context
 
 class BacktestPage:
     """
-    UI-страница для:
-    - одиночного бэктеста текущей strategy_spec;
-    - итеративной оптимизации стратегии.
+    UI page for:
+    - a single backtest of the current strategy_spec;
+    - iterative strategy optimization.
 
-    Все зависимости передаются явно через конструктор.
-    Это снижает связанность с nicegui_app.py и упрощает дальнейший рефакторинг.
+    All dependencies are passed explicitly through the constructor.
+    This reduces coupling with nicegui_app.py and simplifies further refactoring.
     """
 
     def __init__(
@@ -41,12 +41,12 @@ class BacktestPage:
         self.container = ui.column().classes("w-full")
         self._opt_status = {}
         self._opt_running = False
-        #раньше прогресс выводился на странице, теперь сохранем в файл
+        # Progress used to be shown on the page; now it is saved to a file
         #self._progress_lines = []
         #self._last_rendered_count = 0
         self._ui_update_lock = threading.Lock()
 
-        # Результаты, ожидающие безопасного рендера в UI-контексте.
+        # Results waiting for safe rendering in the UI context.
         self._pending_backtest_result = None
         self._pending_backtest_status = None
         self._pending_optimization_result = None
@@ -59,12 +59,12 @@ class BacktestPage:
 
         self.container.visible = False
 
-        # Заполняем список архетипов для селекта сид-архетипа.
+        # Fill the archetype list for the seed archetype select.
         try:
             from optimization.archetypes import ARCHETYPES
             options = {
-                "memory": "Из памяти монеты (без скрининга)",
-                "auto": "Авто по скринингу",
+                "memory": "From coin memory (no screening)",
+                "auto": "Auto by screening",
             }
             for arch in ARCHETYPES:
                 options[arch["name"]] = arch["name"]
@@ -75,45 +75,45 @@ class BacktestPage:
             pass
 
     def build_ui(self):
-        ui.label("📈 Бэктест и оптимизация стратегии").classes("text-h6 q-mb-md")
+        ui.label("📈 Backtest and strategy optimization").classes("text-h6 q-mb-md")
 
         ui.label(
-            "Одиночный бэктест проверяет текущую strategy_spec. "
-            "Оптимизация сначала один раз загружает исторические свечи, затем "
-            "все итерации работают с ними локально без повторных сетевых загрузок."
+            "A single backtest checks the current strategy_spec. "
+            "Optimization first loads historical candles once, then "
+            "all iterations work with them locally without repeated network downloads."
         ).classes("text-caption text-grey q-mb-sm")
 
         with ui.row().classes("gap-4 items-end w-full"):
             self.symbol_select = ui.select(
-                label="Монета",
+                label="Coin",
                 options=list(self.memory.get_all_symbols()),
                 value=self.memory.get_all_symbols()[0] if self.memory.get_all_symbols() else None,
             ).classes("w-40")
 
             self.start_date_input = ui.input(
-                "Дата начала",
+                "Start date",
                 value=(datetime.now(timezone.utc) - timedelta(days=180)).strftime("%Y-%m-%d"),
                 placeholder="YYYY-MM-DD",
             ).classes("w-40")
 
             self.end_date_input = ui.input(
-                "Дата конца",
+                "End date",
                 value=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
                 placeholder="YYYY-MM-DD",
             ).classes("w-40")
 
-            ui.label("Формат дат: YYYY-MM-DD").classes("text-caption text-grey")
+            ui.label("Date format: YYYY-MM-DD").classes("text-caption text-grey")
 
         with ui.row().classes("gap-4 items-end q-mt-sm w-full"):
             self.capital_input = ui.number(
-                "Начальный капитал ($)",
+                "Initial capital ($)",
                 value=1000.0,
                 format="%.2f",
                 min=1,
             ).classes("w-40")
 
             self.commission_input = ui.number(
-                "Комиссия на сторону (%)",
+                "Commission per side (%)",
                 value=0.05,
                 format="%.3f",
                 min=0,
@@ -121,7 +121,7 @@ class BacktestPage:
             ).classes("w-40")
 
             self.iterations_input = ui.number(
-                "Итераций оптимизации",
+                "Optimization iterations",
                 value=10,
                 min=1,
                 max=30,
@@ -129,13 +129,13 @@ class BacktestPage:
             ).classes("w-40")
 
             ui.label(
-                "Win rate НЕ задаётся: критерий — положительный expectancy и "
-                "Profit Factor на TRAIN и TEST."
+                "Win rate is NOT set: the criterion is positive expectancy and "
+                "Profit Factor on TRAIN and TEST."
             ).classes("text-caption text-grey")
 
         with ui.row().classes("gap-4 items-end q-mt-sm w-full"):
             self.train_ratio_input = ui.number(
-                "Начальная доля TRAIN (%)",
+                "Initial TRAIN share (%)",
                 value=70,
                 min=50,
                 max=90,
@@ -143,7 +143,7 @@ class BacktestPage:
             ).classes("w-48")
 
             self.walk_forward_folds_input = ui.number(
-                "TEST-окон walk-forward",
+                "Walk-forward TEST windows",
                 value=6,
                 min=3,
                 max=8,
@@ -151,73 +151,73 @@ class BacktestPage:
             ).classes("w-48")
 
             self.phase0_screen_checkbox = ui.checkbox(
-                "Фаза 0: скрининг архетипов (долго, ~3-5 мин)",
+                "Phase 0: archetype screening (slow, ~3-5 min)",
                 value=False,
             ).classes("q-mt-sm")
             self.freeze_entries_checkbox = ui.checkbox(
-                "Заморозить входы (оптимизировать только риск-параметры)",
+                "Freeze entries (optimize risk parameters only)",
                 value=False,
             ).classes("q-mt-sm")
             ui.label(
-                "При включении условия входа (entry/entry_any) не изменяются. "
-                "Оптимизатор тюнит только стопы, тейки, трейлинг и фильтры."
+                "When enabled, entry conditions (entry/entry_any) are not changed. "
+                "The optimizer tunes only stops, takes, trailing and filters."
             ).classes("text-caption text-grey")
 
             ui.label(
-                "1 = один обычный TRAIN/TEST split. "
-                "3 = три последовательных TEST-окна с расширяющимся TRAIN."
+                "1 = a single regular TRAIN/TEST split. "
+                "3 = three consecutive TEST windows with an expanding TRAIN."
             ).classes("text-caption text-grey")
 
-        # --- Сид-архетип ---
+        # --- Seed archetype ---
         with ui.row().classes("gap-4 items-end q-mt-sm w-full"):
             self.seed_archetype_select = ui.select(
-                label="Сид-архетип (опционально)",
-                options={"auto": "Авто по скринингу"},
+                label="Seed archetype (optional)",
+                options={"auto": "Auto by screening"},
                 value="auto",
             ).classes("w-56")
 
             ui.label(
-                "Сид-архетип — явный старт для оптимизации вместо авто-выбора по скринингу."
+                "A seed archetype is an explicit starting point for optimization instead of auto-selection by screening."
             ).classes("text-caption text-grey")
 
-        with ui.expansion("📋 Доступные серии и подсказки", icon="list").classes("w-full q-mt-md"):
-            ui.label("Доступные серии (15m и 1h):").classes("text-bold")
+        with ui.expansion("📋 Available series and hints", icon="list").classes("w-full q-mt-md"):
+            ui.label("Available series (15m and 1h):").classes("text-bold")
 
             ui.table(
                 columns=[
-                    {"name": "series", "label": "Серия", "field": "series", "align": "left"},
-                    {"name": "description", "label": "Описание", "field": "description", "align": "left"},
+                    {"name": "series", "label": "Series", "field": "series", "align": "left"},
+                    {"name": "description", "label": "Description", "field": "description", "align": "left"},
                 ],
                 rows=[
-                    {"series": "open, high, low, close, volume", "description": "Основные OHLCV"},
-                    {"series": "sma_20, sma_50", "description": "Простые скользящие средние"},
-                    {"series": "rsi_14", "description": "Индекс относительной силы"},
-                    {"series": "atr_14", "description": "Средний истинный диапазон"},
-                    {"series": "bb_upper, bb_middle, bb_lower", "description": "Полосы Боллинджера"},
+                    {"series": "open, high, low, close, volume", "description": "Basic OHLCV"},
+                    {"series": "sma_20, sma_50", "description": "Simple moving averages"},
+                    {"series": "rsi_14", "description": "Relative Strength Index"},
+                    {"series": "atr_14", "description": "Average True Range"},
+                    {"series": "bb_upper, bb_middle, bb_lower", "description": "Bollinger Bands"},
                     {"series": "macd, macd_signal, macd_hist", "description": "MACD"},
-                    {"series": "adx_14", "description": "Индекс направленного движения"},
+                    {"series": "adx_14", "description": "Average Directional Index"},
                     {"series": "vwap", "description": "VWAP"},
-                    {"series": "pivot, resistance_1..3, support_1..3", "description": "Пивот и уровни"},
-                    {"series": "avg_volume_20, avg_volume_96", "description": "Средние объёмы"},
-                    {"series": "sma_20_1h, sma_50_1h, rsi_14_1h, atr_14_1h", "description": "1h-индикаторы тренда"},
-                    {"series": "bb_upper_1h, bb_middle_1h, bb_lower_1h", "description": "1h-полосы Боллинджера"},
+                    {"series": "pivot, resistance_1..3, support_1..3", "description": "Pivot and levels"},
+                    {"series": "avg_volume_20, avg_volume_96", "description": "Average volumes"},
+                    {"series": "sma_20_1h, sma_50_1h, rsi_14_1h, atr_14_1h", "description": "1h trend indicators"},
+                    {"series": "bb_upper_1h, bb_middle_1h, bb_lower_1h", "description": "1h Bollinger Bands"},
                     {"series": "macd_1h, macd_signal_1h, macd_hist_1h", "description": "1h MACD"},
-                    {"series": "adx_14_1h, vwap_1h", "description": "1h ADX и VWAP"},
-                    {"series": "pivot_1h, resistance_1_1h..3, support_1_1h..3", "description": "1h уровни"},
-                    {"series": "avg_volume_20_1h, avg_volume_96_1h", "description": "1h средние объёмы"},
+                    {"series": "adx_14_1h, vwap_1h", "description": "1h ADX and VWAP"},
+                    {"series": "pivot_1h, resistance_1_1h..3, support_1_1h..3", "description": "1h levels"},
+                    {"series": "avg_volume_20_1h, avg_volume_96_1h", "description": "1h average volumes"},
                 ],
                 row_key="series",
             ).classes("w-full")
 
             ui.label(
-                "💡 1h-серии нужны как фильтр старшего таймфрейма: "
-                "они помогают отсеивать шум и повышают устойчивость входов."
+                "💡 The 1h series act as a higher-timeframe filter: "
+                "they help filter out noise and improve entry robustness."
             ).classes("text-caption text-grey q-mt-sm")
 
         with ui.row().classes("gap-4 items-end q-mt-sm w-full"):
             default_csv = str(config.DATA_DIR / "backtests")
             self.csv_path_input = ui.input(
-                "Папка для CSV-отчётов",
+                "Folder for CSV reports",
                 value=default_csv,
             ).classes("flex-1").style("min-width: 300px;")
 
@@ -229,34 +229,32 @@ class BacktestPage:
 
         with ui.row().classes("gap-4 items-center q-mt-sm w-full"):
             self.allow_weak_holdout_save_checkbox = ui.checkbox(
-                "Разрешать сохранение стратегии при weak_pass holdout",
+                "Allow saving the strategy on weak_pass holdout",
                 value=default_allow_weak_holdout,
             )
 
         with ui.row().classes("gap-4 q-mt-md"):
             self.run_btn = ui.button(
-                "🚀 Одиночный бэктест",
+                "🚀 Single backtest",
                 on_click=self.run_backtest,
             ).classes("bg-secondary text-white")
 
             self.optimize_btn = ui.button(
-                "♻️ Запустить оптимизацию",
+                "♻️ Run optimization",
                 on_click=self.run_optimization,
             ).classes("bg-positive text-white")
 
         self.status_label = ui.label("").classes("text-caption q-mt-md")
-        
+
         self.result_container = ui.column().classes("w-full q-mt-lg")
 
-        
-
-        # Таймер безопасного рендера результатов в UI-контексте.
+        # Timer for safe rendering of results in the UI context.
         ui.timer(0.5, self._poll_results)
 
     def _poll_results(self):
         """
-        Выполняется в UI-контексте.
-        Рендерит результаты, которые воркеры положили в pending-поля.
+        Runs in the UI context.
+        Renders the results that the workers put into the pending fields.
         """
         with self._ui_update_lock:
             status_text = self._pending_status_text
@@ -307,7 +305,7 @@ class BacktestPage:
     def _get_common_params(self):
         symbol = self.symbol_select.value
         if not symbol:
-            ui.notify("Выберите монету.", type="warning")
+            ui.notify("Select a coin.", type="warning")
             return None
 
         try:
@@ -331,19 +329,19 @@ class BacktestPage:
             )
         except ValueError:
             ui.notify(
-                "Неверный формат даты. Используйте формат YYYY-MM-DD.",
+                "Invalid date format. Use the YYYY-MM-DD format.",
                 type="warning",
             )
             return None
 
         if start_date >= end_date:
             ui.notify(
-                "Дата начала должна быть раньше даты конца.",
+                "The start date must be earlier than the end date.",
                 type="warning",
             )
             return None
 
-        # Лёгкая проверка по launchTime через метаданные биржи.
+        # Lightweight check against launchTime via exchange metadata.
         adjusted_start_date, adjusted_end_date, listing_warning = (
             self._adjust_period_to_listing_if_needed(
                 symbol=symbol,
@@ -355,8 +353,8 @@ class BacktestPage:
 
         if adjusted_start_date >= adjusted_end_date:
             ui.notify(
-                "После корректировки по дате начала торгов период стал недопустимым. "
-                "Выберите более позднюю дату конца.",
+                "After adjusting to the trading start date the period became invalid. "
+                "Choose a later end date.",
                 type="warning",
             )
             return None
@@ -374,7 +372,7 @@ class BacktestPage:
         min_period = timedelta(days=15)
         if end_date - start_date < min_period:
             ui.notify(
-                "Период должен быть не менее 15 дней: индикаторам требуется история.",
+                "The period must be at least 15 days: the indicators need history.",
                 type="warning",
             )
             return None
@@ -389,7 +387,7 @@ class BacktestPage:
 
     def _get_current_strategy_payload(self, symbol: str):
         """
-        Берёт актуальную стратегию из памяти монеты на момент запуска.
+        Takes the current strategy from the coin's memory at the moment of the run.
         """
         from strategy_spec import validate_strategy_spec
 
@@ -407,7 +405,7 @@ class BacktestPage:
         err = validate_strategy_spec(strategy_spec)
         if err is not None:
             logging.getLogger("nicegui").warning(
-                "[%s] strategy_spec в памяти невалиден: %s",
+                "[%s] strategy_spec in memory is invalid: %s",
                 symbol,
                 err,
             )
@@ -424,10 +422,10 @@ class BacktestPage:
         category: str = "linear",
     ):
         """
-        Если пользователь выбрал дату начала раньше листинга монеты на бирже,
-        сдвигает start_date до даты начала торгов и возвращает предупреждение.
+        If the user picked a start date earlier than the coin's listing on the exchange,
+        shifts start_date to the trading start date and returns a warning.
 
-        Возвращает:
+        Returns:
             adjusted_start_date, adjusted_end_date, warning_text_or_none
         """
         fetcher = getattr(self.backtest_engine, "fetcher", None)
@@ -438,7 +436,7 @@ class BacktestPage:
             listing_start = fetcher.get_symbol_launch_time(symbol, category)
         except Exception:
             logging.getLogger("nicegui").exception(
-                "Не удалось проверить дату начала торгов для %s", symbol
+                "Failed to check the trading start date for %s", symbol
             )
             return start_date, end_date, None
 
@@ -451,22 +449,22 @@ class BacktestPage:
 
         if start_date < listing_day_start:
             warning = (
-                f"{symbol} начала торговаться на бирже только с "
+                f"{symbol} started trading on the exchange only from "
                 f"{listing_day_start.strftime('%Y-%m-%d')}. "
-                f"Начало периода автоматически скорректировано."
+                f"The period start was adjusted automatically."
             )
             return listing_day_start, end_date, warning
 
         return start_date, end_date, None
 
     def _prepare_new_run(self, status_text: str, *, optimization: bool = False):
-        """Подготавливает страницу к новому запуску бэктеста/оптимизации.
+        """Prepares the page for a new backtest/optimization run.
 
-        - очищает старые результаты;
-        - сбрасывает pending-поля;
-        - при оптимизации очищает прогресс;
-        - блокирует кнопки;
-        - выставляет стартовый статус.
+        - clears old results;
+        - resets the pending fields;
+        - clears the progress on optimization;
+        - disables the buttons;
+        - sets the starting status.
         """
         with self._ui_update_lock:
             self._pending_backtest_result = None
@@ -477,14 +475,11 @@ class BacktestPage:
             self._pending_reenable_buttons = False
 
             if optimization:
-                
                 self._opt_running = True
             else:
                 self._opt_running = False
 
         self.result_container.clear()
-
-        
 
         self.status_label.set_text(status_text)
         self.run_btn.enabled = False
@@ -505,26 +500,26 @@ class BacktestPage:
 
         if not strategy_spec and not rules_text:
             ui.notify(
-                f"Нет правил для {symbol}. Сначала инициализируйте монету.",
+                f"No rules for {symbol}. Initialize the coin first.",
                 type="warning",
             )
             return
 
         if not strategy_spec:
             ui.notify(
-                "У монеты нет strategy_spec — будет использована стратегия по умолчанию.",
+                "The coin has no strategy_spec — the default strategy will be used.",
                 type="info",
             )
 
-        # Папку отчётов читаем в UI-потоке, воркер работает в отдельном треде
-        # и не должен дёргать элементы UI.
+        # The reports folder is read in the UI thread; the worker runs in a separate
+        # thread and must not touch UI elements.
         report_dir = (
             self.csv_path_input.value.strip()
             if self.csv_path_input.value
             else str(config.DATA_DIR / "backtests")
         )
 
-        self._prepare_new_run("Загрузка данных и расчёт индикаторов...", optimization=False)
+        self._prepare_new_run("Loading data and calculating indicators...", optimization=False)
 
         def worker():
             try:
@@ -541,10 +536,10 @@ class BacktestPage:
 
                 if "error" in result:
                     with self._ui_update_lock:
-                        self._pending_status_text = f'Ошибка: {result["error"]}'
+                        self._pending_status_text = f'Error: {result["error"]}'
                     return
 
-                # Сохраняем XLSX-отчёт. Ошибка экспорта не должна ломать UI.
+                # Save the XLSX report. An export error must not break the UI.
                 from utils.backtest_exporter import export_backtest_to_xlsx
 
                 saved_path = export_backtest_to_xlsx(
@@ -557,13 +552,13 @@ class BacktestPage:
 
                 src = result.get("spec_source", "ai")
                 status = (
-                    "Бэктест завершён "
-                    f'(стратегия: {"из инициализации" if src == "ai" else "по умолчанию"})'
+                    "Backtest completed "
+                    f'(strategy: {"from initialization" if src == "ai" else "default"})'
                 )
                 if saved_path is not None:
-                    status += f". Отчёт: {saved_path}"
+                    status += f". Report: {saved_path}"
                 else:
-                    status += ". ⚠️ Не удалось сохранить XLSX-отчёт."
+                    status += ". ⚠️ Failed to save the XLSX report."
 
                 with self._ui_update_lock:
                     self._pending_backtest_result = result
@@ -572,7 +567,7 @@ class BacktestPage:
             except Exception as e:
                 logging.getLogger("nicegui").exception("Backtest error")
                 with self._ui_update_lock:
-                    self._pending_status_text = f"Ошибка бэктеста: {e}"
+                    self._pending_status_text = f"Backtest error: {e}"
             finally:
                 with self._ui_update_lock:
                     self._pending_reenable_buttons = True
@@ -591,8 +586,8 @@ class BacktestPage:
 
         if not strategy_spec and not rules_text:
             ui.notify(
-                f"Для {symbol} нет strategy_spec и торговых правил. "
-                "Сначала инициализируйте монету.",
+                f"{symbol} has no strategy_spec and no trading rules. "
+                "Initialize the coin first.",
                 type="warning",
             )
             return
@@ -638,18 +633,18 @@ class BacktestPage:
         }
 
         self._prepare_new_run(
-            "ИДЕТ ОПТИМИЗАЦИЯ",
+            "OPTIMIZATION IN PROGRESS",
             optimization=True,
         )
 
         def progress_cb(event: dict):
-            # Прогресс в UI больше не выводится.
-            # Полный ход оптимизации пишет OptimizationReport в .txt.
+            # Progress is no longer shown in the UI.
+            # The full optimization flow is written by OptimizationReport into a .txt.
             pass
 
         def worker():
             try:
-                # Сид-архетип
+                # Seed archetype
                 seed_val = self.seed_archetype_select.value
                 if seed_val == "memory":
                     seed_archetype = None
@@ -689,26 +684,25 @@ class BacktestPage:
                     robust_min_stability_score=robust_settings["robust_min_stability_score"],
                 )
 
-
                 if "error" in result:
                     with self._ui_update_lock:
-                        self._pending_status_text = f'Ошибка оптимизации: {result["error"]}'
+                        self._pending_status_text = f'Optimization error: {result["error"]}'
                     return
 
                 best = result.get("best")
                 if best:
                     bt = best.get("aggregated_test_stats", {})
                     status = (
-                        f'Оптимизация завершена. Лучшая итерация #{best.get("iteration", "?")}: '
-                        f'TEST доходность={bt.get("return_pct", 0):+.2f}%, '
+                        f'Optimization completed. Best iteration #{best.get("iteration", "?")}: '
+                        f'TEST return={bt.get("return_pct", 0):+.2f}%, '
                         f'TEST expectancy={bt.get("expectancy_pct", 0):+.4f}%, '
                         f'TEST PF={bt.get("profit_factor", 0):.2f}. '
                         f'CSV: {result.get("csv_dir", "")}'
                     )
                 else:
                     status = (
-                        "Оптимизация завершена, но стратегия с эджем на TRAIN и TEST "
-                        "не найдена."
+                        "Optimization completed, but no strategy with an edge on TRAIN and TEST "
+                        "was found."
                     )
 
                 with self._ui_update_lock:
@@ -718,7 +712,7 @@ class BacktestPage:
             except Exception as e:
                 logging.getLogger("nicegui").exception("Optimization error")
                 with self._ui_update_lock:
-                    self._pending_status_text = f"Ошибка оптимизации: {e}"
+                    self._pending_status_text = f"Optimization error: {e}"
             finally:
                 self._opt_running = False
                 with self._ui_update_lock:
@@ -737,45 +731,45 @@ class BacktestPage:
         with self.result_container:
             source_color = "positive" if spec_source == "ai" else "negative"
             source_text = (
-                "✅ Стратегия из инициализации монеты"
+                "✅ Strategy from the coin initialization"
                 if spec_source == "ai"
-                else "⚠️ Стратегия ПО УМОЛЧАНИЮ (spec монеты не найден/невалиден)"
+                else "⚠️ DEFAULT strategy (the coin's spec was not found or is invalid)"
             )
             ui.label(source_text).classes(f"text-{source_color} text-bold q-mt-md")
 
-            with ui.expansion("🔍 Исполнявшаяся strategy_spec", icon="rule").classes("w-full"):
+            with ui.expansion("🔍 Executed strategy_spec", icon="rule").classes("w-full"):
                 ui.code(
                     _json.dumps(spec_used, ensure_ascii=False, indent=2),
                     language="json",
                 ).classes("w-full")
 
-            ui.label("📊 Статистика").classes("text-h6 q-mt-md")
+            ui.label("📊 Statistics").classes("text-h6 q-mt-md")
             ui.table(
                 columns=[
-                    {"name": "metric", "label": "Метрика", "field": "metric", "align": "left"},
-                    {"name": "value", "label": "Значение", "field": "value", "align": "right"},
+                    {"name": "metric", "label": "Metric", "field": "metric", "align": "left"},
+                    {"name": "value", "label": "Value", "field": "value", "align": "right"},
                 ],
                 rows=[
-                    {"metric": "Всего сделок", "value": str(stats.get("total_trades", 0))},
+                    {"metric": "Total trades", "value": str(stats.get("total_trades", 0))},
                     {
                         "metric": "Long / Short",
                         "value": f'{stats.get("long_trades", 0)} / {stats.get("short_trades", 0)}',
                     },
                     {"metric": "Win Rate", "value": f'{stats.get("win_rate", 0)}%'},
                     {
-                        "metric": "Доходность (от капитала)",
+                        "metric": "Return (of capital)",
                         "value": f'{stats.get("return_pct", 0):+.2f}%',
                     },
                     {
-                        "metric": "Сумма % сделок (справочно)",
+                        "metric": "Sum of trade % (reference)",
                         "value": f'{stats.get("total_pnl_pct", 0):+.2f}%',
                     },
                     {
-                        "metric": "Итоговый капитал",
+                        "metric": "Final capital",
                         "value": f'${stats.get("final_capital", 0):,.2f}',
                     },
                     {
-                        "metric": "Макс. просадка",
+                        "metric": "Max drawdown",
                         "value": f'{stats.get("max_drawdown_pct", 0)}%',
                     },
                     {
@@ -783,7 +777,7 @@ class BacktestPage:
                         "value": str(stats.get("profit_factor", 0)),
                     },
                     {
-                        "metric": "Средняя сделка",
+                        "metric": "Average trade",
                         "value": f'{stats.get("avg_trade_pct", 0):+.4f}%',
                     },
                     {
@@ -791,11 +785,11 @@ class BacktestPage:
                         "value": f'{stats.get("expectancy_pct", stats.get("avg_trade_pct", 0)):+.4f}%',
                     },
                     {
-                        "metric": "Средний win",
+                        "metric": "Average win",
                         "value": f'{stats.get("avg_win_pct", 0):+.4f}%',
                     },
                     {
-                        "metric": "Средний loss",
+                        "metric": "Average loss",
                         "value": f'-{abs(stats.get("avg_loss_pct", 0)):.4f}%',
                     },
                     {
@@ -815,7 +809,7 @@ class BacktestPage:
             ).classes("w-full")
 
             if trades:
-                ui.label(f"📋 Сделки ({len(trades)})").classes("text-h6 q-mt-md")
+                ui.label(f"📋 Trades ({len(trades)})").classes("text-h6 q-mt-md")
 
                 for idx, t in enumerate(trades, 1):
                     entry_time = t.get("entry_time")
@@ -842,7 +836,7 @@ class BacktestPage:
                     with ui.expansion(header, icon="trending_up").classes("w-full"):
                         entry_reasons = t.get("entry_reasons", [])
                         if entry_reasons:
-                            ui.label("Условия входа").classes("text-bold")
+                            ui.label("Entry conditions").classes("text-bold")
                             for r in entry_reasons:
                                 mark = "✓" if r.get("passed") else "✗"
                                 color = "positive" if r.get("passed") else "negative"
@@ -852,21 +846,21 @@ class BacktestPage:
 
                         snapshot = t.get("entry_snapshot", {})
                         if snapshot:
-                            ui.label("Снимок индикаторов на входе").classes("text-bold q-mt-md")
+                            ui.label("Indicator snapshot at entry").classes("text-bold q-mt-md")
                             snapshot_rows = [
                                 {"metric": k, "value": str(v)}
                                 for k, v in snapshot.items()
                             ]
                             ui.table(
                                 columns=[
-                                    {"name": "metric", "label": "Параметр", "field": "metric", "align": "left"},
-                                    {"name": "value", "label": "Значение", "field": "value", "align": "right"},
+                                    {"name": "metric", "label": "Parameter", "field": "metric", "align": "left"},
+                                    {"name": "value", "label": "Value", "field": "value", "align": "right"},
                                 ],
                                 rows=snapshot_rows,
                                 row_key="metric",
                             ).classes("w-full")
             else:
-                ui.label("Сделок за период не совершено.").classes("text-caption q-mt-md")
+                ui.label("No trades were made during the period.").classes("text-caption q-mt-md")
 
     def _render_optimization(self, result: dict):
         history = result.get("history", [])
@@ -884,30 +878,30 @@ class BacktestPage:
         self.result_container.clear()
 
         with self.result_container:
-            ui.label("♻️ Результаты оптимизации").classes("text-h6 q-mt-md")
+            ui.label("♻️ Optimization results").classes("text-h6 q-mt-md")
 
             report_path = (
                 result.get("report_path")
                 or getattr(self.backtest_optimizer, "last_report_path", "")
             )
             if report_path:
-                ui.label(f"📄 Подробный отчёт: {report_path}").classes(
+                ui.label(f"📄 Detailed report: {report_path}").classes(
                     "text-caption text-grey"
                 )
 
             if walk_forward_folds <= 1:
                 ui.label(
-                    f"Режим проверки: один TRAIN/TEST split "
+                    f"Validation mode: a single TRAIN/TEST split "
                     f"({int(train_ratio * 100)}% / {int((1 - train_ratio) * 100)}%)."
                 ).classes("text-caption text-grey")
             else:
                 ui.label(
-                    f"Режим проверки: walk-forward, TEST-окон: {walk_forward_folds}. "
-                    "TRAIN-выборка расширяется перед каждым последующим TEST-окном."
+                    f"Validation mode: walk-forward, TEST windows: {walk_forward_folds}. "
+                    "The TRAIN sample expands before each subsequent TEST window."
                 ).classes("text-caption text-grey")
 
             if splits:
-                with ui.expansion("🗓️ Использованные TRAIN / TEST окна", icon="date_range").classes("w-full"):
+                with ui.expansion("🗓️ TRAIN / TEST windows used", icon="date_range").classes("w-full"):
                     split_rows = []
                     for index, split in enumerate(splits, start=1):
                         split_rows.append(
@@ -920,18 +914,18 @@ class BacktestPage:
 
                     ui.table(
                         columns=[
-                            {"name": "fold", "label": "Окно", "field": "fold", "align": "center"},
-                            {"name": "train", "label": "TRAIN-период", "field": "train", "align": "left"},
-                            {"name": "test", "label": "TEST-период", "field": "test", "align": "left"},
+                            {"name": "fold", "label": "Window", "field": "fold", "align": "center"},
+                            {"name": "train", "label": "TRAIN period", "field": "train", "align": "left"},
+                            {"name": "test", "label": "TEST period", "field": "test", "align": "left"},
                         ],
                         rows=split_rows,
                         row_key="fold",
                     ).classes("w-full")
 
                 ui.label(
-                    "Кандидат считается пригодным при положительном expectancy "
-                    "и Profit Factor > 1 на TRAIN и TEST. Win Rate сам по себе "
-                    "не является критерием прибыльности."
+                    "A candidate is considered acceptable with positive expectancy "
+                    "and Profit Factor > 1 on TRAIN and TEST. Win Rate by itself "
+                    "is not a profitability criterion."
                 ).classes("text-caption text-grey q-mt-sm")
 
             if history:
@@ -951,23 +945,23 @@ class BacktestPage:
                             "test_pf": f'{item.get("test_profit_factor", 0):.2f}',
                             "test_dd": f'{item.get("test_max_drawdown_pct", 0):.2f}%',
                             "rob_status": str(item.get("robustness_status", "—")),
-                            "rob_pass": "Да" if item.get("robustness_passed", False) else "Нет",
-                            "rob_fragile": "Да" if item.get("robustness_fragile", False) else "Нет",
+                            "rob_pass": "Yes" if item.get("robustness_passed", False) else "No",
+                            "rob_fragile": "Yes" if item.get("robustness_fragile", False) else "No",
                             "rob_score": f'{item.get("robustness_stability_score", 0):.3f}',
                             "score": f'{item.get("selection_score", 0):.4f}',
-                            "status": "✅ Принят" if item.get("acceptable", False) else "— Не принят",
+                            "status": "✅ Accepted" if item.get("acceptable", False) else "— Not accepted",
                         }
                     )
 
                 ui.table(
                     columns=[
-                        {"name": "iteration", "label": "Итер.", "field": "iteration", "align": "center"},
-                        {"name": "train_trades", "label": "TRAIN сделок", "field": "train_trades", "align": "right"},
-                        {"name": "test_trades", "label": "TEST сделок", "field": "test_trades", "align": "right"},
+                        {"name": "iteration", "label": "Iter.", "field": "iteration", "align": "center"},
+                        {"name": "train_trades", "label": "TRAIN trades", "field": "train_trades", "align": "right"},
+                        {"name": "test_trades", "label": "TEST trades", "field": "test_trades", "align": "right"},
                         {"name": "train_wr", "label": "TRAIN WR", "field": "train_wr", "align": "right"},
                         {"name": "test_wr", "label": "TEST WR", "field": "test_wr", "align": "right"},
-                        {"name": "train_return", "label": "TRAIN дох.", "field": "train_return", "align": "right"},
-                        {"name": "test_return", "label": "TEST дох.", "field": "test_return", "align": "right"},
+                        {"name": "train_return", "label": "TRAIN return", "field": "train_return", "align": "right"},
+                        {"name": "test_return", "label": "TEST return", "field": "test_return", "align": "right"},
                         {"name": "train_exp", "label": "TRAIN Exp.", "field": "train_exp", "align": "right"},
                         {"name": "test_exp", "label": "TEST Exp.", "field": "test_exp", "align": "right"},
                         {"name": "test_pf", "label": "TEST PF", "field": "test_pf", "align": "right"},
@@ -977,19 +971,19 @@ class BacktestPage:
                         {"name": "rob_fragile", "label": "Fragile", "field": "rob_fragile", "align": "center"},
                         {"name": "rob_score", "label": "Robust score", "field": "rob_score", "align": "right"},
                         {"name": "score", "label": "Score", "field": "score", "align": "right"},
-                        {"name": "status", "label": "Статус", "field": "status", "align": "center"},
+                        {"name": "status", "label": "Status", "field": "status", "align": "center"},
                     ],
                     rows=rows,
                     row_key="iteration",
                 ).classes("w-full")
             else:
-                ui.label("Нет завершённых итераций оптимизации.").classes("text-warning q-mt-md")
+                ui.label("No completed optimization iterations.").classes("text-warning q-mt-md")
 
             if not best:
                 ui.label(
-                    "⚠️ Приемлемый вариант стратегии не найден. "
-                    "Это означает не ошибку программы, а то, что ни одна проверенная "
-                    "версия не прошла критерии по TEST-данным."
+                    "⚠️ No acceptable strategy variant was found. "
+                    "This is not a program error: none of the tested versions "
+                    "passed the criteria on the TEST data."
                 ).classes("text-warning text-bold q-mt-md")
                 return
 
@@ -997,28 +991,28 @@ class BacktestPage:
             test_stats = best.get("aggregated_test_stats", {})
 
             ui.label(
-                f'🏆 Лучшая итерация: #{best.get("iteration", "?")} | '
+                f'🏆 Best iteration: #{best.get("iteration", "?")} | '
                 f'TEST WR={test_stats.get("win_rate", 0):.1f}% | '
-                f'TEST доходность={test_stats.get("return_pct", 0):+.2f}% | '
+                f'TEST return={test_stats.get("return_pct", 0):+.2f}% | '
                 f'TEST expectancy={test_stats.get("expectancy_pct", 0):+.4f}% | '
                 f'TEST PF={test_stats.get("profit_factor", 0):.2f}'
             ).classes("text-positive text-bold text-subtitle1 q-mt-md")
 
             robustness_assessment = best.get("window_robustness_assessment", {}) or {}
             if robustness_assessment:
-                ui.label("🧱 Robust-оценка лучшего кандидата").classes("text-h6 q-mt-md")
+                ui.label("🧱 Robustness assessment of the best candidate").classes("text-h6 q-mt-md")
                 ui.table(
                     columns=[
-                        {"name": "metric", "label": "Метрика", "field": "metric", "align": "left"},
-                        {"name": "value", "label": "Значение", "field": "value", "align": "right"},
+                        {"name": "metric", "label": "Metric", "field": "metric", "align": "left"},
+                        {"name": "value", "label": "Value", "field": "value", "align": "right"},
                     ],
                     rows=[
-                        {"metric": "Статус", "value": str(robustness_assessment.get("status", "unstable"))},
-                        {"metric": "Доля прибыльных окон", "value": f'{robustness_assessment.get("profitable_windows_ratio", 0):.0%}'},
-                        {"metric": "Доля окон с положительным expectancy", "value": f'{robustness_assessment.get("positive_expectancy_windows_ratio", 0):.0%}'},
-                        {"metric": "Доля окон с PF > 1", "value": f'{robustness_assessment.get("pf_pass_windows_ratio", 0):.0%}'},
-                        {"metric": "Медианная доходность", "value": f'{robustness_assessment.get("median_window_return_pct", 0):+.2f}%'},
-                        {"metric": "Худшее окно", "value": f'{robustness_assessment.get("worst_window_return_pct", 0):+.2f}%'},
+                        {"metric": "Status", "value": str(robustness_assessment.get("status", "unstable"))},
+                        {"metric": "Share of profitable windows", "value": f'{robustness_assessment.get("profitable_windows_ratio", 0):.0%}'},
+                        {"metric": "Share of windows with positive expectancy", "value": f'{robustness_assessment.get("positive_expectancy_windows_ratio", 0):.0%}'},
+                        {"metric": "Share of windows with PF > 1", "value": f'{robustness_assessment.get("pf_pass_windows_ratio", 0):.0%}'},
+                        {"metric": "Median window return", "value": f'{robustness_assessment.get("median_window_return_pct", 0):+.2f}%'},
+                        {"metric": "Worst window", "value": f'{robustness_assessment.get("worst_window_return_pct", 0):+.2f}%'},
                         {"metric": "Stability score", "value": f'{robustness_assessment.get("stability_score", robustness_assessment.get("window_stability_score", 0)):.3f}'},
                     ],
                     row_key="metric",
@@ -1027,27 +1021,27 @@ class BacktestPage:
                 warnings = robustness_assessment.get("warnings", [])
                 reasons = robustness_assessment.get("reasons", [])
                 if warnings:
-                    ui.label("Предупреждения robust-оценки").classes("text-bold q-mt-sm")
+                    ui.label("Robustness assessment warnings").classes("text-bold q-mt-sm")
                     for warning in warnings:
                         ui.label(f"• {warning}").classes("text-warning")
 
                 if reasons:
-                    ui.label("Причины robust-оценки").classes("text-bold q-mt-sm")
+                    ui.label("Robustness assessment reasons").classes("text-bold q-mt-sm")
                     for reason in reasons:
                         ui.label(f"• {reason}").classes("text-caption")
 
             last_history_item = history[-1] if history else {}
             if last_history_item:
-                ui.label("🧱 Robust-оценка последней итерации").classes("text-h6 q-mt-md")
+                ui.label("🧱 Robustness assessment of the last iteration").classes("text-h6 q-mt-md")
                 ui.table(
                     columns=[
-                        {"name": "metric", "label": "Метрика", "field": "metric", "align": "left"},
-                        {"name": "value", "label": "Значение", "field": "value", "align": "right"},
+                        {"name": "metric", "label": "Metric", "field": "metric", "align": "left"},
+                        {"name": "value", "label": "Value", "field": "value", "align": "right"},
                     ],
                     rows=[
-                        {"metric": "Статус", "value": str(last_history_item.get("robustness_status", "unstable"))},
-                        {"metric": "Passed", "value": "Да" if last_history_item.get("robustness_passed", False) else "Нет"},
-                        {"metric": "Fragile", "value": "Да" if last_history_item.get("robustness_fragile", False) else "Нет"},
+                        {"metric": "Status", "value": str(last_history_item.get("robustness_status", "unstable"))},
+                        {"metric": "Passed", "value": "Yes" if last_history_item.get("robustness_passed", False) else "No"},
+                        {"metric": "Fragile", "value": "Yes" if last_history_item.get("robustness_fragile", False) else "No"},
                         {"metric": "Stability score", "value": f'{last_history_item.get("robustness_stability_score", 0):.3f}'},
                     ],
                     row_key="metric",
@@ -1056,26 +1050,26 @@ class BacktestPage:
             gap = train_stats.get("win_rate", 0) - test_stats.get("win_rate", 0)
             if gap > 15:
                 ui.label(
-                    f"⚠️ TRAIN−TEST разрыв по Win Rate: {gap:.1f}%. "
-                    "Есть риск переобучения."
+                    f"⚠️ TRAIN−TEST Win Rate gap: {gap:.1f}%. "
+                    "There is a risk of overfitting."
                 ).classes("text-warning")
 
             if test_stats.get("expectancy_pct", 0) <= 0:
                 ui.label(
-                    "⚠️ TEST expectancy не положительный. "
-                    "Такую стратегию нельзя считать готовой к реальной торговле."
+                    "⚠️ TEST expectancy is not positive. "
+                    "Such a strategy cannot be considered ready for live trading."
                 ).classes("text-warning")
 
-            ui.label("📊 Метрики лучшей стратегии").classes("text-h6 q-mt-md")
+            ui.label("📊 Metrics of the best strategy").classes("text-h6 q-mt-md")
             ui.table(
                 columns=[
-                    {"name": "metric", "label": "Метрика", "field": "metric", "align": "left"},
+                    {"name": "metric", "label": "Metric", "field": "metric", "align": "left"},
                     {"name": "train", "label": "TRAIN", "field": "train", "align": "right"},
                     {"name": "test", "label": "TEST", "field": "test", "align": "right"},
                 ],
                 rows=[
                     {
-                        "metric": "Количество сделок",
+                        "metric": "Number of trades",
                         "train": str(train_stats.get("total_trades", 0)),
                         "test": str(test_stats.get("total_trades", 0)),
                     },
@@ -1085,12 +1079,12 @@ class BacktestPage:
                         "test": f'{test_stats.get("win_rate", 0):.1f}%',
                     },
                     {
-                        "metric": "Доходность",
+                        "metric": "Return",
                         "train": f'{train_stats.get("return_pct", 0):+.2f}%',
                         "test": f'{test_stats.get("return_pct", 0):+.2f}%',
                     },
                     {
-                        "metric": "Expectancy / средняя сделка",
+                        "metric": "Expectancy / average trade",
                         "train": f'{train_stats.get("expectancy_pct", 0):+.4f}%',
                         "test": f'{test_stats.get("expectancy_pct", 0):+.4f}%',
                     },
@@ -1100,17 +1094,17 @@ class BacktestPage:
                         "test": f'{test_stats.get("profit_factor", 0):.2f}',
                     },
                     {
-                        "metric": "Максимальная просадка",
+                        "metric": "Max drawdown",
                         "train": f'{train_stats.get("max_drawdown_pct", 0):.2f}%',
                         "test": f'{test_stats.get("max_drawdown_pct", 0):.2f}%',
                     },
                     {
-                        "metric": "Средняя прибыльная сделка",
+                        "metric": "Average winning trade",
                         "train": f'{train_stats.get("avg_win_pct", 0):+.4f}%',
                         "test": f'{test_stats.get("avg_win_pct", 0):+.4f}%',
                     },
                     {
-                        "metric": "Средняя убыточная сделка",
+                        "metric": "Average losing trade",
                         "train": f'-{abs(train_stats.get("avg_loss_pct", 0)):.4f}%',
                         "test": f'-{abs(test_stats.get("avg_loss_pct", 0)):.4f}%',
                     },
@@ -1119,41 +1113,41 @@ class BacktestPage:
             ).classes("w-full")
 
             if holdout.get("enabled"):
-                ui.label("🧪 Финальная HOLDOUT-проверка").classes("text-h6 q-mt-md")
+                ui.label("🧪 Final HOLDOUT validation").classes("text-h6 q-mt-md")
                 ui.table(
                     columns=[
-                        {"name": "metric", "label": "Метрика", "field": "metric", "align": "left"},
-                        {"name": "value", "label": "Значение", "field": "value", "align": "right"},
+                        {"name": "metric", "label": "Metric", "field": "metric", "align": "left"},
+                        {"name": "value", "label": "Value", "field": "value", "align": "right"},
                     ],
                     rows=[
-                        {"metric": "Статус", "value": str(holdout.get("status", "not_run"))},
-                        {"metric": "Сделок", "value": str(holdout.get("total_trades", 0))},
-                        {"metric": "Доходность", "value": f'{holdout.get("return_pct", 0):+.2f}%'},
+                        {"metric": "Status", "value": str(holdout.get("status", "not_run"))},
+                        {"metric": "Trades", "value": str(holdout.get("total_trades", 0))},
+                        {"metric": "Return", "value": f'{holdout.get("return_pct", 0):+.2f}%'},
                         {"metric": "Expectancy", "value": f'{holdout.get("expectancy_pct", 0):+.4f}%'},
                         {"metric": "Profit Factor", "value": f'{holdout.get("profit_factor", 0):.2f}'},
-                        {"metric": "Макс. просадка", "value": f'{holdout.get("max_drawdown_pct", 0):.2f}%'},
+                        {"metric": "Max drawdown", "value": f'{holdout.get("max_drawdown_pct", 0):.2f}%'},
                     ],
                     row_key="metric",
                 ).classes("w-full")
 
                 if holdout.get("warnings"):
-                    ui.label("Предупреждения holdout").classes("text-bold q-mt-sm")
+                    ui.label("Holdout warnings").classes("text-bold q-mt-sm")
                     for warning in holdout.get("warnings", []):
                         ui.label(f"• {warning}").classes("text-warning")
 
                 if holdout.get("recommendations"):
-                    ui.label("Рекомендации holdout").classes("text-bold q-mt-sm")
+                    ui.label("Holdout recommendations").classes("text-bold q-mt-sm")
                     for rec in holdout.get("recommendations", []):
                         ui.label(f"• {rec}").classes("text-caption")
 
-            with ui.expansion("🔍 Лучшая strategy_spec", icon="rule").classes("w-full q-mt-md"):
+            with ui.expansion("🔍 Best strategy_spec", icon="rule").classes("w-full q-mt-md"):
                 ui.code(
                     _json.dumps(best.get("spec", {}), ensure_ascii=False, indent=2),
                     language="json",
                 ).classes("w-full")
 
-            with ui.expansion("📐 Правила лучшей стратегии", icon="description").classes("w-full"):
-                ui.markdown(best.get("rules") or "Текстовые правила отсутствуют.")
+            with ui.expansion("📐 Rules of the best strategy", icon="description").classes("w-full"):
+                ui.markdown(best.get("rules") or "No text rules available.")
 
     def refresh(self):
         if not self.memory:

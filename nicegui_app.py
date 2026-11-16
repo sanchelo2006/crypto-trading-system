@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-NiceGUI интерфейс торговой системы.
-Добавлены вкладки «Настройки», «Бэктест», «Автоторговля», блокировка _auto_threads,
-облегчённый внутридневной пакет при наличии сетапа/позиции.
-Реализована докачка пропущенных свечей при старте авторежима.
-HelpPage удалена.
+NiceGUI interface of the trading system.
+Added tabs "Settings", "Backtest", "Auto trading", the _auto_threads lock,
+and a lightweight intraday package when a setup/position exists.
+Catch-up of missed candles on auto mode start is implemented.
+HelpPage removed.
 """
 import sys
 import threading
@@ -28,11 +28,11 @@ from ui.pages.backtest_page import BacktestPage
 from ui.pages.coin_page import CoinPage
 from ui.pages.auto_trading_page import AutoTradingPage
 from ui.pages.statistics_page import StatisticsPage
-from ui.pages.research_lab_page import ResearchLabPage
+from ui.pages.logs_page import LogsPage
 
 from ui.app_context import app_context
 
-# ДОБАВЛЕНО: импорт для защиты от конфликтов и автовосстановления
+# ADDED: import for conflict protection and auto-recovery
 from trading.auto_trader import (
     is_auto_trading_running,
     _load_active_traders,
@@ -63,8 +63,8 @@ fetcher: Optional[BybitDataFetcher] = None
 ai_client: Optional[DeepSeekClient] = None
 memory: Optional[MemoryManager] = None
 
-# На первом этапе эти типы намеренно не указываются строго:
-# экземпляры создаются в ui.services.create_services().
+# At the first stage these types are intentionally not declared strictly:
+# the instances are created in ui.services.create_services().
 app_settings = None
 backtest_engine = None
 backtest_optimizer = None
@@ -75,67 +75,67 @@ _auto_threads: Dict[str, dict] = {}
 _auto_threads_lock = threading.Lock()
 
 # ============================================================================
-# UI-события: уведомления, обновления страниц, чат, ручные статусы.
+# UI events: notifications, page refreshes, chat, manual statuses.
 #
-# Реальная потокобезопасная логика вынесена в ui.queues.UiEventQueue.
-# Эти тонкие функции-адаптеры оставлены на первом этапе, чтобы не менять
-# десятки существующих вызовов по всему nicegui_app.py.
+# The actual thread-safe logic lives in ui.queues.UiEventQueue.
+# These thin adapter functions are kept at the first stage to avoid changing
+# dozens of existing calls across nicegui_app.py.
 # ============================================================================
 
 ui_events = UiEventQueue()
 
 def queue_chat_message(text: str, is_assistant: bool = True):
-    """Добавляет сообщение в очередь UI-чата."""
+    """Adds a message to the UI chat queue."""
     ui_events.queue_chat_message(text, is_assistant)
 
 
 def queue_chat_loading(loading: bool, text: str = ""):
-    """Добавляет событие изменения состояния загрузки чата."""
+    """Adds a chat loading state change event."""
     ui_events.queue_chat_loading(loading, text)
 
 
 def process_chat_queue(chat_page_instance):
-    """Отрисовывает накопленные сообщения чата в UI-контексте."""
+    """Renders the accumulated chat messages in the UI context."""
     ui_events.process_chat_queue(chat_page_instance)
 
 
 def set_manual_action(symbol: str, msg: str):
-    """Устанавливает ручной статус операции для монеты."""
+    """Sets the manual operation status for a coin."""
     ui_events.set_manual_action(symbol, msg)
     update_status()
 
 
 def clear_manual_action(symbol: str):
-    """Очищает ручной статус операции для монеты."""
+    """Clears the manual operation status for a coin."""
     ui_events.clear_manual_action(symbol)
     update_status()
 
 
 def get_manual_actions() -> Dict[str, str]:
-    """Возвращает текущие ручные статусы операций."""
+    """Returns the current manual operation statuses."""
     return ui_events.get_manual_actions()
 
 
 def add_notification(message: str, type: str = "positive"):
-    """Добавляет уведомление для последующего показа в UI-потоке."""
+    """Adds a notification to be shown later in the UI thread."""
     ui_events.add_notification(message, type)
 
 
 def schedule_refresh(symbol: str):
-    """Ставит обновление страницы монеты в очередь UI."""
+    """Queues a refresh of the coin's page in the UI."""
     ui_events.schedule_refresh(symbol)
 
 
 def _notify_from_queue(message: str, notification_type: str):
-    """Внутренний callback для UiEventQueue."""
+    """Internal callback for UiEventQueue."""
     ui.notify(message, type=notification_type)
 
 
 def _refresh_from_queue(symbol: str):
     """
-    Обновляет страницу конкретной монеты и общие страницы.
+    Refreshes a specific coin's page and the shared pages.
 
-    Вызывается UI-очередью только в UI-контексте.
+    Called by the UI queue only in the UI context.
     """
     if symbol in symbol_pages:
         symbol_pages[symbol].refresh()
@@ -155,9 +155,9 @@ def _refresh_from_queue(symbol: str):
 
 def process_queues():
     """
-    Применяет накопленные уведомления и обновления страниц.
+    Applies the accumulated notifications and page refreshes.
 
-    Вызывается таймером check_updates() в UI-контексте.
+    Called by the check_updates() timer in the UI context.
     """
     ui_events.process_ui_events(
         notify_callback=_notify_from_queue,
@@ -167,11 +167,11 @@ def process_queues():
 
 def init_services():
     """
-    Создаёт сервисы приложения.
+    Creates the application services.
 
-    На первом этапе рефакторинга глобальные переменные оставлены для
-    обратной совместимости с существующими страницами и AutoModeState.
-    Фактическая логика создания сервисов вынесена в ui.services.
+    At the first stage of the refactoring the global variables are kept for
+    backward compatibility with the existing pages and AutoModeState.
+    The actual service creation logic lives in ui.services.
     """
     global _services_initialized
     global fetcher
@@ -217,7 +217,7 @@ def init_services():
         _services_initialized = True
 
         logging.getLogger("nicegui").info(
-            "Сервисы инициализированы через ui.services"
+            "Services initialized via ui.services"
         )
 
         return True
@@ -226,12 +226,12 @@ def init_services():
         _services_initialized = False
 
         logging.getLogger("nicegui").exception(
-            "Ошибка инициализации сервисов: %s",
+            "Service initialization error: %s",
             e,
         )
 
         ui.notify(
-            f"Ошибка инициализации: {e}",
+            f"Initialization error: {e}",
             type="negative",
         )
 
@@ -241,20 +241,20 @@ def init_services():
 
 def _restore_auto_traders():
     """
-    Восстанавливает автотрейдеры после перезапуска приложения.
-    Читает файл активных трейдеров и запускает их.
-    Вызывается ОДИН раз при старте, после инициализации сервисов.
+    Restores auto traders after an application restart.
+    Reads the active traders file and starts them.
+    Called ONCE at startup, after the services are initialized.
     """
     if not config.AUTO_TRADING_ENABLED:
         return
 
     saved = _load_active_traders()
     if not saved:
-        logging.getLogger("nicegui").info("Нет сохранённых автотрейдеров для восстановления")
+        logging.getLogger("nicegui").info("No saved auto traders to restore")
         return
 
     logger = logging.getLogger("nicegui")
-    logger.info(f"Восстановление автотрейдеров: найдено {len(saved)} записей")
+    logger.info(f"Restoring auto traders: {len(saved)} records found")
 
     for symbol, cfg_data in saved.items():
         try:
@@ -289,11 +289,11 @@ def _restore_auto_traders():
             )
 
             if started:
-                logger.info(f"[{symbol}] Автотрейдер восстановлен после перезапуска")
+                logger.info(f"[{symbol}] Auto trader restored after restart")
             else:
-                logger.warning(f"[{symbol}] Не удалось восстановить автотрейдер")
+                logger.warning(f"[{symbol}] Failed to restore the auto trader")
         except Exception:
-            logger.exception(f"[{symbol}] Ошибка восстановления автотрейдера")
+            logger.exception(f"[{symbol}] Auto trader restore error")
 
 symbol_pages: Dict[str, "CoinPage"] = {}
 app_context.symbol_pages = symbol_pages
@@ -305,7 +305,7 @@ settings_page = None
 backtest_page = None
 auto_trading_page = None
 statistics_page = None
-research_lab_page = None
+logs_page = None
 status_label = None
 symbol_list_container = None
 main_container = None
@@ -337,7 +337,7 @@ def update_status():
 
     current_memory = app_context.memory or memory
     if not current_memory:
-        label.set_text("Авторежим не запущен")
+        label.set_text("Auto mode is not running")
         return
 
     active = []
@@ -346,23 +346,23 @@ def update_status():
         if st and st.get("is_running"):
             active.append(f"{sym}: {st.get('current_action','')}")
 
-    label.set_text("\n".join(active) if active else "Авторежим не запущен")
+    label.set_text("\n".join(active) if active else "Auto mode is not running")
 
 def create_app():
     # ================================================================
-    # МОБИЛЬНАЯ АДАПТАЦИЯ: глобальный CSS для маленьких экранов
+    # MOBILE ADAPTATION: global CSS for small screens
     # ================================================================
     ui.add_head_html(r'''
     <style>
-        /* --- Viewport и базовые шрифты --- */
+        /* --- Viewport and base fonts --- */
         body {
             -webkit-text-size-adjust: 100%;
             font-size: 15px;
         }
 
-        /* --- Мобильная версия (экраны уже 768px) --- */
+        /* --- Mobile version (screens narrower than 768px) --- */
         @media (max-width: 768px) {
-            /* Сайдбар: превращаем в компактный блок сверху */
+            /* Sidebar: turn it into a compact block on top */
             .mobile-sidebar-wrapper {
                 flex-direction: column !important;
             }
@@ -380,7 +380,7 @@ def create_app():
                 padding: 8px !important;
             }
 
-            /* Таблицы: горизонтальный скролл, не ломают ширину */
+            /* Tables: horizontal scroll, do not break the width */
             .q-table {
                 display: block !important;
                 overflow-x: auto !important;
@@ -392,7 +392,7 @@ def create_app():
                 padding: 6px 8px !important;
             }
 
-            /* Rows: перенос элементов на новую строку */
+            /* Rows: wrap items onto a new line */
             .q-row, .nicegui-row {
                 flex-wrap: wrap !important;
             }
@@ -402,27 +402,27 @@ def create_app():
                 margin-bottom: 4px !important;
             }
 
-            /* Кнопки: крупнее для удобного тапа */
+            /* Buttons: larger for comfortable tapping */
             .q-btn {
                 min-height: 44px !important;
                 font-size: 15px !important;
                 padding: 8px 12px !important;
             }
 
-            /* Инпуты: крупнее и на всю ширину */
+            /* Inputs: larger and full width */
             .q-field, .q-input, input, select, textarea {
-                font-size: 16px !important;  /* 16px чтобы iOS не зумил */
+                font-size: 16px !important;  /* 16px so iOS does not zoom */
                 min-height: 44px !important;
             }
 
-            /* Карточки: на всю ширину, меньше padding */
+            /* Cards: full width, less padding */
             .q-card {
                 width: 100% !important;
                 padding: 8px !important;
                 margin-bottom: 8px !important;
             }
 
-            /* Диалоги: на всю ширину экрана */
+            /* Dialogs: full screen width */
             .q-dialog__inner {
                 padding: 8px !important;
             }
@@ -432,24 +432,24 @@ def create_app():
                 width: 95vw !important;
             }
 
-            /* Шрифты заголовков */
+            /* Heading fonts */
             .text-h4 { font-size: 22px !important; }
             .text-h5 { font-size: 18px !important; }
             .text-h6 { font-size: 16px !important; }
             .text-subtitle1 { font-size: 15px !important; }
             .text-caption { font-size: 12px !important; }
 
-            /* Expansions (сворачиваемые блоки) */
+            /* Expansions (collapsible blocks) */
             .q-expansion-item {
                 font-size: 14px !important;
             }
 
-            /* Чат: сообщения на всю ширину */
+            /* Chat: full-width messages */
             .nicegui-chat-message {
                 max-width: 95% !important;
             }
 
-            /* Табы: компактнее */
+            /* Tabs: more compact */
             .q-tabs__content {
                 flex-wrap: wrap !important;
             }
@@ -460,7 +460,7 @@ def create_app():
             }
         }
 
-        /* --- Очень маленькие экраны (телефоны < 480px) --- */
+        /* --- Very small screens (phones < 480px) --- */
         @media (max-width: 480px) {
             body { font-size: 14px; }
             .q-table { font-size: 12px !important; }
@@ -468,19 +468,19 @@ def create_app():
             .text-h4 { font-size: 20px !important; }
         }
 
-        /* --- Планшеты и десктоп (> 768px) — оставляем как есть --- */
+        /* --- Tablets and desktop (> 768px) — left as is --- */
         @media (min-width: 769px) {
-            /* На десктопе ничего не меняем */
+            /* Nothing is changed on desktop */
         }
     </style>
     ''')
     app_context.reset_pages()
     global main_container, summary_page, journal_page, chat_page
-    global settings_page, backtest_page, auto_trading_page, statistics_page, research_lab_page, status_label, symbol_list_container  # ИЗМЕНЕНО
+    global settings_page, backtest_page, auto_trading_page, statistics_page, logs_page, status_label, symbol_list_container  # CHANGED
 
     with ui.row().classes('bg-dark text-white p-4 w-full items-center justify-between'):
         ui.label('📊 Crypto Trading System').classes('text-2xl font-bold')
-        status_label = ui.label('Авторежим не запущен').classes('text-sm')
+        status_label = ui.label('Auto mode is not running').classes('text-sm')
 
     with ui.row().classes('w-full items-stretch min-h-screen mobile-sidebar-wrapper'):
         with ui.column().classes('w-64 bg-grey-2 p-4 gap-2 mobile-sidebar').style('max-height: 100vh; overflow-y: auto;'):
@@ -489,16 +489,16 @@ def create_app():
 
             ui.separator()
             with ui.row().classes('gap-2'):
-                ui.button('➕ Добавить', on_click=add_symbol_dialog).classes('bg-primary text-white')
-                ui.button('🗑 Удалить', on_click=remove_symbol).classes('bg-negative text-white')
+                ui.button('➕ Add', on_click=add_symbol_dialog).classes('bg-primary text-white')
+                ui.button('🗑 Remove', on_click=remove_symbol).classes('bg-negative text-white')
 
             ui.separator()
-            ui.button('⏹ Остановить все авторежимы', on_click=stop_all_auto).classes('bg-warning text-white w-full')
+            ui.button('⏹ Stop all auto modes', on_click=stop_all_auto).classes('bg-warning text-white w-full')
             ui.separator()
-            ui.button('🌅 Утренний пакет (все)', on_click=run_morning_all).classes('bg-info text-white w-full')
-            ui.button('⏱ Внутридневной (все)', on_click=run_intraday_all).classes('bg-info text-white w-full')
+            ui.button('🌅 Morning package (all)', on_click=run_morning_all).classes('bg-info text-white w-full')
+            ui.button('⏱ Intraday (all)', on_click=run_intraday_all).classes('bg-info text-white w-full')
             ui.separator()
-            ui.label(f'Модель: {config.DEEPSEEK_MODEL}').classes('text-caption')
+            ui.label(f'Model: {config.DEEPSEEK_MODEL}').classes('text-caption')
             ui.label(f'Testnet: {config.BYBIT_TESTNET}').classes('text-caption')
 
         with ui.column().classes('flex-1 p-4 overflow-y-auto mobile-main').style('width: 100%;'):
@@ -539,7 +539,7 @@ def create_app():
                 )
                 backtest_page.container.visible = False
 
-                # ДОБАВЛЕНО: создание страницы автоторговли
+                # ADDED: auto trading page creation
                 if config.AUTO_TRADING_ENABLED:
                     auto_trading_page = AutoTradingPage(
                         memory=memory,
@@ -552,13 +552,12 @@ def create_app():
                     )
                     auto_trading_page.container.visible = False
 
-                # Статистика P&L — доступна всегда (читает trade-логи).
+                # P&L statistics — always available (reads the trade logs).
                 statistics_page = StatisticsPage(memory=memory)
                 statistics_page.container.visible = False
 
-                # Исследовательская лаборатория — портфельная симуляция
-                research_lab_page = ResearchLabPage(backtest_engine=backtest_engine)
-                research_lab_page.container.visible = False
+                logs_page = LogsPage()
+                logs_page.container.visible = False
 
                 load_all_pages()
 
@@ -567,10 +566,10 @@ def create_app():
         journal_page=journal_page,
         chat_page=chat_page,
         settings_page=settings_page,
+        logs_page=logs_page,
         backtest_page=backtest_page,
         auto_trading_page=auto_trading_page,
-        research_lab_page=research_lab_page,
-    )        
+    )
 
     app_context.bind_shell(
         status_label=status_label,
@@ -580,8 +579,8 @@ def create_app():
 
     ui.timer(2.0, callback=check_updates)
 
-    # Восстанавливаем автотрейдеры после перезапуска (с задержкой 10 сек,
-    # чтобы сервисы успели полностью инициализироваться)
+    # Restore auto traders after a restart (with a 10 sec delay
+    # so the services have time to fully initialize)
     ui.timer(10.0, _restore_auto_traders, once=True)
 
 
@@ -595,42 +594,42 @@ def render_sidebar_buttons():
 
     container.clear()
     with container:
-        ui.label('⚙️ Управление').classes('text-h6')
-        
+        ui.label('⚙️ Controls').classes('text-h6')
+
         buttons_config = [
-            ('📊 Сводка', 'Сводка'),
-            ('📋 Журнал сделок', 'Журнал'),
-            ('💬 Чат', 'Чат'),
-            ('⚙️ Настройки', 'Настройки'),
-            ('📈 Бэктест', 'Бэктест'),
-            ('📊 Статистика', 'Статистика'),
-            ('🔬 Лаборатория', 'Лаборатория'),
+            ('📊 Summary', 'Summary'),
+            ('📋 Trade journal', 'Journal'),
+            ('💬 Chat', 'Chat'),
+            ('⚙️ Settings', 'Settings'),
+            ('📈 Backtest', 'Backtest'),
+            ('📊 Statistics', 'Statistics'),
+            ('📁 Logs', 'Logs'),
         ]
-        
+
         if config.AUTO_TRADING_ENABLED:
-            buttons_config.append(('🤖 Автоторговля', 'Автоторговля'))
-        
+            buttons_config.append(('🤖 Auto trading', 'Auto trading'))
+
         for btn_text, page_name in buttons_config:
             btn = ui.button(btn_text, on_click=lambda p=page_name: switch_page(p))
             btn.classes('bg-transparent text-dark text-left')
             btn.style('width: 100%; text-align: left; color: black !important;')
 
         ui.separator()
-        ui.label('💰 Монеты').classes('text-h6')
+        ui.label('💰 Coins').classes('text-h6')
 
         for sym in current_memory.get_all_symbols():
             state = AutoModeState.get_state(sym)
             auto_mode_running = state and state.get("is_running")
-            auto_trading = is_auto_trading_running(sym)  # ДОБАВЛЕНО
-            
-            # ИЗМЕНЕНО: иконка учитывает и авторежим, и автоторговлю
+            auto_trading = is_auto_trading_running(sym)  # ADDED
+
+            # CHANGED: the icon accounts for both auto mode and auto trading
             if auto_trading:
-                icon = "🤖"  # автоторговля
+                icon = "🤖"  # auto trading
             elif auto_mode_running:
-                icon = "🟢"  # авторежим
+                icon = "🟢"  # auto mode
             else:
                 icon = "⚪"
-            
+
             cm = current_memory.get(sym)
             closed = "🔒" if cm.is_day_closed() else ""
             btn = ui.button(f'{icon}{closed} {sym}', on_click=lambda s=sym: switch_page(s))
@@ -638,33 +637,33 @@ def render_sidebar_buttons():
             btn.style('width: 100%; text-align: left; color: black !important;')
 
 def switch_page(page_name: str, open_archive_tab: bool = False):
-    # ИЗМЕНЕНО: добавлена страница автоторговли
-    for p in [summary_page, journal_page, chat_page, settings_page, backtest_page, auto_trading_page, statistics_page, research_lab_page]:
+    # CHANGED: auto trading page added
+    for p in [summary_page, journal_page, chat_page, settings_page, backtest_page, auto_trading_page, statistics_page, logs_page]:
         if p:
             p.container.visible = False
     for page in symbol_pages.values():
         page.container.visible = False
 
-    if page_name == 'Сводка' and summary_page:
+    if page_name == 'Summary' and summary_page:
         summary_page.container.visible = True
-    elif page_name == 'Журнал' and journal_page:
+    elif page_name == 'Journal' and journal_page:
         journal_page.container.visible = True
         journal_page.refresh()
-    elif page_name == 'Чат' and chat_page:
+    elif page_name == 'Chat' and chat_page:
         chat_page.container.visible = True
-    elif page_name == 'Настройки' and settings_page:
+    elif page_name == 'Settings' and settings_page:
         settings_page.container.visible = True
-    elif page_name == 'Бэктест' and backtest_page:
+    elif page_name == 'Backtest' and backtest_page:
         backtest_page.container.visible = True
         backtest_page.refresh()
-    # ДОБАВЛЕНО: обработка страницы автоторговли
-    elif page_name == 'Автоторговля' and auto_trading_page:
+    # ADDED: auto trading page handling
+    elif page_name == 'Auto trading' and auto_trading_page:
         auto_trading_page.container.visible = True
-    elif page_name == 'Статистика' and statistics_page:
+    elif page_name == 'Statistics' and statistics_page:
         statistics_page.container.visible = True
         statistics_page.refresh()
-    elif page_name == 'Лаборатория' and research_lab_page:
-        research_lab_page.container.visible = True
+    elif page_name == 'Logs' and logs_page:
+        logs_page.container.visible = True
     elif page_name in symbol_pages:
         page = symbol_pages[page_name]
         page.container.visible = True
@@ -708,30 +707,30 @@ def load_all_pages():
 
 def stop_all_auto():
     AutoModeState.stop_all()
-    add_notification('Все авторежимы остановлены', 'warning')
+    add_notification('All auto modes stopped', 'warning')
     update_status()
 
 def add_symbol_dialog():
     with ui.dialog() as dialog, ui.card().style('min-width: 450px;'):
-        ui.label('Добавить монету').classes('text-h6')
-        symbol_input = ui.input('Символ', placeholder='XRPUSDT')
+        ui.label('Add coin').classes('text-h6')
+        symbol_input = ui.input('Symbol', placeholder='XRPUSDT')
         with ui.row().classes('justify-end'):
-            ui.button('Отмена', on_click=dialog.close)
+            ui.button('Cancel', on_click=dialog.close)
 
             def do_add():
                 symbol = symbol_input.value.strip().upper()
                 if not symbol:
                     return
                 if symbol in memory.get_all_symbols():
-                    ui.notify('Уже есть', type='warning')
+                    ui.notify('Already exists', type='warning')
                     return
                 try:
                     price = fetcher.get_current_price(symbol, category='linear')
                     if price is None or price <= 0:
-                        ui.notify(f'{symbol} не найдена', type='negative')
+                        ui.notify(f'{symbol} not found', type='negative')
                         return
                 except Exception as e:
-                    ui.notify(f'Ошибка: {e}', type='negative')
+                    ui.notify(f'Error: {e}', type='negative')
                     return
                 memory.add_symbol(symbol)
                 config.TRADING_PAIRS.append({"symbol": symbol, "category": "linear"})
@@ -761,10 +760,10 @@ def add_symbol_dialog():
                 if backtest_page:
                     backtest_page.refresh()
 
-                ui.notify(f'{symbol} добавлена! Цена: {price:.4f}', type='positive')
+                ui.notify(f'{symbol} added! Price: {price:.4f}', type='positive')
                 dialog.close()
 
-            ui.button('Добавить', on_click=do_add, color='primary')
+            ui.button('Add', on_click=do_add, color='primary')
     dialog.open()
 
 def remove_symbol():
@@ -774,10 +773,10 @@ def remove_symbol():
     if not symbols:
         return
     with ui.dialog() as dialog, ui.card().style('min-width: 300px;'):
-        ui.label('Удалить монету').classes('text-h6')
-        symbol_select = ui.select(options=symbols, label='Выберите')
+        ui.label('Remove coin').classes('text-h6')
+        symbol_select = ui.select(options=symbols, label='Select')
         with ui.row().classes('justify-end'):
-            ui.button('Отмена', on_click=dialog.close)
+            ui.button('Cancel', on_click=dialog.close)
 
             def do_remove():
                 sym = symbol_select.value
@@ -790,37 +789,37 @@ def remove_symbol():
                     render_sidebar_buttons()
                     if backtest_page:
                         backtest_page.refresh()
-                    ui.notify(f'{sym} удалена', type='positive')
+                    ui.notify(f'{sym} removed', type='positive')
                     dialog.close()
 
-            ui.button('Удалить', on_click=do_remove, color='negative')
+            ui.button('Remove', on_click=do_remove, color='negative')
     dialog.open()
 
 def run_morning_all():
     if not memory:
         return
     for sym in memory.get_all_symbols():
-        # ДОБАВЛЕНО: проверка автоторговли
+        # ADDED: auto trading check
         if is_auto_trading_running(sym):
             add_notification(
-                f'[{sym}] Автоторговля включена. Утренний пакет недоступен.',
+                f'[{sym}] Auto trading is enabled. The morning package is unavailable.',
                 'warning'
             )
             continue
-        set_manual_action(sym, "🌅 Утро...")
+        set_manual_action(sym, "🌅 Morning...")
 
     def worker():
         try:
             for pc in config.TRADING_PAIRS:
                 sym, cat = pc["symbol"], pc["category"]
-                
-                # ДОБАВЛЕНО: проверка автоторговли
+
+                # ADDED: auto trading check
                 if is_auto_trading_running(sym):
                     continue
-                
+
                 cm = memory.get(sym)
                 if cm.is_day_closed():
-                    add_notification(f'[{sym}] День закрыт, утренний пакет не отправлен', 'warning')
+                    add_notification(f'[{sym}] Day is closed, morning package not sent', 'warning')
                     continue
                 if not cm.is_initialized():
                     continue
@@ -838,10 +837,10 @@ def run_morning_all():
                         cm.update_state({"last_morning_update_utc": datetime.now(timezone.utc).isoformat()})
                         schedule_refresh(sym)
                 except Exception as e:
-                    add_notification(f'Ошибка {sym}: {e}', 'negative')
+                    add_notification(f'Error {sym}: {e}', 'negative')
                 finally:
                     clear_manual_action(sym)
-            add_notification('Утро (все) завершено', 'positive')
+            add_notification('Morning (all) completed', 'positive')
         finally:
             for sym in memory.get_all_symbols():
                 clear_manual_action(sym)
@@ -852,27 +851,27 @@ def run_intraday_all():
     if not memory:
         return
     for sym in memory.get_all_symbols():
-        # ДОБАВЛЕНО: проверка автоторговли
+        # ADDED: auto trading check
         if is_auto_trading_running(sym):
             add_notification(
-                f'[{sym}] Автоторговля включена. Внутридневной пакет недоступен.',
+                f'[{sym}] Auto trading is enabled. The intraday package is unavailable.',
                 'warning'
             )
             continue
-        set_manual_action(sym, "⏱ День...")
+        set_manual_action(sym, "⏱ Intraday...")
 
     def worker():
         try:
             for pc in config.TRADING_PAIRS:
                 sym, cat = pc["symbol"], pc["category"]
-                
-                # ДОБАВЛЕНО: проверка автоторговли
+
+                # ADDED: auto trading check
                 if is_auto_trading_running(sym):
                     continue
-                
+
                 cm = memory.get(sym)
                 if cm.is_day_closed():
-                    add_notification(f'[{sym}] День закрыт, внутридневной пакет не отправлен', 'warning')
+                    add_notification(f'[{sym}] Day is closed, intraday package not sent', 'warning')
                     continue
                 if not cm.is_initialized():
                     continue
@@ -894,10 +893,10 @@ def run_intraday_all():
                         cm.update_state({"last_update_utc": datetime.now(timezone.utc).isoformat()})
                         schedule_refresh(sym)
                 except Exception as e:
-                    add_notification(f'Ошибка {sym}: {e}', 'negative')
+                    add_notification(f'Error {sym}: {e}', 'negative')
                 finally:
                     clear_manual_action(sym)
-            add_notification('День (все) завершён', 'positive')
+            add_notification('Intraday (all) completed', 'positive')
         finally:
             for sym in memory.get_all_symbols():
                 clear_manual_action(sym)
@@ -912,7 +911,7 @@ def find_free_port(start_port: int = 8081, max_attempts: int = 10) -> int:
                 return port
             except OSError:
                 continue
-    raise RuntimeError(f"Не удалось найти свободный порт в диапазоне {start_port}-{start_port+max_attempts-1}")
+    raise RuntimeError(f"Failed to find a free port in the range {start_port}-{start_port+max_attempts-1}")
 
 def main():
     from utils.logger_setup import setup_logging
@@ -926,8 +925,8 @@ def main():
 
     logger = logging.getLogger("nicegui")
 
-    # --- 1. faulthandler: ловит жёсткие краши (segfault, OOM) ---
-    # Дамп стека пишется в файл, если процесс убит не Python-исключением.
+    # --- 1. faulthandler: catches hard crashes (segfault, OOM) ---
+    # The stack dump is written to a file if the process is killed not by a Python exception.
     try:
         from pathlib import Path
         log_dir = Path(__file__).parent / "logs"
@@ -935,22 +934,22 @@ def main():
         _crash_log = open(log_dir / "faulthandler.log", "a", encoding="utf-8")
         faulthandler.enable(file=_crash_log, all_threads=True)
     except Exception:
-        pass  # не критично, продолжаем без него
+        pass  # not critical, continue without it
 
-    # --- 2. Главный excepthook: необработанные исключения верхнего уровня ---
+    # --- 2. Main excepthook: unhandled top-level exceptions ---
     def _excepthook(exc_type, exc_value, exc_tb):
         logger.critical(
-            "НЕОБРАБОТАННОЕ ИСКЛЮЧЕНИЕ (main thread):\n%s",
+            "UNHANDLED EXCEPTION (main thread):\n%s",
             "".join(traceback.format_exception(exc_type, exc_value, exc_tb)),
         )
 
     sys.excepthook = _excepthook
 
-    # --- 3. threading.excepthook: исключения в фоновых потоках ---
-    # КРИТИЧНО для автоторговли — трейдеры работают в отдельных потоках.
+    # --- 3. threading.excepthook: exceptions in background threads ---
+    # CRITICAL for auto trading — traders run in separate threads.
     def _thread_excepthook(args):
         logger.critical(
-            "НЕОБРАБОТАННОЕ ИСКЛЮЧЕНИЕ (thread %s):\n%s",
+            "UNHANDLED EXCEPTION (thread %s):\n%s",
             args.thread.name if args.thread else "?",
             "".join(traceback.format_exception(
                 args.exc_type, args.exc_value, args.exc_traceback
@@ -960,10 +959,10 @@ def main():
     if hasattr(threading, "excepthook"):
         threading.excepthook = _thread_excepthook
 
-    # --- 4. Обработчики сигналов завершения ---
+    # --- 4. Termination signal handlers ---
     def _signal_handler(signum, frame):
         logger.warning(
-            "ПОЛУЧЕН СИГНАЛ %s — процесс завершается извне.", signum
+            "RECEIVED SIGNAL %s — the process is being terminated externally.", signum
         )
         sys.exit(0)
 
@@ -974,15 +973,15 @@ def main():
         try:
             signal.signal(sig, _signal_handler)
         except (ValueError, OSError):
-            pass  # не все сигналы ставятся вне главного потока
+            pass  # not all signals can be set outside the main thread
 
-    # --- 5. atexit: штатное завершение ---
+    # --- 5. atexit: normal shutdown ---
     def _onexit():
-        logger.warning("Процесс завершается (atexit).")
+        logger.warning("The process is shutting down (atexit).")
 
     atexit.register(_onexit)
 
-    # --- Остальная логика без изменений ---
+    # --- The rest of the logic is unchanged ---
     if not init_services():
         sys.exit(1)
 
@@ -990,8 +989,8 @@ def main():
 
     try:
         port = find_free_port(8081, 20)
-        logger.info(f"Используется порт {port}")
-        print(f"\n✅ Сервер запущен на http://localhost:{port}\n")
+        logger.info(f"Using port {port}")
+        print(f"\n✅ Server started at http://localhost:{port}\n")
     except RuntimeError as e:
         logger.error(str(e))
         print(f"❌ {str(e)}")
@@ -1001,7 +1000,7 @@ def main():
         ui.run(title='Crypto Trading System', host='0.0.0.0',
                port=port, reload=False)
     except Exception:
-        logger.critical("ui.run() завершился с исключением", exc_info=True)
+        logger.critical("ui.run() finished with an exception", exc_info=True)
         raise
 
 if __name__ == "__main__":

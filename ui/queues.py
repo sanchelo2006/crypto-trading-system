@@ -1,9 +1,9 @@
 """
-Потокобезопасные UI-очереди.
+Thread-safe UI queues.
 
-Фоновые потоки не должны напрямую создавать или обновлять элементы NiceGUI.
-Они помещают события в UiEventQueue, а главный UI-таймер забирает их
-и применяет в UI-контексте.
+Background threads must not create or update NiceGUI elements directly.
+They put events into UiEventQueue, and the main UI timer picks them up
+and applies them in the UI context.
 """
 
 from __future__ import annotations
@@ -15,9 +15,9 @@ from typing import Callable, Deque, Dict, Optional, Tuple
 
 class UiEventQueue:
     """
-    Потокобезопасный контейнер UI-событий.
+    Thread-safe container of UI events.
 
-    Используется как мост между фоновыми потоками и главным потоком NiceGUI.
+    Used as a bridge between background threads and the main NiceGUI thread.
     """
 
     def __init__(self) -> None:
@@ -31,19 +31,19 @@ class UiEventQueue:
         self._manual_actions_lock = threading.Lock()
 
     # ------------------------------------------------------------------
-    # Чат
+    # Chat
     # ------------------------------------------------------------------
 
     def queue_chat_message(self, text: str, is_assistant: bool = True) -> None:
         """
-        Добавляет обычное сообщение в очередь чата.
+        Adds a regular message to the chat queue.
 
         Parameters
         ----------
         text:
-            Текст сообщения.
+            Message text.
         is_assistant:
-            True — сообщение от AI, False — сообщение пользователя.
+            True — message from the AI, False — message from the user.
         """
         with self._chat_lock:
             self._chat_messages.append(
@@ -56,7 +56,7 @@ class UiEventQueue:
 
     def queue_chat_loading(self, loading: bool, text: str = "") -> None:
         """
-        Добавляет событие изменения статуса загрузки чата.
+        Adds a chat loading status change event.
         """
         with self._chat_lock:
             self._chat_messages.append(
@@ -69,10 +69,11 @@ class UiEventQueue:
 
     def process_chat_queue(self, chat_page) -> None:
         """
-        Применяет накопленные события чата в UI-контексте.
+        Applies the accumulated chat events in the UI context.
 
-        chat_page намеренно не типизирован жёстко, чтобы модуль не зависел
-        от конкретного класса ChatPage и не создавал циклический импорт.
+        chat_page is intentionally not strictly typed, so that the module
+        does not depend on the concrete ChatPage class and does not create
+        a circular import.
         """
         if chat_page is None:
             return
@@ -93,24 +94,24 @@ class UiEventQueue:
                 with chat_page.chat_container:
                     ui.chat_message(
                         text=item.get("text", ""),
-                        name="AI" if item.get("assistant", True) else "Вы",
+                        name="AI" if item.get("assistant", True) else "You",
                         sent=not item.get("assistant", True),
                     )
 
     # ------------------------------------------------------------------
-    # Уведомления и refresh
+    # Notifications and refresh
     # ------------------------------------------------------------------
 
     def add_notification(self, message: str, notification_type: str = "positive") -> None:
         """
-        Добавляет уведомление, которое позже покажет главный UI-поток.
+        Adds a notification that the main UI thread will show later.
         """
         with self._queue_lock:
             self._notifications.append((message, notification_type))
 
     def schedule_refresh(self, symbol: str) -> None:
         """
-        Планирует обновление страницы конкретной монеты.
+        Schedules a refresh of a specific coin's page.
         """
         with self._queue_lock:
             self._refresh_symbols.append(symbol)
@@ -121,17 +122,17 @@ class UiEventQueue:
         refresh_callback: Callable[[str], None],
     ) -> None:
         """
-        Обрабатывает уведомления и запросы на обновление UI.
+        Processes notifications and UI refresh requests.
 
         Parameters
         ----------
         notify_callback:
-            Функция вида notify_callback(message, notification_type).
-            В nicegui_app.py обычно вызывает ui.notify(...).
+            A function of the form notify_callback(message, notification_type).
+            In nicegui_app.py it usually calls ui.notify(...).
 
         refresh_callback:
-            Функция вида refresh_callback(symbol), которая обновляет
-            страницу конкретной монеты и связанные сводные страницы.
+            A function of the form refresh_callback(symbol) that refreshes
+            a specific coin's page and the related summary pages.
         """
         notifications = []
         refresh_symbols = []
@@ -150,31 +151,31 @@ class UiEventQueue:
             refresh_callback(symbol)
 
     # ------------------------------------------------------------------
-    # Ручные статусы
+    # Manual statuses
     # ------------------------------------------------------------------
 
     def set_manual_action(self, symbol: str, message: str) -> None:
         """
-        Устанавливает текст ручной операции для конкретной монеты.
+        Sets the manual operation text for a specific coin.
 
-        Примеры:
-        - «🌅 Утренний пакет...»
-        - «🪄 Инициализация...»
-        - «📊 Анализ после входа...»
+        Examples:
+        - "🌅 Morning batch..."
+        - "🪄 Initialization..."
+        - "📊 Post-entry analysis..."
         """
         with self._manual_actions_lock:
             self._manual_actions[symbol] = message
 
     def clear_manual_action(self, symbol: str) -> None:
         """
-        Удаляет ручной статус операции для монеты.
+        Removes the manual operation status for a coin.
         """
         with self._manual_actions_lock:
             self._manual_actions.pop(symbol, None)
 
     def get_manual_actions(self) -> Dict[str, str]:
         """
-        Возвращает копию текущих ручных статусов.
+        Returns a copy of the current manual statuses.
         """
         with self._manual_actions_lock:
             return self._manual_actions.copy()

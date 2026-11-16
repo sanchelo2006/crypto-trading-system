@@ -1,17 +1,16 @@
 """
-Общий контекст приложения NiceGUI.
+Shared application context for the NiceGUI interface.
 
-Здесь хранятся:
-- сервисы;
-- ссылки на страницы;
-- ссылки на корневые UI-элементы;
-- словарь страниц монет.
+Stores:
+- services;
+- references to pages;
+- references to root UI elements;
+- the dictionary of coin pages.
 
-На данном этапе AppContext вводится мягко:
-он сосуществует с уже существующими глобальными переменными и
-становится единым контейнером состояния верхнего уровня.
+At this stage AppContext is introduced gradually:
+it coexists with the already existing global variables and
+becomes the single container of top-level state.
 """
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -20,7 +19,7 @@ from typing import Any, Dict, Optional
 
 @dataclass
 class AppContext:
-    # --- Сервисы ---
+    # --- Services ---
     fetcher: Any = None
     ai_client: Any = None
     memory: Any = None
@@ -28,32 +27,33 @@ class AppContext:
     backtest_engine: Any = None
     backtest_optimizer: Any = None
 
-    # --- Страницы ---
+    # --- Pages ---
     summary_page: Any = None
     journal_page: Any = None
     chat_page: Any = None
     settings_page: Any = None
+    logs_page: Any = None
     backtest_page: Any = None
     auto_trading_page: Any = None
-    research_lab_page: Any = None
+    
 
-    # --- UI-контейнеры верхнего уровня ---
+    # --- Top-level UI containers ---
     status_label: Any = None
     symbol_list_container: Any = None
     main_container: Any = None
 
-    # --- Страницы монет ---
+    # --- Coin pages ---
     symbol_pages: Dict[str, Any] = field(default_factory=dict)
 
     def reset_pages(self) -> None:
-        """Сбрасывает ссылки на страницы и контейнеры UI."""
+        """Resets references to pages and UI containers."""
         self.summary_page = None
         self.journal_page = None
         self.chat_page = None
         self.settings_page = None
+        self.logs_page = None
         self.backtest_page = None
         self.auto_trading_page = None
-        self.research_lab_page = None
         self.status_label = None
         self.symbol_list_container = None
         self.main_container = None
@@ -69,7 +69,7 @@ class AppContext:
         backtest_engine=None,
         backtest_optimizer=None,
     ) -> None:
-        """Привязывает сервисы приложения."""
+        """Binds the application services."""
         self.fetcher = fetcher
         self.ai_client = ai_client
         self.memory = memory
@@ -84,7 +84,7 @@ class AppContext:
         symbol_list_container=None,
         main_container=None,
     ) -> None:
-        """Привязывает корневые UI-элементы."""
+        """Binds the root UI elements."""
         self.status_label = status_label
         self.symbol_list_container = symbol_list_container
         self.main_container = main_container
@@ -96,19 +96,19 @@ class AppContext:
         journal_page=None,
         chat_page=None,
         settings_page=None,
+        logs_page=None,
         backtest_page=None,
         auto_trading_page=None,
-        research_lab_page=None,
     ) -> None:
-        """Привязывает страницы верхнего уровня."""
+        """Binds the top-level pages."""
         self.summary_page = summary_page
         self.journal_page = journal_page
         self.chat_page = chat_page
         self.settings_page = settings_page
+        self.logs_page = logs_page
         self.backtest_page = backtest_page
         self.auto_trading_page = auto_trading_page
-        self.research_lab_page = research_lab_page
 
 
-# Единый экземпляр контекста приложения.
+# Single instance of the application context.
 app_context = AppContext()

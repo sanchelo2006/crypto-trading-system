@@ -1,5 +1,5 @@
 """
-Страница системных настроек.
+System settings page.
 """
 
 from __future__ import annotations
@@ -9,11 +9,11 @@ from nicegui import ui
 
 class SettingsPage:
     """
-    Страница редактирования пользовательских настроек приложения.
+    Page for editing the application's user settings.
 
-    На этом этапе логика оставлена максимально близкой к исходному
-    nicegui_app.py: страница показывает чекбоксы и сохраняет настройки
-    через переданный объект app_settings.
+    At this stage the logic is kept as close as possible to the original
+    nicegui_app.py: the page shows checkboxes and saves the settings
+    through the passed app_settings object.
     """
 
     def __init__(self, app_settings):
@@ -26,103 +26,101 @@ class SettingsPage:
         self.container.visible = False
 
     def build_ui(self):
-        ui.label("⚙️ Настройки системы").classes("text-h6 q-mb-md")
+        ui.label("⚙️ System settings").classes("text-h6 q-mb-md")
 
-        with ui.expansion("📦 Данные пакетов", icon="dataset", value=True).classes("w-full"):
+        with ui.expansion("📦 Data packages", icon="dataset", value=True).classes("w-full"):
             with ui.column().classes("q-gutter-md w-full"):
-                ui.label("Состав пакетов").classes("text-bold")
+                ui.label("Package contents").classes("text-bold")
 
                 with ui.column().classes("gap-2"):
                     self.include_1h = ui.checkbox(
-                        "Часовые свечи (1h)",
+                        "Hourly candles (1h)",
                         value=self.app_settings.get("include_1h"),
                     ).style("width: 260px")
 
-                    # Подсказка о том, зачем нужны 1h-серии
+                    # Hint explaining why the 1h series are needed
                     ui.label(
-                        "Серии 1h используются для трендового фильтра старшего таймфрейма, "
-                        "повышения устойчивости стратегии и снижения количества шумовых сигналов."
+                        "The 1h series are used for the higher-timeframe trend filter, "
+                        "improving strategy robustness and reducing the number of noisy signals."
                     ).classes("text-caption text-grey q-mt-xs")
 
                     self.include_15m = ui.checkbox(
-                        "15-мин свечи",
+                        "15-minute candles",
                         value=self.app_settings.get("include_15m"),
                     ).style("width: 260px")
 
                     self.include_fund = ui.checkbox(
-                        "Фундаментал (OI, Funding, F&G)",
+                        "Fundamentals (OI, Funding, F&G)",
                         value=self.app_settings.get("include_fundamentals"),
                     ).style("width: 260px")
 
                     self.include_ob = ui.checkbox(
-                        "Стакан",
+                        "Order book",
                         value=self.app_settings.get("include_orderbook"),
                     ).style("width: 260px")
 
                     self.include_trades = ui.checkbox(
-                        "Трейды",
+                        "Trades",
                         value=self.app_settings.get("include_trades"),
                     ).style("width: 260px")
 
                     self.include_news = ui.checkbox(
-                        "Новости",
+                        "News",
                         value=self.app_settings.get("include_news"),
                     ).style("width: 260px")
 
                     self.allow_weak_holdout_save = ui.checkbox(
-                        "Разрешать сохранение стратегии при weak_pass holdout",
+                        "Allow saving the strategy on weak_pass holdout",
                         value=self.app_settings.get("allow_weak_holdout_save", False),
                     ).style("width: 360px")
 
-        with ui.expansion("🧱 Robust-отбор по окнам", icon="insights", value=False).classes("w-full"):
+        with ui.expansion("🧱 Robust window-based selection", icon="insights", value=False).classes("w-full"):
             with ui.column().classes("q-gutter-md w-full"):
                 self.robust_min_profitable_windows_ratio = ui.number(
-                    "Минимальная доля прибыльных окон",
+                    "Minimum share of profitable windows",
                     value=float(self.app_settings.get("robust_min_profitable_windows_ratio", 0.67)),
                     format="%.2f",
                 ).style("width: 320px")
 
                 self.robust_min_positive_expectancy_windows_ratio = ui.number(
-                    "Минимальная доля окон с положительным expectancy",
+                    "Minimum share of windows with positive expectancy",
                     value=float(self.app_settings.get("robust_min_positive_expectancy_windows_ratio", 0.67)),
                     format="%.2f",
                 ).style("width: 320px")
 
                 self.robust_min_pf_pass_windows_ratio = ui.number(
-                    "Минимальная доля окон с PF > 1",
+                    "Minimum share of windows with PF > 1",
                     value=float(self.app_settings.get("robust_min_pf_pass_windows_ratio", 0.67)),
                     format="%.2f",
                 ).style("width: 320px")
 
                 self.robust_min_median_window_return_pct = ui.number(
-                    "Минимальная медианная доходность по окнам (%)",
+                    "Minimum median window return (%)",
                     value=float(self.app_settings.get("robust_min_median_window_return_pct", 0.0)),
                     format="%.2f",
                 ).style("width: 320px")
 
                 self.robust_max_worst_window_return_pct = ui.number(
-                    "Минимально допустимое худшее окно (%)",
+                    "Minimum allowed worst window (%)",
                     value=float(self.app_settings.get("robust_max_worst_window_return_pct", -5.0)),
                     format="%.2f",
                 ).style("width: 320px")
 
                 self.robust_min_stability_score = ui.number(
-                    "Минимальный stability_score",
+                    "Minimum stability_score",
                     value=float(self.app_settings.get("robust_min_stability_score", 0.5)),
                     format="%.2f",
                 ).style("width: 320px")
 
                 self.block_fragile_best_candidate = ui.checkbox(
-                    "Блокировать fragile-кандидата как best",
+                    "Block a fragile candidate as best",
                     value=bool(self.app_settings.get("block_fragile_best_candidate", True)),
                 ).style("width: 360px")
 
         ui.button(
-            "💾 Сохранить настройки",
+            "💾 Save settings",
             on_click=self.save_settings,
         ).classes("bg-primary text-white q-mt-lg")
-
-        
 
     def save_settings(self):
         self.app_settings.update({
@@ -143,6 +141,6 @@ class SettingsPage:
         })
 
         if self.app_settings.save():
-            ui.notify("Настройки сохранены!", type="positive")
+            ui.notify("Settings saved!", type="positive")
         else:
-            ui.notify("Ошибка сохранения настроек", type="negative")
+            ui.notify("Failed to save settings", type="negative")

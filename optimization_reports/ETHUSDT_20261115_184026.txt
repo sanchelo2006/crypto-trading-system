@@ -1,0 +1,3065 @@
+====================================================================================================
+OPTIMIZATION ETHUSDT
+UTC: 2026-11-15T18:40:26+00:00
+Report file: C:\Users\sanch\Projects\TRADING_AGENT_4\optimization_reports\ETHUSDT_20261115_184026.txt
+====================================================================================================
+
+[18:40:26] Detailed optimization report: C:\Users\sanch\Projects\TRADING_AGENT_4\optimization_reports\ETHUSDT_20261115_184026.txt
+[18:40:26] Optimization: period 2025-01-01 → 2026-11-15, iterations: 3, walk-forward windows: 6, local mutations per iteration: 30.
+[18:40:26] Loading historical candles and computing indicators...
+[18:43:04] Historical data ready: 65643 candles.
+[18:43:04] BASELINE buy&hold over period: -45.73%, DD=69.3%.
+
+----------------------------------------------------------------------------------------------------
+[18:43:04] BASELINE / BUY&HOLD
+----------------------------------------------------------------------------------------------------
+{
+  "name": "BUY&HOLD",
+  "return_pct": -45.73,
+  "max_drawdown_pct": 69.29,
+  "trades": 1,
+  "winrate": 0.0,
+  "expectancy_pct": 0.0,
+  "profit_factor": 0.0
+}
+[18:43:04] HOLDOUT reserved: 9846 candles (2026-08-05 05:15:00+00:00 → 2026-11-15 18:30:00+00:00).
+[18:43:04] OPTIMIZATION period: 2025-01-01 00:00:00+00:00 → 2026-08-05 05:00:00+00:00.
+[18:43:04] Number of split windows: 6.
+[18:43:04] Window 1/6: TRAIN 2025-01-01 → 2026-02-11 | TEST 2026-02-11 → 2026-03-12
+[18:43:04] Window 2/6: TRAIN 2025-01-01 → 2026-03-12 | TEST 2026-03-12 → 2026-04-10
+[18:43:04] Window 3/6: TRAIN 2025-01-01 → 2026-04-10 | TEST 2026-04-10 → 2026-05-10
+[18:43:04] Window 4/6: TRAIN 2025-01-01 → 2026-05-10 | TEST 2026-05-10 → 2026-06-08
+[18:43:04] Window 5/6: TRAIN 2025-01-01 → 2026-06-08 | TEST 2026-06-08 → 2026-07-07
+[18:43:04] Window 6/6: TRAIN 2025-01-01 → 2026-07-07 | TEST 2026-07-07 → 2026-08-05
+[18:43:04] Iteration 1/3: running TRAIN/TEST...
+[18:43:16] [1] TRAIN: trades=406, P&L=-113.27%, Exp=-0.2790%, PF=0.75.
+[18:43:16] [1] TEST: trades=139, P&L=-31.54%, Exp=-0.2269%, PF=0.76, DD=18.95%, RawScore=+3.1048, WindowPenalty=+2.1000, Score=+1.0048, not accepted.
+[18:43:16] [1] SOFT WARNINGS: Worst window -18.9%
+[18:43:16] [1] RECOMMENDATIONS: Consider more aggressive breakeven or trailing stop | Test the strategy on longer history and an additional holdout period
+[18:43:16] [1] WINDOW PENALTY: +2.1000 | reasons: borderline share of profitable windows | borderline share of windows with positive expectancy | borderline share of windows with PF > 1 | there is a very bad window | elevated return dispersion between windows
+[18:43:16] [1] SCORE BREAKDOWN: test_return=-29.09%, test_exp=-0.2269%, test_pf=0.76, test_dd=18.95%, gap_ret=-42.80, gap_exp=-0.0521, gap_pf=-0.01, test_conc=0.07, raw=+3.1048, penalty=+2.1000, final=+1.0048.
+[18:43:16] [1] ROBUSTNESS: status=fragile, passed=True, fragile=True, profitable=50%, positive_exp=50%, pf_pass=50%, worst=-18.95%, median=-1.68%, stability=0.550
+[18:47:55] Iteration 1: AI analyzes results...
+
+----------------------------------------------------------------------------------------------------
+[18:47:55] ITERATION 1 / AI INPUT DATA
+----------------------------------------------------------------------------------------------------
+{
+  "base_spec": {
+    "long": {
+      "entry_any": [
+        [
+          {
+            "type": "compare",
+            "left": "close",
+            "op": ">",
+            "right": "sma_50_1h"
+          },
+          {
+            "type": "compare",
+            "left": "macd_hist",
+            "op": ">",
+            "right": 0
+          },
+          {
+            "type": "volume",
+            "op": ">",
+            "ref": "avg_volume_96",
+            "mult": 1.2
+          },
+          {
+            "type": "compare",
+            "left": "low",
+            "op": "<=",
+            "right": "resistance_1"
+          }
+        ],
+        [
+          {
+            "type": "compare",
+            "left": "close",
+            "op": ">",
+            "right": "sma_50_1h"
+          },
+          {
+            "type": "compare",
+            "left": "rsi_14",
+            "op": ">",
+            "right": 50
+          },
+          {
+            "type": "volume",
+            "op": ">",
+            "ref": "avg_volume_96",
+            "mult": 1.0
+          },
+          {
+            "type": "compare",
+            "left": "low",
+            "op": "<=",
+            "right": "pivot"
+          }
+        ]
+      ],
+      "stop_loss_atr_mult": 3.0,
+      "take_profit_atr_mult": 10.0,
+      "stop_loss_pct": 2.5,
+      "take_profit_pct": [
+        8.0
+      ],
+      "management": {
+        "move_to_breakeven_at_tp_pct": 0.6,
+        "breakeven_offset_pct": 0.1,
+        "trailing_atr_mult": null,
+        "max_hold_candles": 120,
+        "exit_on_level_failure": false,
+        "level_field": "resistance_1",
+        "level_failure_buffer_pct": 1.0,
+        "exit_on_trend_loss": false,
+        "exit_on_macd_flip": false
+      }
+    },
+    "short": {
+      "entry_any": [
+        [
+          {
+            "type": "compare",
+            "left": "close",
+            "op": "<",
+            "right": "sma_50_1h"
+          },
+          {
+            "type": "compare",
+            "left": "macd_hist",
+            "op": "<",
+            "right": 0
+          },
+          {
+            "type": "volume",
+            "op": ">",
+            "ref": "avg_volume_96",
+            "mult": 1.2
+          },
+          {
+            "type": "compare",
+            "left": "high",
+            "op": ">=",
+            "right": "support_1"
+          }
+        ],
+        [
+          {
+            "type": "compare",
+            "left": "close",
+            "op": "<",
+            "right": "sma_50_1h"
+          },
+          {
+            "type": "compare",
+            "left": "rsi_14",
+            "op": "<",
+            "right": 50
+          },
+          {
+            "type": "volume",
+            "op": ">",
+            "ref": "avg_volume_96",
+            "mult": 1.0
+          },
+          {
+            "type": "compare",
+            "left": "high",
+            "op": ">=",
+            "right": "pivot"
+          }
+        ]
+      ],
+      "stop_loss_atr_mult": 3.0,
+      "take_profit_atr_mult": 10.0,
+      "stop_loss_pct": 2.5,
+      "take_profit_pct": [
+        8.0
+      ],
+      "management": {
+        "move_to_breakeven_at_tp_pct": 0.6,
+        "breakeven_offset_pct": 0.1,
+        "trailing_atr_mult": null,
+        "max_hold_candles": 120,
+        "exit_on_level_failure": false,
+        "level_field": "support_1",
+        "level_failure_buffer_pct": 1.0,
+        "exit_on_trend_loss": false,
+        "exit_on_macd_flip": false
+      }
+    },
+    "filters": [
+      {
+        "type": "compare",
+        "left": "adx_14_1h",
+        "op": ">",
+        "right": 20
+      }
+    ],
+    "risk_controls": {
+      "enabled": true,
+      "max_consecutive_losses": 4,
+      "pause_candles_after_losses": 32,
+      "max_losses_in_window": 6,
+      "loss_window_trades": 10
+    }
+  },
+  "base_rules": "## Trading Rules\n- Long group 1: close > sma_50_1h, macd_hist > 0, volume > avg_volume_96 * 1.2, low <= resistance_1.\n- Long group 2: close > sma_50_1h, rsi_14 > 50, volume > avg_volume_96 * 1.0, low <= pivot.\n- Short group 1: close < sma_50_1h, macd_hist < 0, volume > avg_volume_96 * 1.2, high >= support_1.\n- Short group 2: close < sma_50_1h, rsi_14 < 50, volume > avg_volume_96 * 1.0, high >= pivot.\n- Global regime filter: adx_14_1h > 20.\n- Stop-loss: 3.0 x ATR(15m) or 2.5% max.\n- Take-profit: 10.0 x ATR(15m) or 8.0% target.\n\n## Risk Management\n- Move to breakeven at 0.6% profit, offset 0.1%.\n- Max hold 120 candles (30 hours).\n- Cooldown: after 4 consecutive losses, pause 32 candles.\n- Max 6 losses in 10 trades triggers pause.\n- No trailing stop; exit on level failure disabled.",
+  "analysis_summary": {
+    "iteration": 1,
+    "rejected_specs_count": 1,
+    "selection_goal": "Maximize total P&L on TEST (total_pnl_pct) with moderate drawdown. Return = expectancy × number of trades: both too few trades and negative expectancy are equally failures. A candidate is acceptable only if PF>1.1 on TEST, PF>1.0 on TRAIN, expectancy>0 on both, and at least 10 trades on TEST. Study iteration_history: continue changes that raised selection_score, and do not repeat those that worsened it.",
+    "train_stats": {
+      "total_trades": 406,
+      "win_rate": 25.1,
+      "return_pct": -71.89,
+      "total_pnl_pct": -113.27,
+      "profit_factor": 0.75,
+      "avg_trade_pct": -0.279,
+      "avg_win_pct": 3.4196,
+      "avg_loss_pct": 1.52,
+      "expectancy_pct": -0.279,
+      "max_drawdown_pct": 75.26,
+      "long_trades": 182,
+      "short_trades": 224
+    },
+    "test_stats": {
+      "total_trades": 139,
+      "win_rate": 26.6,
+      "return_pct": -29.09,
+      "total_pnl_pct": -31.54,
+      "profit_factor": 0.76,
+      "avg_trade_pct": -0.2269,
+      "avg_win_pct": 2.6549,
+      "avg_loss_pct": 1.2723,
+      "expectancy_pct": -0.2269,
+      "max_drawdown_pct": 18.95,
+      "long_trades": 62,
+      "short_trades": 77
+    },
+    "diagnostics": {
+      "train_minus_test_return_pct": -42.8,
+      "train_minus_test_expectancy_pct": -0.0521,
+      "test_trade_count_warning": "ok",
+      "window_stability_score": 0.55,
+      "robustness_status": "fragile",
+      "worst_window_return_pct": -18.95,
+      "window_stability_penalty": 2.1,
+      "raw_selection_score": 3.1048,
+      "final_selection_score": 1.0048,
+      "acceptable": false
+    },
+    "iteration_history": [
+      {
+        "iter": 1,
+        "test_trades": 139,
+        "test_pnl": -31.54,
+        "test_pf": 0.76,
+        "score": 1.0048,
+        "accepted": false,
+        "changes": "original spec",
+        "robust_status": "fragile",
+        "worst_window": -18.95,
+        "windows_total": 6,
+        "profitable_windows": 3,
+        "profitable_windows_ratio": 0.5,
+        "positive_expectancy_windows": 3,
+        "positive_expectancy_windows_ratio": 0.5,
+        "pf_pass_windows": 3,
+        "pf_pass_windows_ratio": 0.5,
+        "median_window_return_pct": -1.675,
+        "median_window_expectancy_pct": -0.0403,
+        "return_std": 8.6382,
+        "expectancy_std": 0.5285,
+        "worst_window_return_pct": -18.95,
+        "worst_window_expectancy_pct": -1.2931,
+        "best_window_return_pct": 3.78,
+        "best_window_expectancy_pct": 0.1764,
+        "windows": [
+          {
+            "window_index": 1,
+            "return_pct": -18.95,
+            "expectancy_pct": -1.2931,
+            "profit_factor": 0.14,
+            "total_trades": 16,
+            "max_drawdown_pct": 18.95
+          },
+          {
+            "window_index": 2,
+            "return_pct": 0.36,
+            "expectancy_pct": 0.044,
+            "profit_factor": 1.05,
+            "total_trades": 25,
+            "max_drawdown_pct": 7.08
+          },
+          {
+            "window_index": 3,
+            "return_pct": 2.23,
+            "expectancy_pct": 0.1083,
+            "profit_factor": 1.15,
+            "total_trades": 24,
+            "max_drawdown_pct": 7.08
+          },
+          {
+            "window_index": 4,
+            "return_pct": 3.78,
+            "expectancy_pct": 0.1764,
+            "profit_factor": 1.21,
+            "total_trades": 25,
+            "max_drawdown_pct": 10.39
+          },
+          {
+            "window_index": 5,
+            "return_pct": -3.71,
+            "expectancy_pct": -0.1246,
+            "profit_factor": 0.86,
+            "total_trades": 26,
+            "max_drawdown_pct": 7.69
+          },
+          {
+            "window_index": 6,
+            "return_pct": -14.67,
+            "expectancy_pct": -0.6835,
+            "profit_factor": 0.17,
+            "total_trades": 23,
+            "max_drawdown_pct": 14.74
+          }
+        ],
+        "stability_score": 0.55
+      }
+    ],
+    "rejected_changes": [
+      "[1] original spec"
+    ],
+    "train_trade_summary": {
+      "total": 406,
+      "wins": 102,
+      "losses": 304,
+      "winrate": 25.1,
+      "loss_by_direction": {
+        "long": 145,
+        "short": 159
+      },
+      "loss_by_exit": {
+        "stop_loss": 291,
+        "time_stop": 13
+      },
+      "loss_profile": {
+        "adx_14": 28.225,
+        "dist_sma50_pct": -0.095,
+        "macd_vs_signal": -0.072,
+        "atr_14": 14.895,
+        "rsi_14": 49.952,
+        "vol_ratio": 1.8
+      },
+      "win_profile": {
+        "adx_14": 28.424,
+        "dist_sma50_pct": -0.278,
+        "macd_vs_signal": -1.572,
+        "atr_14": 15.232,
+        "rsi_14": 45.976,
+        "vol_ratio": 2.168
+      }
+    },
+    "test_trade_summary": {
+      "total": 139,
+      "wins": 37,
+      "losses": 102,
+      "winrate": 26.6,
+      "loss_by_direction": {
+        "short": 55,
+        "long": 47
+      },
+      "loss_by_exit": {
+        "stop_loss": 96,
+        "time_stop": 5,
+        "end_of_period": 1
+      },
+      "loss_profile": {
+        "adx_14": 29.136,
+        "dist_sma50_pct": 0.043,
+        "macd_vs_signal": -0.113,
+        "atr_14": 8.651,
+        "rsi_14": 48.768,
+        "vol_ratio": 1.907
+      },
+      "win_profile": {
+        "adx_14": 27.434,
+        "dist_sma50_pct": -0.277,
+        "macd_vs_signal": -0.628,
+        "atr_14": 8.978,
+        "rsi_14": 46.793,
+        "vol_ratio": 1.975
+      }
+    }
+  },
+  "rejected_fingerprints": "<1 items — full data in CSV>",
+  "extra_instruction": ""
+}
+
+----------------------------------------------------------------------------------------------------
+[18:48:34] ITERATION 1 / AI RESPONSE
+----------------------------------------------------------------------------------------------------
+{
+  "strategy_spec": {
+    "long": {
+      "entry_any": [
+        [
+          {
+            "type": "compare",
+            "left": "close",
+            "op": ">",
+            "right": "sma_50_1h"
+          },
+          {
+            "type": "compare",
+            "left": "macd_hist",
+            "op": ">",
+            "right": 0
+          },
+          {
+            "type": "volume",
+            "op": ">",
+            "ref": "avg_volume_96",
+            "mult": 1.15
+          },
+          {
+            "type": "range",
+            "value": "rsi_14",
+            "min": 42,
+            "max": 62
+          }
+        ],
+        [
+          {
+            "type": "compare",
+            "left": "close",
+            "op": ">",
+            "right": "sma_50_1h"
+          },
+          {
+            "type": "compare",
+            "left": "low",
+            "op": "<=",
+            "right": "support_1"
+          },
+          {
+            "type": "compare",
+            "left": "close",
+            "op": ">",
+            "right": "support_1"
+          },
+          {
+            "type": "volume",
+            "op": ">",
+            "ref": "avg_volume_96",
+            "mult": 1.1
+          }
+        ]
+      ],
+      "stop_loss_atr_mult": 3.0,
+      "take_profit_atr_mult": 10.0,
+      "stop_loss_pct": 2.5,
+      "take_profit_pct": [
+        8.0
+      ],
+      "management": {
+        "move_to_breakeven_at_tp_pct": 0.5,
+        "breakeven_offset_pct": 0.1,
+        "trailing_atr_mult": null,
+        "max_hold_candles": 96,
+        "exit_on_level_failure": false,
+        "level_field": "resistance_1",
+        "level_failure_buffer_pct": 1.0,
+        "exit_on_trend_loss": false,
+        "exit_on_macd_flip": false
+      }
+    },
+    "short": {
+      "entry_any": [
+        [
+          {
+            "type": "compare",
+            "left": "close",
+            "op": "<",
+            "right": "sma_50_1h"
+          },
+          {
+            "type": "compare",
+            "left": "macd_hist",
+            "op": "<",
+            "right": 0
+          },
+          {
+            "type": "volume",
+            "op": ">",
+            "ref": "avg_volume_96",
+            "mult": 1.15
+          },
+          {
+            "type": "range",
+            "value": "rsi_14",
+            "min": 38,
+            "max": 58
+          }
+        ],
+        [
+          {
+            "type": "compare",
+            "left": "close",
+            "op": "<",
+            "right": "sma_50_1h"
+          },
+          {
+            "type": "compare",
+            "left": "high",
+            "op": ">=",
+            "right": "resistance_1"
+          },
+          {
+            "type": "compare",
+            "left": "close",
+            "op": "<",
+            "right": "resistance_1"
+          },
+          {
+            "type": "volume",
+            "op": ">",
+            "ref": "avg_volume_96",
+            "mult": 1.1
+          }
+        ]
+      ],
+      "stop_loss_atr_mult": 3.0,
+      "take_profit_atr_mult": 10.0,
+      "stop_loss_pct": 2.5,
+      "take_profit_pct": [
+        8.0
+      ],
+      "management": {
+        "move_to_breakeven_at_tp_pct": 0.5,
+        "breakeven_offset_pct": 0.1,
+        "trailing_atr_mult": null,
+        "max_hold_candles": 96,
+        "exit_on_level_failure": false,
+        "level_field": "support_1",
+        "level_failure_buffer_pct": 1.0,
+        "exit_on_trend_loss": false,
+        "exit_on_macd_flip": false
+      }
+    },
+    "filters": [
+      {
+        "type": "compare",
+        "left": "adx_14_1h",
+        "op": ">",
+        "right": 18
+      }
+    ],
+    "risk_controls": {
+      "enabled": true,
+      "max_consecutive_losses": 4,
+      "pause_candles_after_losses": 24,
+      "max_losses_in_window": 6,
+      "loss_window_trades": 10
+    }
+  },
+  "new_rules": "## Trading Rules\n- Long setup A (trend pullback resume): close > sma_50_1h, macd_hist > 0, volume > avg_volume_96 * 1.15, and rsi_14 between 42 and 62 (no chasing overbought momentum).\n- Long setup B (support reclaim in uptrend): close > sma_50_1h, low <= support_1, close > support_1 (candle pierces support then closes back above it), volume > avg_volume_96 * 1.1.\n- Short setup A (trend pullback resume): close < sma_50_1h, macd_hist < 0, volume > avg_volume_96 * 1.15, and rsi_14 between 38 and 58.\n- Short setup B (resistance rejection in downtrend): close < sma_50_1h, high >= resistance_1, close < resistance_1, volume > avg_volume_96 * 1.1.\n- Global regime filter: adx_14_1h > 18 (soft, keeps frequency).\n- Stop-loss: 3.0 x atr_14 or 2.5% max, whichever is tighter.\n- Take-profit: 10.0 x atr_14 or 8.0% target.\n\n## Risk Management\n- Move stop to breakeven when price reaches 0.5 of the distance to take-profit (i.e. about 5 x atr_14); breakeven offset 0.1%.\n- Time stop: exit at close after 96 candles (24 hours).\n- No trailing stop; exit on level failure, trend loss and macd flip disabled.\n- Cooldown: after 4 consecutive losses pause 24 candles; 6 losses within 10 trades also triggers a pause.",
+  "changes_summary": "Swapped tautological low<=resistance_1/pivot entries for RSI 42-62 pullbacks and support/resistance reclaims; BE at 0.5 TP, time stop 96, softer ADX filter."
+}
+[18:48:34] Iteration 1: new spec accepted.
+[18:48:34] Iteration 2/3: running TRAIN/TEST...
+[18:48:42] [2] TRAIN: trades=434, P&L=-97.29%, Exp=-0.2242%, PF=0.79.
+[18:48:42] [2] TEST: trades=139, P&L=-35.18%, Exp=-0.2531%, PF=0.71, DD=13.90%, RawScore=+4.4854, WindowPenalty=+3.0000, Score=+1.4854, not accepted.
+[18:48:42] [2] SOFT WARNINGS: Profitable windows < 50% | Windows with positive expectancy < 50% | Windows with PF > 1 < 50% | Worst window -13.6%
+[18:48:42] [2] RECOMMENDATIONS: Tighten entry filters or increase stop-loss | Check entry logic: possibly too many noisy signals | Increase take_profit or improve position management | Consider more aggressive breakeven or trailing stop | Test the strategy on longer history and an additional holdout period
+[18:48:42] [2] WINDOW PENALTY: +3.0000 | reasons: too few profitable windows | too few windows with positive expectancy | too few windows with PF > 1 | there is a very bad window | elevated return dispersion between windows
+[18:48:42] [2] SCORE BREAKDOWN: test_return=-31.42%, test_exp=-0.2531%, test_pf=0.71, test_dd=13.90%, gap_ret=-35.25, gap_exp=+0.0289, gap_pf=+0.08, test_conc=0.07, raw=+4.4854, penalty=+3.0000, final=+1.4854.
+[18:48:42] [2] ROBUSTNESS: status=unstable, passed=False, fragile=False, profitable=17%, positive_exp=17%, pf_pass=17%, worst=-13.56%, median=-6.50%, stability=0.100
+[18:53:00] Local search improved TRAIN-score, fixing 2-local.
+[18:53:00] [2-local] TRAIN: trades=502, P&L=-71.72%, Exp=-0.1429%, PF=0.78.
+[18:53:00] [2-local] TEST: trades=161, P&L=-34.07%, Exp=-0.2116%, PF=0.61, DD=13.01%, RawScore=+6.1237, WindowPenalty=+3.0000, Score=+3.1237, not accepted.
+[18:53:00] [2-local] SOFT WARNINGS: Profitable windows < 50% | Windows with positive expectancy < 50% | Windows with PF > 1 < 50% | Worst window -12.0%
+[18:53:00] [2-local] RECOMMENDATIONS: Tighten entry filters or increase stop-loss | Check entry logic: possibly too many noisy signals | Increase take_profit or improve position management | Consider more aggressive breakeven or trailing stop | Test the strategy on longer history and an additional holdout period
+[18:53:00] [2-local] WINDOW PENALTY: +3.0000 | reasons: too few profitable windows | too few windows with positive expectancy | too few windows with PF > 1 | there is a very bad window | elevated return dispersion between windows
+[18:53:00] [2-local] SCORE BREAKDOWN: test_return=-29.84%, test_exp=-0.2116%, test_pf=0.61, test_dd=13.01%, gap_ret=-25.14, gap_exp=+0.0687, gap_pf=+0.17, test_conc=0.12, raw=+6.1237, penalty=+3.0000, final=+3.1237.
+[18:53:00] [2-local] ROBUSTNESS: status=unstable, passed=False, fragile=False, profitable=33%, positive_exp=33%, pf_pass=33%, worst=-12.01%, median=-6.42%, stability=0.100
+[18:53:00] Iteration 2: AI analyzes results...
+
+----------------------------------------------------------------------------------------------------
+[18:53:00] ITERATION 2 / AI INPUT DATA
+----------------------------------------------------------------------------------------------------
+{
+  "base_spec": {
+    "long": {
+      "entry_any": [
+        [
+          {
+            "type": "compare",
+            "left": "close",
+            "op": ">",
+            "right": "sma_50_1h"
+          },
+          {
+            "type": "compare",
+            "left": "macd_hist",
+            "op": ">",
+            "right": 0
+          },
+          {
+            "type": "volume",
+            "op": ">",
+            "ref": "avg_volume_96",
+            "mult": 1.21
+          },
+          {
+            "type": "range",
+            "value": "rsi_14",
+            "min": 36.1,
+            "max": 61.0
+          }
+        ],
+        [
+          {
+            "type": "compare",
+            "left": "close",
+            "op": ">",
+            "right": "sma_50_1h"
+          },
+          {
+            "type": "compare",
+            "left": "low",
+            "op": "<=",
+            "right": "support_1"
+          },
+          {
+            "type": "compare",
+            "left": "close",
+            "op": ">",
+            "right": "support_1"
+          },
+          {
+            "type": "volume",
+            "op": ">",
+            "ref": "avg_volume_96",
+            "mult": 0.83
+          }
+        ]
+      ],
+      "stop_loss_atr_mult": 1.04,
+      "take_profit_atr_mult": 10.0,
+      "stop_loss_pct": 2.5,
+      "take_profit_pct": [
+        8.0
+      ],
+      "management": {
+        "move_to_breakeven_at_tp_pct": 0.3,
+        "breakeven_offset_pct": 0.1,
+        "trailing_atr_mult": null,
+        "max_hold_candles": 96,
+        "exit_on_level_failure": false,
+        "level_field": "resistance_1",
+        "level_failure_buffer_pct": 1.0,
+        "exit_on_trend_loss": false,
+        "exit_on_macd_flip": false
+      }
+    },
+    "short": {
+      "entry_any": [
+        [
+          {
+            "type": "compare",
+            "left": "close",
+            "op": "<",
+            "right": "sma_50_1h"
+          },
+          {
+            "type": "compare",
+            "left": "macd_hist",
+            "op": "<",
+            "right": 0
+          },
+          {
+            "type": "volume",
+            "op": ">",
+            "ref": "avg_volume_96",
+            "mult": 1.15
+          },
+          {
+            "type": "range",
+            "value": "rsi_14",
+            "min": 38,
+            "max": 58
+          }
+        ],
+        [
+          {
+            "type": "compare",
+            "left": "close",
+            "op": "<",
+            "right": "sma_50_1h"
+          },
+          {
+            "type": "compare",
+            "left": "high",
+            "op": ">=",
+            "right": "resistance_1"
+          },
+          {
+            "type": "compare",
+            "left": "close",
+            "op": "<",
+            "right": "resistance_1"
+          },
+          {
+            "type": "volume",
+            "op": ">",
+            "ref": "avg_volume_96",
+            "mult": 1.11
+          }
+        ]
+      ],
+      "stop_loss_atr_mult": 1.79,
+      "take_profit_atr_mult": 10.0,
+      "stop_loss_pct": 2.5,
+      "take_profit_pct": [
+        8.0
+      ],
+      "management": {
+        "move_to_breakeven_at_tp_pct": 0.3,
+        "breakeven_offset_pct": 0.1,
+        "trailing_atr_mult": null,
+        "max_hold_candles": 96,
+        "exit_on_level_failure": false,
+        "level_field": "support_1",
+        "level_failure_buffer_pct": 1.0,
+        "exit_on_trend_loss": false,
+        "exit_on_macd_flip": false
+      }
+    },
+    "filters": [
+      {
+        "type": "compare",
+        "left": "adx_14_1h",
+        "op": ">",
+        "right": 18
+      }
+    ],
+    "risk_controls": {
+      "enabled": true,
+      "max_consecutive_losses": 4,
+      "pause_candles_after_losses": 24,
+      "max_losses_in_window": 6,
+      "loss_window_trades": 10
+    }
+  },
+  "base_rules": "## Trading Rules\n- Long setup A (trend pullback resume): close > sma_50_1h, macd_hist > 0, volume > avg_volume_96 * 1.15, and rsi_14 between 42 and 62 (no chasing overbought momentum).\n- Long setup B (support reclaim in uptrend): close > sma_50_1h, low <= support_1, close > support_1 (candle pierces support then closes back above it), volume > avg_volume_96 * 1.1.\n- Short setup A (trend pullback resume): close < sma_50_1h, macd_hist < 0, volume > avg_volume_96 * 1.15, and rsi_14 between 38 and 58.\n- Short setup B (resistance rejection in downtrend): close < sma_50_1h, high >= resistance_1, close < resistance_1, volume > avg_volume_96 * 1.1.\n- Global regime filter: adx_14_1h > 18 (soft, keeps frequency).\n- Stop-loss: 3.0 x atr_14 or 2.5% max, whichever is tighter.\n- Take-profit: 10.0 x atr_14 or 8.0% target.\n\n## Risk Management\n- Move stop to breakeven when price reaches 0.5 of the distance to take-profit (i.e. about 5 x atr_14); breakeven offset 0.1%.\n- Time stop: exit at close after 96 candles (24 hours).\n- No trailing stop; exit on level failure, trend loss and macd flip disabled.\n- Cooldown: after 4 consecutive losses pause 24 candles; 6 losses within 10 trades also triggers a pause.",
+  "analysis_summary": {
+    "iteration": 2,
+    "rejected_specs_count": 3,
+    "selection_goal": "Maximize total P&L on TEST (total_pnl_pct) with moderate drawdown. Return = expectancy × number of trades: both too few trades and negative expectancy are equally failures. A candidate is acceptable only if PF>1.1 on TEST, PF>1.0 on TRAIN, expectancy>0 on both, and at least 10 trades on TEST. Study iteration_history: continue changes that raised selection_score, and do not repeat those that worsened it.",
+    "train_stats": {
+      "total_trades": 502,
+      "win_rate": 13.1,
+      "return_pct": -54.98,
+      "total_pnl_pct": -71.72,
+      "profit_factor": 0.78,
+      "avg_trade_pct": -0.1429,
+      "avg_win_pct": 3.7994,
+      "avg_loss_pct": 0.7396,
+      "expectancy_pct": -0.1429,
+      "max_drawdown_pct": 58.65,
+      "long_trades": 227,
+      "short_trades": 275
+    },
+    "test_stats": {
+      "total_trades": 161,
+      "win_rate": 11.2,
+      "return_pct": -29.84,
+      "total_pnl_pct": -34.07,
+      "profit_factor": 0.61,
+      "avg_trade_pct": -0.2116,
+      "avg_win_pct": 2.9789,
+      "avg_loss_pct": 0.6132,
+      "expectancy_pct": -0.2116,
+      "max_drawdown_pct": 13.01,
+      "long_trades": 74,
+      "short_trades": 87
+    },
+    "diagnostics": {
+      "train_minus_test_return_pct": -25.14,
+      "train_minus_test_expectancy_pct": 0.0687,
+      "test_trade_count_warning": "ok",
+      "window_stability_score": 0.1,
+      "robustness_status": "unstable",
+      "worst_window_return_pct": -12.01,
+      "window_stability_penalty": 3.0,
+      "raw_selection_score": 6.1237,
+      "final_selection_score": 3.1237000000000004,
+      "acceptable": false
+    },
+    "iteration_history": [
+      {
+        "iter": 1,
+        "test_trades": 139,
+        "test_pnl": -31.54,
+        "test_pf": 0.76,
+        "score": 1.0048,
+        "accepted": false,
+        "changes": "original spec",
+        "robust_status": "fragile",
+        "worst_window": -18.95,
+        "windows_total": 6,
+        "profitable_windows": 3,
+        "profitable_windows_ratio": 0.5,
+        "positive_expectancy_windows": 3,
+        "positive_expectancy_windows_ratio": 0.5,
+        "pf_pass_windows": 3,
+        "pf_pass_windows_ratio": 0.5,
+        "median_window_return_pct": -1.675,
+        "median_window_expectancy_pct": -0.0403,
+        "return_std": 8.6382,
+        "expectancy_std": 0.5285,
+        "worst_window_return_pct": -18.95,
+        "worst_window_expectancy_pct": -1.2931,
+        "best_window_return_pct": 3.78,
+        "best_window_expectancy_pct": 0.1764,
+        "windows": [
+          {
+            "window_index": 1,
+            "return_pct": -18.95,
+            "expectancy_pct": -1.2931,
+            "profit_factor": 0.14,
+            "total_trades": 16,
+            "max_drawdown_pct": 18.95
+          },
+          {
+            "window_index": 2,
+            "return_pct": 0.36,
+            "expectancy_pct": 0.044,
+            "profit_factor": 1.05,
+            "total_trades": 25,
+            "max_drawdown_pct": 7.08
+          },
+          {
+            "window_index": 3,
+            "return_pct": 2.23,
+            "expectancy_pct": 0.1083,
+            "profit_factor": 1.15,
+            "total_trades": 24,
+            "max_drawdown_pct": 7.08
+          },
+          {
+            "window_index": 4,
+            "return_pct": 3.78,
+            "expectancy_pct": 0.1764,
+            "profit_factor": 1.21,
+            "total_trades": 25,
+            "max_drawdown_pct": 10.39
+          },
+          {
+            "window_index": 5,
+            "return_pct": -3.71,
+            "expectancy_pct": -0.1246,
+            "profit_factor": 0.86,
+            "total_trades": 26,
+            "max_drawdown_pct": 7.69
+          },
+          {
+            "window_index": 6,
+            "return_pct": -14.67,
+            "expectancy_pct": -0.6835,
+            "profit_factor": 0.17,
+            "total_trades": 23,
+            "max_drawdown_pct": 14.74
+          }
+        ],
+        "stability_score": 0.55
+      },
+      {
+        "iter": 2,
+        "test_trades": 139,
+        "test_pnl": -35.18,
+        "test_pf": 0.71,
+        "score": 1.4854000000000003,
+        "accepted": false,
+        "changes": "Swapped tautological low<=resistance_1/pivot entries for RSI 42-62 pullbacks and support/resistance reclaims; BE at 0.5 TP, time stop 96, softer ADX f",
+        "robust_status": "unstable",
+        "worst_window": -13.56,
+        "windows_total": 6,
+        "profitable_windows": 1,
+        "profitable_windows_ratio": 0.1667,
+        "positive_expectancy_windows": 1,
+        "positive_expectancy_windows_ratio": 0.1667,
+        "pf_pass_windows": 1,
+        "pf_pass_windows_ratio": 0.1667,
+        "median_window_return_pct": -6.505,
+        "median_window_expectancy_pct": -0.3093,
+        "return_std": 6.6373,
+        "expectancy_std": 0.2898,
+        "worst_window_return_pct": -13.56,
+        "worst_window_expectancy_pct": -0.527,
+        "best_window_return_pct": 7.05,
+        "best_window_expectancy_pct": 0.3239,
+        "windows": [
+          {
+            "window_index": 1,
+            "return_pct": -7.71,
+            "expectancy_pct": -0.4106,
+            "profit_factor": 0.69,
+            "total_trades": 18,
+            "max_drawdown_pct": 11.12
+          },
+          {
+            "window_index": 2,
+            "return_pct": -5.3,
+            "expectancy_pct": -0.2079,
+            "profit_factor": 0.76,
+            "total_trades": 24,
+            "max_drawdown_pct": 11.16
+          },
+          {
+            "window_index": 3,
+            "return_pct": -4.18,
+            "expectancy_pct": -0.1713,
+            "profit_factor": 0.76,
+            "total_trades": 23,
+            "max_drawdown_pct": 9.63
+          },
+          {
+            "window_index": 4,
+            "return_pct": 7.05,
+            "expectancy_pct": 0.3239,
+            "profit_factor": 1.44,
+            "total_trades": 23,
+            "max_drawdown_pct": 7.84
+          },
+          {
+            "window_index": 5,
+            "return_pct": -13.56,
+            "expectancy_pct": -0.527,
+            "profit_factor": 0.44,
+            "total_trades": 27,
+            "max_drawdown_pct": 13.9
+          },
+          {
+            "window_index": 6,
+            "return_pct": -11.5,
+            "expectancy_pct": -0.5033,
+            "profit_factor": 0.32,
+            "total_trades": 24,
+            "max_drawdown_pct": 11.5
+          }
+        ],
+        "stability_score": 0.1
+      },
+      {
+        "iter": "2-local",
+        "test_trades": 161,
+        "test_pnl": -34.07,
+        "test_pf": 0.61,
+        "score": 3.1237000000000004,
+        "accepted": false,
+        "changes": "Local mutation of numeric parameters.",
+        "robust_status": "unstable",
+        "worst_window": -12.01,
+        "windows_total": 6,
+        "profitable_windows": 2,
+        "profitable_windows_ratio": 0.3333,
+        "positive_expectancy_windows": 2,
+        "positive_expectancy_windows_ratio": 0.3333,
+        "pf_pass_windows": 2,
+        "pf_pass_windows_ratio": 0.3333,
+        "median_window_return_pct": -6.42,
+        "median_window_expectancy_pct": -0.2412,
+        "return_std": 5.7421,
+        "expectancy_std": 0.2075,
+        "worst_window_return_pct": -12.01,
+        "worst_window_expectancy_pct": -0.4307,
+        "best_window_return_pct": 3.28,
+        "best_window_expectancy_pct": 0.1352,
+        "windows": [
+          {
+            "window_index": 1,
+            "return_pct": 0.03,
+            "expectancy_pct": 0.0183,
+            "profit_factor": 1.02,
+            "total_trades": 18,
+            "max_drawdown_pct": 5.41
+          },
+          {
+            "window_index": 2,
+            "return_pct": -11.84,
+            "expectancy_pct": -0.4307,
+            "profit_factor": 0.26,
+            "total_trades": 29,
+            "max_drawdown_pct": 13.0
+          },
+          {
+            "window_index": 3,
+            "return_pct": -4.7,
+            "expectancy_pct": -0.1704,
+            "profit_factor": 0.66,
+            "total_trades": 27,
+            "max_drawdown_pct": 9.05
+          },
+          {
+            "window_index": 4,
+            "return_pct": 3.28,
+            "expectancy_pct": 0.1352,
+            "profit_factor": 1.31,
+            "total_trades": 27,
+            "max_drawdown_pct": 10.0
+          },
+          {
+            "window_index": 5,
+            "return_pct": -12.01,
+            "expectancy_pct": -0.38,
+            "profit_factor": 0.42,
+            "total_trades": 33,
+            "max_drawdown_pct": 13.01
+          },
+          {
+            "window_index": 6,
+            "return_pct": -8.14,
+            "expectancy_pct": -0.3119,
+            "profit_factor": 0.23,
+            "total_trades": 27,
+            "max_drawdown_pct": 8.27
+          }
+        ],
+        "stability_score": 0.1
+      }
+    ],
+    "rejected_changes": [
+      "[2-local] Local mutation of numeric parameters.",
+      "[2] Swapped tautological low<=resistance_1/pivot entries for RSI 42-62 pullbacks and support/resistance reclaims; BE at 0.5 TP, time stop 96, softer ADX filter.",
+      "[1] original spec"
+    ],
+    "train_trade_summary": {
+      "total": 502,
+      "wins": 66,
+      "losses": 436,
+      "winrate": 13.1,
+      "loss_by_direction": {
+        "long": 211,
+        "short": 225
+      },
+      "loss_by_exit": {
+        "stop_loss": 434,
+        "time_stop": 2
+      },
+      "loss_profile": {
+        "adx_14": 26.654,
+        "dist_sma50_pct": -0.141,
+        "macd_vs_signal": -0.261,
+        "atr_14": 14.707,
+        "rsi_14": 49.455,
+        "vol_ratio": 1.441
+      },
+      "win_profile": {
+        "adx_14": 30.14,
+        "dist_sma50_pct": -0.669,
+        "macd_vs_signal": -1.477,
+        "atr_14": 18.763,
+        "rsi_14": 44.929,
+        "vol_ratio": 1.801
+      }
+    },
+    "test_trade_summary": {
+      "total": 161,
+      "wins": 18,
+      "losses": 143,
+      "winrate": 11.2,
+      "loss_by_direction": {
+        "short": 75,
+        "long": 68
+      },
+      "loss_by_exit": {
+        "stop_loss": 141,
+        "end_of_period": 1,
+        "time_stop": 1
+      },
+      "loss_profile": {
+        "adx_14": 26.714,
+        "dist_sma50_pct": -0.058,
+        "macd_vs_signal": 0.049,
+        "atr_14": 8.505,
+        "rsi_14": 49.869,
+        "vol_ratio": 1.371
+      },
+      "win_profile": {
+        "adx_14": 27.641,
+        "dist_sma50_pct": -0.415,
+        "macd_vs_signal": -0.171,
+        "atr_14": 9.035,
+        "rsi_14": 47.143,
+        "vol_ratio": 1.991
+      }
+    }
+  },
+  "rejected_fingerprints": "<3 items — full data in CSV>",
+  "extra_instruction": ""
+}
+
+----------------------------------------------------------------------------------------------------
+[18:53:46] ITERATION 2 / AI RESPONSE
+----------------------------------------------------------------------------------------------------
+{
+  "strategy_spec": {
+    "long": {
+      "entry_any": [
+        [
+          {
+            "type": "compare",
+            "left": "close",
+            "op": ">",
+            "right": "sma_50_1h"
+          },
+          {
+            "type": "range",
+            "value": "rsi_14",
+            "min": 33,
+            "max": 52
+          },
+          {
+            "type": "volume",
+            "op": ">",
+            "ref": "avg_volume_96",
+            "mult": 1.25
+          }
+        ],
+        [
+          {
+            "type": "compare",
+            "left": "close",
+            "op": ">",
+            "right": "sma_50_1h"
+          },
+          {
+            "type": "compare",
+            "left": "macd_hist",
+            "op": ">",
+            "right": 0
+          },
+          {
+            "type": "volume",
+            "op": ">",
+            "ref": "avg_volume_96",
+            "mult": 1.5
+          },
+          {
+            "type": "range",
+            "value": "rsi_14",
+            "min": 45,
+            "max": 65
+          }
+        ]
+      ],
+      "stop_loss_atr_mult": 2.5,
+      "take_profit_atr_mult": 6.0,
+      "stop_loss_pct": 2.5,
+      "take_profit_pct": [
+        5.0
+      ],
+      "management": {
+        "move_to_breakeven_at_tp_pct": 0.5,
+        "breakeven_offset_pct": 0.1,
+        "trailing_atr_mult": null,
+        "max_hold_candles": 64,
+        "exit_on_level_failure": false,
+        "level_field": "resistance_1",
+        "level_failure_buffer_pct": 1.0,
+        "exit_on_trend_loss": false,
+        "exit_on_macd_flip": false
+      }
+    },
+    "short": {
+      "entry_any": [
+        [
+          {
+            "type": "compare",
+            "left": "close",
+            "op": "<",
+            "right": "sma_50_1h"
+          },
+          {
+            "type": "range",
+            "value": "rsi_14",
+            "min": 48,
+            "max": 67
+          },
+          {
+            "type": "volume",
+            "op": ">",
+            "ref": "avg_volume_96",
+            "mult": 1.25
+          }
+        ],
+        [
+          {
+            "type": "compare",
+            "left": "close",
+            "op": "<",
+            "right": "sma_50_1h"
+          },
+          {
+            "type": "compare",
+            "left": "macd_hist",
+            "op": "<",
+            "right": 0
+          },
+          {
+            "type": "volume",
+            "op": ">",
+            "ref": "avg_volume_96",
+            "mult": 1.5
+          },
+          {
+            "type": "range",
+            "value": "rsi_14",
+            "min": 35,
+            "max": 55
+          }
+        ]
+      ],
+      "stop_loss_atr_mult": 2.5,
+      "take_profit_atr_mult": 6.0,
+      "stop_loss_pct": 2.5,
+      "take_profit_pct": [
+        5.0
+      ],
+      "management": {
+        "move_to_breakeven_at_tp_pct": 0.5,
+        "breakeven_offset_pct": 0.1,
+        "trailing_atr_mult": null,
+        "max_hold_candles": 64,
+        "exit_on_level_failure": false,
+        "level_field": "support_1",
+        "level_failure_buffer_pct": 1.0,
+        "exit_on_trend_loss": false,
+        "exit_on_macd_flip": false
+      }
+    },
+    "filters": [
+      {
+        "type": "compare",
+        "left": "adx_14_1h",
+        "op": ">",
+        "right": 18
+      }
+    ],
+    "risk_controls": {
+      "enabled": true,
+      "max_consecutive_losses": 4,
+      "pause_candles_after_losses": 16,
+      "max_losses_in_window": 6,
+      "loss_window_trades": 10
+    }
+  },
+  "new_rules": "## Trading Rules\n- Global regime filter: adx_14_1h > 18 (soft; keeps frequency but skips flat regimes).\n- Long setup A (uptrend pullback): close > sma_50_1h, rsi_14 between 33 and 52 (buy the dip, not the extension), and volume > avg_volume_96 * 1.25.\n- Long setup B (trend continuation): close > sma_50_1h, macd_hist > 0, volume > avg_volume_96 * 1.5, and rsi_14 between 45 and 65 (no chasing above 65).\n- Short setup A (downtrend rally): close < sma_50_1h, rsi_14 between 48 and 67 (sell the bounce into strength), and volume > avg_volume_96 * 1.25.\n- Short setup B (trend breakdown): close < sma_50_1h, macd_hist < 0, volume > avg_volume_96 * 1.5, and rsi_14 between 35 and 55.\n- Entry only on the last closed 15m candle; fills at next candle open.\n\n## Risk Management\n- Stop-loss: 2.5 x atr_14 (fallback stop_loss_pct 2.5%). This is the key fix - the previous 1.0-1.8 x ATR stop sat inside 15m noise and produced 434/436 stop-outs.\n- Take-profit: 6.0 x atr_14 (fallback take_profit_pct 5.0%), i.e. RR ~2.4 so the breakeven win rate is ~30%.\n- Move to breakeven when price reaches 0.5 of the distance to TP (breakeven_offset_pct 0.1 covers commissions).\n- Time-stop: exit at close after 64 x 15m candles if neither stop nor target is hit.\n- exit_on_level_failure, exit_on_trend_loss and exit_on_macd_flip are disabled to avoid nervous early exits.\n- Risk controls: pause 16 candles after 4 consecutive losses; block after 6 losses within 10 trades.",
+  "changes_summary": "Widened stop 1.04/1.79->2.5 ATR (was inside noise, 434/436 stop-outs), TP 10->6 ATR (RR 2.4), volume mults 1.25/1.5, RSI pullback bands, shorter 16-candle cooldown."
+}
+[18:53:46] Iteration 2: new spec accepted.
+[18:53:46] Iteration 3/3: running TRAIN/TEST...
+[18:53:53] [3] TRAIN: trades=778, P&L=-170.80%, Exp=-0.2195%, PF=0.74.
+[18:53:53] [3] TEST: trades=264, P&L=-54.15%, Exp=-0.2051%, PF=0.70, DD=21.84%, RawScore=-1.8780, WindowPenalty=+3.0000, Score=-4.8780, not accepted.
+[18:53:53] [3] SOFT WARNINGS: Profitable windows < 50% | Windows with positive expectancy < 50% | Windows with PF > 1 < 50% | Worst window -19.4%
+[18:53:53] [3] RECOMMENDATIONS: Tighten entry filters or increase stop-loss | Check entry logic: possibly too many noisy signals | Increase take_profit or improve position management | Consider more aggressive breakeven or trailing stop | Test the strategy on longer history and an additional holdout period
+[18:53:53] [3] WINDOW PENALTY: +3.0000 | reasons: too few profitable windows | too few windows with positive expectancy | too few windows with PF > 1 | there is a very bad window | elevated return dispersion between windows
+[18:53:53] [3] SCORE BREAKDOWN: test_return=-43.55%, test_exp=-0.2051%, test_pf=0.70, test_dd=21.84%, gap_ret=-40.73, gap_exp=-0.0144, gap_pf=+0.04, test_conc=0.05, raw=-1.8780, penalty=+3.0000, final=-4.8780.
+[18:53:53] [3] ROBUSTNESS: status=unstable, passed=False, fragile=False, profitable=0%, positive_exp=17%, pf_pass=0%, worst=-19.36%, median=-6.89%, stability=0.100
+[18:57:39] Local search improved TRAIN-score, fixing 3-local.
+[18:57:39] [3-local] TRAIN: trades=765, P&L=-155.50%, Exp=-0.2033%, PF=0.75.
+[18:57:39] [3-local] TEST: trades=258, P&L=-27.27%, Exp=-0.1057%, PF=0.84, DD=14.82%, RawScore=+4.8104, WindowPenalty=+3.0000, Score=+1.8104, not accepted.
+[18:57:39] [3-local] SOFT WARNINGS: Profitable windows < 50% | Windows with positive expectancy < 50% | Windows with PF > 1 < 50% | Worst window -14.6%
+[18:57:39] [3-local] RECOMMENDATIONS: Tighten entry filters or increase stop-loss | Check entry logic: possibly too many noisy signals | Increase take_profit or improve position management | Consider more aggressive breakeven or trailing stop | Test the strategy on longer history and an additional holdout period
+[18:57:39] [3-local] WINDOW PENALTY: +3.0000 | reasons: too few profitable windows | too few windows with positive expectancy | too few windows with PF > 1 | there is a very bad window | elevated return dispersion between windows
+[18:57:39] [3-local] SCORE BREAKDOWN: test_return=-26.20%, test_exp=-0.1057%, test_pf=0.84, test_dd=14.82%, gap_ret=-55.27, gap_exp=-0.0976, gap_pf=-0.09, test_conc=0.05, raw=+4.8104, penalty=+3.0000, final=+1.8104.
+[18:57:39] [3-local] ROBUSTNESS: status=unstable, passed=False, fragile=False, profitable=17%, positive_exp=17%, pf_pass=17%, worst=-14.55%, median=-6.26%, stability=0.100
+[18:57:39] Optimization iteration limit reached.
+[18:57:39] No strategy passed the requirements.
+
+----------------------------------------------------------------------------------------------------
+[18:57:39] FINAL / BEST CANDIDATE
+----------------------------------------------------------------------------------------------------
+null
+
+----------------------------------------------------------------------------------------------------
+[18:57:39] FINAL / HOLDOUT
+----------------------------------------------------------------------------------------------------
+{
+  "enabled": false,
+  "reason": "not_run",
+  "status": "not_run",
+  "passed": false,
+  "weak_pass": false,
+  "warnings": [],
+  "recommendations": []
+}
+
+----------------------------------------------------------------------------------------------------
+[18:57:39] FINAL / FULL ITERATION HISTORY
+----------------------------------------------------------------------------------------------------
+[
+  {
+    "iteration": 1,
+    "train_trades": 406,
+    "test_trades": 139,
+    "train_winrate": 25.1,
+    "test_winrate": 26.6,
+    "train_return_pct": -71.89,
+    "test_return_pct": -29.09,
+    "train_expectancy_pct": -0.279,
+    "test_expectancy_pct": -0.2269,
+    "train_profit_factor": 0.75,
+    "test_profit_factor": 0.76,
+    "train_max_drawdown_pct": 75.26,
+    "test_max_drawdown_pct": 18.95,
+    "test_total_pnl_pct": -31.54,
+    "selection_score": 1.0048,
+    "raw_selection_score": 3.1048,
+    "window_stability_penalty": 2.1,
+    "window_penalty_reasons": [
+      "borderline share of profitable windows",
+      "borderline share of windows with positive expectancy",
+      "borderline share of windows with PF > 1",
+      "there is a very bad window",
+      "elevated return dispersion between windows"
+    ],
+    "score_breakdown": {
+      "acceptable": false,
+      "raw_selection_score": 3.1048,
+      "window_stability_penalty": 2.1,
+      "final_selection_score": 1.0048,
+      "train_total_trades": 406,
+      "test_total_trades": 139,
+      "train_return_pct": -71.89,
+      "test_return_pct": -29.09,
+      "train_expectancy_pct": -0.279,
+      "test_expectancy_pct": -0.2269,
+      "train_profit_factor": 0.75,
+      "test_profit_factor": 0.76,
+      "train_max_drawdown_pct": 75.26,
+      "test_max_drawdown_pct": 18.95,
+      "train_minus_test_return_pct": -42.8,
+      "train_minus_test_expectancy_pct": -0.0521,
+      "train_minus_test_profit_factor": -0.01,
+      "train_profit_concentration": 0.045,
+      "test_profit_concentration": 0.065,
+      "windows_total": 6,
+      "profitable_windows_ratio": 0.5,
+      "positive_expectancy_windows_ratio": 0.5,
+      "pf_pass_windows_ratio": 0.5,
+      "median_window_return_pct": -1.675,
+      "worst_window_return_pct": -18.95,
+      "window_return_std": 8.6382,
+      "window_stability_score": 0.55,
+      "robustness_status": "fragile",
+      "robustness_passed": true,
+      "robustness_fragile": true,
+      "robustness_warnings": [
+        "Not enough profitable windows: 50%",
+        "Not enough windows with positive expectancy: 50%",
+        "Not enough windows with PF > 1: 50%",
+        "Median window return is negative: -1.68%",
+        "Worst window is too weak: -18.95%"
+      ],
+      "robustness_reasons": [
+        "profitable_windows_ratio_too_low",
+        "positive_expectancy_windows_ratio_too_low",
+        "pf_pass_windows_ratio_too_low",
+        "median_window_return_negative",
+        "worst_window_return_too_low"
+      ]
+    },
+    "acceptable": false,
+    "changes_summary": "original spec",
+    "spec": {
+      "long": {
+        "entry_any": [
+          [
+            {
+              "type": "compare",
+              "left": "close",
+              "op": ">",
+              "right": "sma_50_1h"
+            },
+            {
+              "type": "compare",
+              "left": "macd_hist",
+              "op": ">",
+              "right": 0
+            },
+            {
+              "type": "volume",
+              "op": ">",
+              "ref": "avg_volume_96",
+              "mult": 1.2
+            },
+            {
+              "type": "compare",
+              "left": "low",
+              "op": "<=",
+              "right": "resistance_1"
+            }
+          ],
+          [
+            {
+              "type": "compare",
+              "left": "close",
+              "op": ">",
+              "right": "sma_50_1h"
+            },
+            {
+              "type": "compare",
+              "left": "rsi_14",
+              "op": ">",
+              "right": 50
+            },
+            {
+              "type": "volume",
+              "op": ">",
+              "ref": "avg_volume_96",
+              "mult": 1.0
+            },
+            {
+              "type": "compare",
+              "left": "low",
+              "op": "<=",
+              "right": "pivot"
+            }
+          ]
+        ],
+        "stop_loss_atr_mult": 3.0,
+        "take_profit_atr_mult": 10.0,
+        "stop_loss_pct": 2.5,
+        "take_profit_pct": [
+          8.0
+        ],
+        "management": {
+          "move_to_breakeven_at_tp_pct": 0.6,
+          "breakeven_offset_pct": 0.1,
+          "trailing_atr_mult": null,
+          "max_hold_candles": 120,
+          "exit_on_level_failure": false,
+          "level_field": "resistance_1",
+          "level_failure_buffer_pct": 1.0,
+          "exit_on_trend_loss": false,
+          "exit_on_macd_flip": false
+        }
+      },
+      "short": {
+        "entry_any": [
+          [
+            {
+              "type": "compare",
+              "left": "close",
+              "op": "<",
+              "right": "sma_50_1h"
+            },
+            {
+              "type": "compare",
+              "left": "macd_hist",
+              "op": "<",
+              "right": 0
+            },
+            {
+              "type": "volume",
+              "op": ">",
+              "ref": "avg_volume_96",
+              "mult": 1.2
+            },
+            {
+              "type": "compare",
+              "left": "high",
+              "op": ">=",
+              "right": "support_1"
+            }
+          ],
+          [
+            {
+              "type": "compare",
+              "left": "close",
+              "op": "<",
+              "right": "sma_50_1h"
+            },
+            {
+              "type": "compare",
+              "left": "rsi_14",
+              "op": "<",
+              "right": 50
+            },
+            {
+              "type": "volume",
+              "op": ">",
+              "ref": "avg_volume_96",
+              "mult": 1.0
+            },
+            {
+              "type": "compare",
+              "left": "high",
+              "op": ">=",
+              "right": "pivot"
+            }
+          ]
+        ],
+        "stop_loss_atr_mult": 3.0,
+        "take_profit_atr_mult": 10.0,
+        "stop_loss_pct": 2.5,
+        "take_profit_pct": [
+          8.0
+        ],
+        "management": {
+          "move_to_breakeven_at_tp_pct": 0.6,
+          "breakeven_offset_pct": 0.1,
+          "trailing_atr_mult": null,
+          "max_hold_candles": 120,
+          "exit_on_level_failure": false,
+          "level_field": "support_1",
+          "level_failure_buffer_pct": 1.0,
+          "exit_on_trend_loss": false,
+          "exit_on_macd_flip": false
+        }
+      },
+      "filters": [
+        {
+          "type": "compare",
+          "left": "adx_14_1h",
+          "op": ">",
+          "right": 20
+        }
+      ],
+      "risk_controls": {
+        "enabled": true,
+        "max_consecutive_losses": 4,
+        "pause_candles_after_losses": 32,
+        "max_losses_in_window": 6,
+        "loss_window_trades": 10
+      }
+    },
+    "rules": "## Trading Rules\n- Long group 1: close > sma_50_1h, macd_hist > 0, volume > avg_volume_96 * 1.2, low <= resistance_1.\n- Long group 2: close > sma_50_1h, rsi_14 > 50, volume > avg_volume_96 * 1.0, low <= pivot.\n- Short group 1: close < sma_50_1h, macd_hist < 0, volume > avg_volume_96 * 1.2, high >= support_1.\n- Short group 2: close < sma_50_1h, rsi_14 < 50, volume > avg_volume_96 * 1.0, high >= pivot.\n- Global regime filter: adx_14_1h > 20.\n- Stop-loss: 3.0 x ATR(15m) or 2.5% max.\n- Take-profit: 10.0 x ATR(15m) or 8.0% target.\n\n## Risk Management\n- Move to breakeven at 0.6% profit, offset 0.1%.\n- Max hold 120 candles (30 hours).\n- Cooldown: after 4 consecutive losses, pause 32 candles.\n- Max 6 losses in 10 trades triggers pause.\n- No trailing stop; exit on level failure disabled.",
+    "window_robustness": {
+      "windows_total": 6,
+      "profitable_windows": 3,
+      "profitable_windows_ratio": 0.5,
+      "positive_expectancy_windows": 3,
+      "positive_expectancy_windows_ratio": 0.5,
+      "pf_pass_windows": 3,
+      "pf_pass_windows_ratio": 0.5,
+      "median_window_return_pct": -1.675,
+      "median_window_expectancy_pct": -0.0403,
+      "return_std": 8.6382,
+      "expectancy_std": 0.5285,
+      "worst_window_return_pct": -18.95,
+      "worst_window_expectancy_pct": -1.2931,
+      "best_window_return_pct": 3.78,
+      "best_window_expectancy_pct": 0.1764,
+      "windows": [
+        {
+          "window_index": 1,
+          "return_pct": -18.95,
+          "expectancy_pct": -1.2931,
+          "profit_factor": 0.14,
+          "total_trades": 16,
+          "max_drawdown_pct": 18.95
+        },
+        {
+          "window_index": 2,
+          "return_pct": 0.36,
+          "expectancy_pct": 0.044,
+          "profit_factor": 1.05,
+          "total_trades": 25,
+          "max_drawdown_pct": 7.08
+        },
+        {
+          "window_index": 3,
+          "return_pct": 2.23,
+          "expectancy_pct": 0.1083,
+          "profit_factor": 1.15,
+          "total_trades": 24,
+          "max_drawdown_pct": 7.08
+        },
+        {
+          "window_index": 4,
+          "return_pct": 3.78,
+          "expectancy_pct": 0.1764,
+          "profit_factor": 1.21,
+          "total_trades": 25,
+          "max_drawdown_pct": 10.39
+        },
+        {
+          "window_index": 5,
+          "return_pct": -3.71,
+          "expectancy_pct": -0.1246,
+          "profit_factor": 0.86,
+          "total_trades": 26,
+          "max_drawdown_pct": 7.69
+        },
+        {
+          "window_index": 6,
+          "return_pct": -14.67,
+          "expectancy_pct": -0.6835,
+          "profit_factor": 0.17,
+          "total_trades": 23,
+          "max_drawdown_pct": 14.74
+        }
+      ],
+      "stability_score": 0.55
+    },
+    "window_diagnostics": {
+      "stability_score": 0.55,
+      "warnings": [
+        "Profitable windows 50% — there is instability risk",
+        "Positive expectancy in only 50% of windows",
+        "Worst window -18.9% — catastrophic drawdowns possible",
+        "Moderate return volatility (8.6% std)"
+      ],
+      "recommendations": [
+        "Consider more aggressive breakeven or trailing stop",
+        "Test the strategy on longer history and an additional holdout period"
+      ]
+    },
+    "window_robustness_assessment": {
+      "status": "fragile",
+      "passed": true,
+      "fragile": true,
+      "warnings": [
+        "Not enough profitable windows: 50%",
+        "Not enough windows with positive expectancy: 50%",
+        "Not enough windows with PF > 1: 50%",
+        "Median window return is negative: -1.68%",
+        "Worst window is too weak: -18.95%"
+      ],
+      "reasons": [
+        "profitable_windows_ratio_too_low",
+        "positive_expectancy_windows_ratio_too_low",
+        "pf_pass_windows_ratio_too_low",
+        "median_window_return_negative",
+        "worst_window_return_too_low"
+      ],
+      "profitable_windows_ratio": 0.5,
+      "positive_expectancy_windows_ratio": 0.5,
+      "pf_pass_windows_ratio": 0.5,
+      "median_window_return_pct": -1.675,
+      "worst_window_return_pct": -18.95,
+      "stability_score": 0.55
+    },
+    "soft_warnings": [
+      "Worst window -18.9%"
+    ]
+  },
+  {
+    "iteration": 2,
+    "train_trades": 434,
+    "test_trades": 139,
+    "train_winrate": 27.4,
+    "test_winrate": 24.5,
+    "train_return_pct": -66.67,
+    "test_return_pct": -31.42,
+    "train_expectancy_pct": -0.2242,
+    "test_expectancy_pct": -0.2531,
+    "train_profit_factor": 0.79,
+    "test_profit_factor": 0.71,
+    "train_max_drawdown_pct": 68.33,
+    "test_max_drawdown_pct": 13.9,
+    "test_total_pnl_pct": -35.18,
+    "selection_score": 1.4854000000000003,
+    "raw_selection_score": 4.4854,
+    "window_stability_penalty": 3.0,
+    "window_penalty_reasons": [
+      "too few profitable windows",
+      "too few windows with positive expectancy",
+      "too few windows with PF > 1",
+      "there is a very bad window",
+      "elevated return dispersion between windows"
+    ],
+    "score_breakdown": {
+      "acceptable": false,
+      "raw_selection_score": 4.4854,
+      "window_stability_penalty": 3.0,
+      "final_selection_score": 1.4854,
+      "train_total_trades": 434,
+      "test_total_trades": 139,
+      "train_return_pct": -66.67,
+      "test_return_pct": -31.42,
+      "train_expectancy_pct": -0.2242,
+      "test_expectancy_pct": -0.2531,
+      "train_profit_factor": 0.79,
+      "test_profit_factor": 0.71,
+      "train_max_drawdown_pct": 68.33,
+      "test_max_drawdown_pct": 13.9,
+      "train_minus_test_return_pct": -35.25,
+      "train_minus_test_expectancy_pct": 0.0289,
+      "train_minus_test_profit_factor": 0.08,
+      "train_profit_concentration": 0.029,
+      "test_profit_concentration": 0.072,
+      "windows_total": 6,
+      "profitable_windows_ratio": 0.1667,
+      "positive_expectancy_windows_ratio": 0.1667,
+      "pf_pass_windows_ratio": 0.1667,
+      "median_window_return_pct": -6.505,
+      "worst_window_return_pct": -13.56,
+      "window_return_std": 6.6373,
+      "window_stability_score": 0.1,
+      "robustness_status": "unstable",
+      "robustness_passed": false,
+      "robustness_fragile": false,
+      "robustness_warnings": [
+        "Not enough profitable windows: 17%",
+        "Not enough windows with positive expectancy: 17%",
+        "Not enough windows with PF > 1: 17%",
+        "Median window return is negative: -6.50%",
+        "Worst window is too weak: -13.56%",
+        "Low stability_score: 0.100"
+      ],
+      "robustness_reasons": [
+        "profitable_windows_ratio_too_low",
+        "positive_expectancy_windows_ratio_too_low",
+        "pf_pass_windows_ratio_too_low",
+        "median_window_return_negative",
+        "worst_window_return_too_low",
+        "stability_score_too_low"
+      ]
+    },
+    "acceptable": false,
+    "changes_summary": "Swapped tautological low<=resistance_1/pivot entries for RSI 42-62 pullbacks and support/resistance reclaims; BE at 0.5 TP, time stop 96, softer ADX filter.",
+    "spec": {
+      "long": {
+        "entry_any": [
+          [
+            {
+              "type": "compare",
+              "left": "close",
+              "op": ">",
+              "right": "sma_50_1h"
+            },
+            {
+              "type": "compare",
+              "left": "macd_hist",
+              "op": ">",
+              "right": 0
+            },
+            {
+              "type": "volume",
+              "op": ">",
+              "ref": "avg_volume_96",
+              "mult": 1.15
+            },
+            {
+              "type": "range",
+              "value": "rsi_14",
+              "min": 42,
+              "max": 62
+            }
+          ],
+          [
+            {
+              "type": "compare",
+              "left": "close",
+              "op": ">",
+              "right": "sma_50_1h"
+            },
+            {
+              "type": "compare",
+              "left": "low",
+              "op": "<=",
+              "right": "support_1"
+            },
+            {
+              "type": "compare",
+              "left": "close",
+              "op": ">",
+              "right": "support_1"
+            },
+            {
+              "type": "volume",
+              "op": ">",
+              "ref": "avg_volume_96",
+              "mult": 1.1
+            }
+          ]
+        ],
+        "stop_loss_atr_mult": 3.0,
+        "take_profit_atr_mult": 10.0,
+        "stop_loss_pct": 2.5,
+        "take_profit_pct": [
+          8.0
+        ],
+        "management": {
+          "move_to_breakeven_at_tp_pct": 0.5,
+          "breakeven_offset_pct": 0.1,
+          "trailing_atr_mult": null,
+          "max_hold_candles": 96,
+          "exit_on_level_failure": false,
+          "level_field": "resistance_1",
+          "level_failure_buffer_pct": 1.0,
+          "exit_on_trend_loss": false,
+          "exit_on_macd_flip": false
+        }
+      },
+      "short": {
+        "entry_any": [
+          [
+            {
+              "type": "compare",
+              "left": "close",
+              "op": "<",
+              "right": "sma_50_1h"
+            },
+            {
+              "type": "compare",
+              "left": "macd_hist",
+              "op": "<",
+              "right": 0
+            },
+            {
+              "type": "volume",
+              "op": ">",
+              "ref": "avg_volume_96",
+              "mult": 1.15
+            },
+            {
+              "type": "range",
+              "value": "rsi_14",
+              "min": 38,
+              "max": 58
+            }
+          ],
+          [
+            {
+              "type": "compare",
+              "left": "close",
+              "op": "<",
+              "right": "sma_50_1h"
+            },
+            {
+              "type": "compare",
+              "left": "high",
+              "op": ">=",
+              "right": "resistance_1"
+            },
+            {
+              "type": "compare",
+              "left": "close",
+              "op": "<",
+              "right": "resistance_1"
+            },
+            {
+              "type": "volume",
+              "op": ">",
+              "ref": "avg_volume_96",
+              "mult": 1.1
+            }
+          ]
+        ],
+        "stop_loss_atr_mult": 3.0,
+        "take_profit_atr_mult": 10.0,
+        "stop_loss_pct": 2.5,
+        "take_profit_pct": [
+          8.0
+        ],
+        "management": {
+          "move_to_breakeven_at_tp_pct": 0.5,
+          "breakeven_offset_pct": 0.1,
+          "trailing_atr_mult": null,
+          "max_hold_candles": 96,
+          "exit_on_level_failure": false,
+          "level_field": "support_1",
+          "level_failure_buffer_pct": 1.0,
+          "exit_on_trend_loss": false,
+          "exit_on_macd_flip": false
+        }
+      },
+      "filters": [
+        {
+          "type": "compare",
+          "left": "adx_14_1h",
+          "op": ">",
+          "right": 18
+        }
+      ],
+      "risk_controls": {
+        "enabled": true,
+        "max_consecutive_losses": 4,
+        "pause_candles_after_losses": 24,
+        "max_losses_in_window": 6,
+        "loss_window_trades": 10
+      }
+    },
+    "rules": "## Trading Rules\n- Long setup A (trend pullback resume): close > sma_50_1h, macd_hist > 0, volume > avg_volume_96 * 1.15, and rsi_14 between 42 and 62 (no chasing overbought momentum).\n- Long setup B (support reclaim in uptrend): close > sma_50_1h, low <= support_1, close > support_1 (candle pierces support then closes back above it), volume > avg_volume_96 * 1.1.\n- Short setup A (trend pullback resume): close < sma_50_1h, macd_hist < 0, volume > avg_volume_96 * 1.15, and rsi_14 between 38 and 58.\n- Short setup B (resistance rejection in downtrend): close < sma_50_1h, high >= resistance_1, close < resistance_1, volume > avg_volume_96 * 1.1.\n- Global regime filter: adx_14_1h > 18 (soft, keeps frequency).\n- Stop-loss: 3.0 x atr_14 or 2.5% max, whichever is tighter.\n- Take-profit: 10.0 x atr_14 or 8.0% target.\n\n## Risk Management\n- Move stop to breakeven when price reaches 0.5 of the distance to take-profit (i.e. about 5 x atr_14); breakeven offset 0.1%.\n- Time stop: exit at close after 96 candles (24 hours).\n- No trailing stop; exit on level failure, trend loss and macd flip disabled.\n- Cooldown: after 4 consecutive losses pause 24 candles; 6 losses within 10 trades also triggers a pause.",
+    "window_robustness": {
+      "windows_total": 6,
+      "profitable_windows": 1,
+      "profitable_windows_ratio": 0.1667,
+      "positive_expectancy_windows": 1,
+      "positive_expectancy_windows_ratio": 0.1667,
+      "pf_pass_windows": 1,
+      "pf_pass_windows_ratio": 0.1667,
+      "median_window_return_pct": -6.505,
+      "median_window_expectancy_pct": -0.3093,
+      "return_std": 6.6373,
+      "expectancy_std": 0.2898,
+      "worst_window_return_pct": -13.56,
+      "worst_window_expectancy_pct": -0.527,
+      "best_window_return_pct": 7.05,
+      "best_window_expectancy_pct": 0.3239,
+      "windows": [
+        {
+          "window_index": 1,
+          "return_pct": -7.71,
+          "expectancy_pct": -0.4106,
+          "profit_factor": 0.69,
+          "total_trades": 18,
+          "max_drawdown_pct": 11.12
+        },
+        {
+          "window_index": 2,
+          "return_pct": -5.3,
+          "expectancy_pct": -0.2079,
+          "profit_factor": 0.76,
+          "total_trades": 24,
+          "max_drawdown_pct": 11.16
+        },
+        {
+          "window_index": 3,
+          "return_pct": -4.18,
+          "expectancy_pct": -0.1713,
+          "profit_factor": 0.76,
+          "total_trades": 23,
+          "max_drawdown_pct": 9.63
+        },
+        {
+          "window_index": 4,
+          "return_pct": 7.05,
+          "expectancy_pct": 0.3239,
+          "profit_factor": 1.44,
+          "total_trades": 23,
+          "max_drawdown_pct": 7.84
+        },
+        {
+          "window_index": 5,
+          "return_pct": -13.56,
+          "expectancy_pct": -0.527,
+          "profit_factor": 0.44,
+          "total_trades": 27,
+          "max_drawdown_pct": 13.9
+        },
+        {
+          "window_index": 6,
+          "return_pct": -11.5,
+          "expectancy_pct": -0.5033,
+          "profit_factor": 0.32,
+          "total_trades": 24,
+          "max_drawdown_pct": 11.5
+        }
+      ],
+      "stability_score": 0.1
+    },
+    "window_diagnostics": {
+      "stability_score": 0.1,
+      "warnings": [
+        "Only 17% of windows are profitable — strategy is unstable",
+        "Only 17% of windows have positive expectancy — strategy is fragile",
+        "PF > 1 in only 17% of windows — strategy does not pay off",
+        "Worst window -13.6% — catastrophic drawdowns possible",
+        "Moderate return volatility (6.6% std)"
+      ],
+      "recommendations": [
+        "Tighten entry filters or increase stop-loss",
+        "Check entry logic: possibly too many noisy signals",
+        "Increase take_profit or improve position management",
+        "Consider more aggressive breakeven or trailing stop",
+        "Test the strategy on longer history and an additional holdout period"
+      ]
+    },
+    "window_robustness_assessment": {
+      "status": "unstable",
+      "passed": false,
+      "fragile": false,
+      "warnings": [
+        "Not enough profitable windows: 17%",
+        "Not enough windows with positive expectancy: 17%",
+        "Not enough windows with PF > 1: 17%",
+        "Median window return is negative: -6.50%",
+        "Worst window is too weak: -13.56%",
+        "Low stability_score: 0.100"
+      ],
+      "reasons": [
+        "profitable_windows_ratio_too_low",
+        "positive_expectancy_windows_ratio_too_low",
+        "pf_pass_windows_ratio_too_low",
+        "median_window_return_negative",
+        "worst_window_return_too_low",
+        "stability_score_too_low"
+      ],
+      "profitable_windows_ratio": 0.1667,
+      "positive_expectancy_windows_ratio": 0.1667,
+      "pf_pass_windows_ratio": 0.1667,
+      "median_window_return_pct": -6.505,
+      "worst_window_return_pct": -13.56,
+      "stability_score": 0.1
+    },
+    "soft_warnings": [
+      "Profitable windows < 50%",
+      "Windows with positive expectancy < 50%",
+      "Windows with PF > 1 < 50%",
+      "Worst window -13.6%"
+    ]
+  },
+  {
+    "iteration": "2-local",
+    "train_trades": 502,
+    "test_trades": 161,
+    "train_winrate": 13.1,
+    "test_winrate": 11.2,
+    "train_return_pct": -54.98,
+    "test_return_pct": -29.84,
+    "train_expectancy_pct": -0.1429,
+    "test_expectancy_pct": -0.2116,
+    "train_profit_factor": 0.78,
+    "test_profit_factor": 0.61,
+    "train_max_drawdown_pct": 58.65,
+    "test_max_drawdown_pct": 13.01,
+    "test_total_pnl_pct": -34.07,
+    "selection_score": 3.1237000000000004,
+    "raw_selection_score": 6.1237,
+    "window_stability_penalty": 3.0,
+    "window_penalty_reasons": [
+      "too few profitable windows",
+      "too few windows with positive expectancy",
+      "too few windows with PF > 1",
+      "there is a very bad window",
+      "elevated return dispersion between windows"
+    ],
+    "score_breakdown": {
+      "acceptable": false,
+      "raw_selection_score": 6.1237,
+      "window_stability_penalty": 3.0,
+      "final_selection_score": 3.1237,
+      "train_total_trades": 502,
+      "test_total_trades": 161,
+      "train_return_pct": -54.98,
+      "test_return_pct": -29.84,
+      "train_expectancy_pct": -0.1429,
+      "test_expectancy_pct": -0.2116,
+      "train_profit_factor": 0.78,
+      "test_profit_factor": 0.61,
+      "train_max_drawdown_pct": 58.65,
+      "test_max_drawdown_pct": 13.01,
+      "train_minus_test_return_pct": -25.14,
+      "train_minus_test_expectancy_pct": 0.0687,
+      "train_minus_test_profit_factor": 0.17,
+      "train_profit_concentration": 0.052,
+      "test_profit_concentration": 0.115,
+      "windows_total": 6,
+      "profitable_windows_ratio": 0.3333,
+      "positive_expectancy_windows_ratio": 0.3333,
+      "pf_pass_windows_ratio": 0.3333,
+      "median_window_return_pct": -6.42,
+      "worst_window_return_pct": -12.01,
+      "window_return_std": 5.7421,
+      "window_stability_score": 0.1,
+      "robustness_status": "unstable",
+      "robustness_passed": false,
+      "robustness_fragile": false,
+      "robustness_warnings": [
+        "Not enough profitable windows: 33%",
+        "Not enough windows with positive expectancy: 33%",
+        "Not enough windows with PF > 1: 33%",
+        "Median window return is negative: -6.42%",
+        "Worst window is too weak: -12.01%",
+        "Low stability_score: 0.100"
+      ],
+      "robustness_reasons": [
+        "profitable_windows_ratio_too_low",
+        "positive_expectancy_windows_ratio_too_low",
+        "pf_pass_windows_ratio_too_low",
+        "median_window_return_negative",
+        "worst_window_return_too_low",
+        "stability_score_too_low"
+      ]
+    },
+    "acceptable": false,
+    "changes_summary": "Local mutation of numeric parameters.",
+    "spec": {
+      "long": {
+        "entry_any": [
+          [
+            {
+              "type": "compare",
+              "left": "close",
+              "op": ">",
+              "right": "sma_50_1h"
+            },
+            {
+              "type": "compare",
+              "left": "macd_hist",
+              "op": ">",
+              "right": 0
+            },
+            {
+              "type": "volume",
+              "op": ">",
+              "ref": "avg_volume_96",
+              "mult": 1.21
+            },
+            {
+              "type": "range",
+              "value": "rsi_14",
+              "min": 36.1,
+              "max": 61.0
+            }
+          ],
+          [
+            {
+              "type": "compare",
+              "left": "close",
+              "op": ">",
+              "right": "sma_50_1h"
+            },
+            {
+              "type": "compare",
+              "left": "low",
+              "op": "<=",
+              "right": "support_1"
+            },
+            {
+              "type": "compare",
+              "left": "close",
+              "op": ">",
+              "right": "support_1"
+            },
+            {
+              "type": "volume",
+              "op": ">",
+              "ref": "avg_volume_96",
+              "mult": 0.83
+            }
+          ]
+        ],
+        "stop_loss_atr_mult": 1.04,
+        "take_profit_atr_mult": 10.0,
+        "stop_loss_pct": 2.5,
+        "take_profit_pct": [
+          8.0
+        ],
+        "management": {
+          "move_to_breakeven_at_tp_pct": 0.3,
+          "breakeven_offset_pct": 0.1,
+          "trailing_atr_mult": null,
+          "max_hold_candles": 96,
+          "exit_on_level_failure": false,
+          "level_field": "resistance_1",
+          "level_failure_buffer_pct": 1.0,
+          "exit_on_trend_loss": false,
+          "exit_on_macd_flip": false
+        }
+      },
+      "short": {
+        "entry_any": [
+          [
+            {
+              "type": "compare",
+              "left": "close",
+              "op": "<",
+              "right": "sma_50_1h"
+            },
+            {
+              "type": "compare",
+              "left": "macd_hist",
+              "op": "<",
+              "right": 0
+            },
+            {
+              "type": "volume",
+              "op": ">",
+              "ref": "avg_volume_96",
+              "mult": 1.15
+            },
+            {
+              "type": "range",
+              "value": "rsi_14",
+              "min": 38,
+              "max": 58
+            }
+          ],
+          [
+            {
+              "type": "compare",
+              "left": "close",
+              "op": "<",
+              "right": "sma_50_1h"
+            },
+            {
+              "type": "compare",
+              "left": "high",
+              "op": ">=",
+              "right": "resistance_1"
+            },
+            {
+              "type": "compare",
+              "left": "close",
+              "op": "<",
+              "right": "resistance_1"
+            },
+            {
+              "type": "volume",
+              "op": ">",
+              "ref": "avg_volume_96",
+              "mult": 1.11
+            }
+          ]
+        ],
+        "stop_loss_atr_mult": 1.79,
+        "take_profit_atr_mult": 10.0,
+        "stop_loss_pct": 2.5,
+        "take_profit_pct": [
+          8.0
+        ],
+        "management": {
+          "move_to_breakeven_at_tp_pct": 0.3,
+          "breakeven_offset_pct": 0.1,
+          "trailing_atr_mult": null,
+          "max_hold_candles": 96,
+          "exit_on_level_failure": false,
+          "level_field": "support_1",
+          "level_failure_buffer_pct": 1.0,
+          "exit_on_trend_loss": false,
+          "exit_on_macd_flip": false
+        }
+      },
+      "filters": [
+        {
+          "type": "compare",
+          "left": "adx_14_1h",
+          "op": ">",
+          "right": 18
+        }
+      ],
+      "risk_controls": {
+        "enabled": true,
+        "max_consecutive_losses": 4,
+        "pause_candles_after_losses": 24,
+        "max_losses_in_window": 6,
+        "loss_window_trades": 10
+      }
+    },
+    "rules": "## Trading Rules\n- Long setup A (trend pullback resume): close > sma_50_1h, macd_hist > 0, volume > avg_volume_96 * 1.15, and rsi_14 between 42 and 62 (no chasing overbought momentum).\n- Long setup B (support reclaim in uptrend): close > sma_50_1h, low <= support_1, close > support_1 (candle pierces support then closes back above it), volume > avg_volume_96 * 1.1.\n- Short setup A (trend pullback resume): close < sma_50_1h, macd_hist < 0, volume > avg_volume_96 * 1.15, and rsi_14 between 38 and 58.\n- Short setup B (resistance rejection in downtrend): close < sma_50_1h, high >= resistance_1, close < resistance_1, volume > avg_volume_96 * 1.1.\n- Global regime filter: adx_14_1h > 18 (soft, keeps frequency).\n- Stop-loss: 3.0 x atr_14 or 2.5% max, whichever is tighter.\n- Take-profit: 10.0 x atr_14 or 8.0% target.\n\n## Risk Management\n- Move stop to breakeven when price reaches 0.5 of the distance to take-profit (i.e. about 5 x atr_14); breakeven offset 0.1%.\n- Time stop: exit at close after 96 candles (24 hours).\n- No trailing stop; exit on level failure, trend loss and macd flip disabled.\n- Cooldown: after 4 consecutive losses pause 24 candles; 6 losses within 10 trades also triggers a pause.",
+    "window_robustness": {
+      "windows_total": 6,
+      "profitable_windows": 2,
+      "profitable_windows_ratio": 0.3333,
+      "positive_expectancy_windows": 2,
+      "positive_expectancy_windows_ratio": 0.3333,
+      "pf_pass_windows": 2,
+      "pf_pass_windows_ratio": 0.3333,
+      "median_window_return_pct": -6.42,
+      "median_window_expectancy_pct": -0.2412,
+      "return_std": 5.7421,
+      "expectancy_std": 0.2075,
+      "worst_window_return_pct": -12.01,
+      "worst_window_expectancy_pct": -0.4307,
+      "best_window_return_pct": 3.28,
+      "best_window_expectancy_pct": 0.1352,
+      "windows": [
+        {
+          "window_index": 1,
+          "return_pct": 0.03,
+          "expectancy_pct": 0.0183,
+          "profit_factor": 1.02,
+          "total_trades": 18,
+          "max_drawdown_pct": 5.41
+        },
+        {
+          "window_index": 2,
+          "return_pct": -11.84,
+          "expectancy_pct": -0.4307,
+          "profit_factor": 0.26,
+          "total_trades": 29,
+          "max_drawdown_pct": 13.0
+        },
+        {
+          "window_index": 3,
+          "return_pct": -4.7,
+          "expectancy_pct": -0.1704,
+          "profit_factor": 0.66,
+          "total_trades": 27,
+          "max_drawdown_pct": 9.05
+        },
+        {
+          "window_index": 4,
+          "return_pct": 3.28,
+          "expectancy_pct": 0.1352,
+          "profit_factor": 1.31,
+          "total_trades": 27,
+          "max_drawdown_pct": 10.0
+        },
+        {
+          "window_index": 5,
+          "return_pct": -12.01,
+          "expectancy_pct": -0.38,
+          "profit_factor": 0.42,
+          "total_trades": 33,
+          "max_drawdown_pct": 13.01
+        },
+        {
+          "window_index": 6,
+          "return_pct": -8.14,
+          "expectancy_pct": -0.3119,
+          "profit_factor": 0.23,
+          "total_trades": 27,
+          "max_drawdown_pct": 8.27
+        }
+      ],
+      "stability_score": 0.1
+    },
+    "window_diagnostics": {
+      "stability_score": 0.1,
+      "warnings": [
+        "Only 33% of windows are profitable — strategy is unstable",
+        "Only 33% of windows have positive expectancy — strategy is fragile",
+        "PF > 1 in only 33% of windows — strategy does not pay off",
+        "Worst window -12.0% — catastrophic drawdowns possible",
+        "Moderate return volatility (5.7% std)"
+      ],
+      "recommendations": [
+        "Tighten entry filters or increase stop-loss",
+        "Check entry logic: possibly too many noisy signals",
+        "Increase take_profit or improve position management",
+        "Consider more aggressive breakeven or trailing stop",
+        "Test the strategy on longer history and an additional holdout period"
+      ]
+    },
+    "window_robustness_assessment": {
+      "status": "unstable",
+      "passed": false,
+      "fragile": false,
+      "warnings": [
+        "Not enough profitable windows: 33%",
+        "Not enough windows with positive expectancy: 33%",
+        "Not enough windows with PF > 1: 33%",
+        "Median window return is negative: -6.42%",
+        "Worst window is too weak: -12.01%",
+        "Low stability_score: 0.100"
+      ],
+      "reasons": [
+        "profitable_windows_ratio_too_low",
+        "positive_expectancy_windows_ratio_too_low",
+        "pf_pass_windows_ratio_too_low",
+        "median_window_return_negative",
+        "worst_window_return_too_low",
+        "stability_score_too_low"
+      ],
+      "profitable_windows_ratio": 0.3333,
+      "positive_expectancy_windows_ratio": 0.3333,
+      "pf_pass_windows_ratio": 0.3333,
+      "median_window_return_pct": -6.42,
+      "worst_window_return_pct": -12.01,
+      "stability_score": 0.1
+    },
+    "soft_warnings": [
+      "Profitable windows < 50%",
+      "Windows with positive expectancy < 50%",
+      "Windows with PF > 1 < 50%",
+      "Worst window -12.0%"
+    ]
+  },
+  {
+    "iteration": 3,
+    "train_trades": 778,
+    "test_trades": 264,
+    "train_winrate": 25.1,
+    "test_winrate": 23.1,
+    "train_return_pct": -84.28,
+    "test_return_pct": -43.55,
+    "train_expectancy_pct": -0.2195,
+    "test_expectancy_pct": -0.2051,
+    "train_profit_factor": 0.74,
+    "test_profit_factor": 0.7,
+    "train_max_drawdown_pct": 85.92,
+    "test_max_drawdown_pct": 21.84,
+    "test_total_pnl_pct": -54.15,
+    "selection_score": -4.878,
+    "raw_selection_score": -1.878,
+    "window_stability_penalty": 3.0,
+    "window_penalty_reasons": [
+      "too few profitable windows",
+      "too few windows with positive expectancy",
+      "too few windows with PF > 1",
+      "there is a very bad window",
+      "elevated return dispersion between windows"
+    ],
+    "score_breakdown": {
+      "acceptable": false,
+      "raw_selection_score": -1.878,
+      "window_stability_penalty": 3.0,
+      "final_selection_score": -4.878,
+      "train_total_trades": 778,
+      "test_total_trades": 264,
+      "train_return_pct": -84.28,
+      "test_return_pct": -43.55,
+      "train_expectancy_pct": -0.2195,
+      "test_expectancy_pct": -0.2051,
+      "train_profit_factor": 0.74,
+      "test_profit_factor": 0.7,
+      "train_max_drawdown_pct": 85.92,
+      "test_max_drawdown_pct": 21.84,
+      "train_minus_test_return_pct": -40.73,
+      "train_minus_test_expectancy_pct": -0.0144,
+      "train_minus_test_profit_factor": 0.04,
+      "train_profit_concentration": 0.019,
+      "test_profit_concentration": 0.053,
+      "windows_total": 6,
+      "profitable_windows_ratio": 0.0,
+      "positive_expectancy_windows_ratio": 0.1667,
+      "pf_pass_windows_ratio": 0.0,
+      "median_window_return_pct": -6.895,
+      "worst_window_return_pct": -19.36,
+      "window_return_std": 5.9683,
+      "window_stability_score": 0.1,
+      "robustness_status": "unstable",
+      "robustness_passed": false,
+      "robustness_fragile": false,
+      "robustness_warnings": [
+        "Not enough profitable windows: 0%",
+        "Not enough windows with positive expectancy: 17%",
+        "Not enough windows with PF > 1: 0%",
+        "Median window return is negative: -6.89%",
+        "Worst window is too weak: -19.36%",
+        "Low stability_score: 0.100"
+      ],
+      "robustness_reasons": [
+        "profitable_windows_ratio_too_low",
+        "positive_expectancy_windows_ratio_too_low",
+        "pf_pass_windows_ratio_too_low",
+        "median_window_return_negative",
+        "worst_window_return_too_low",
+        "stability_score_too_low"
+      ]
+    },
+    "acceptable": false,
+    "changes_summary": "Widened stop 1.04/1.79->2.5 ATR (was inside noise, 434/436 stop-outs), TP 10->6 ATR (RR 2.4), volume mults 1.25/1.5, RSI pullback bands, shorter 16-candle cooldown.",
+    "spec": {
+      "long": {
+        "entry_any": [
+          [
+            {
+              "type": "compare",
+              "left": "close",
+              "op": ">",
+              "right": "sma_50_1h"
+            },
+            {
+              "type": "range",
+              "value": "rsi_14",
+              "min": 33,
+              "max": 52
+            },
+            {
+              "type": "volume",
+              "op": ">",
+              "ref": "avg_volume_96",
+              "mult": 1.25
+            }
+          ],
+          [
+            {
+              "type": "compare",
+              "left": "close",
+              "op": ">",
+              "right": "sma_50_1h"
+            },
+            {
+              "type": "compare",
+              "left": "macd_hist",
+              "op": ">",
+              "right": 0
+            },
+            {
+              "type": "volume",
+              "op": ">",
+              "ref": "avg_volume_96",
+              "mult": 1.5
+            },
+            {
+              "type": "range",
+              "value": "rsi_14",
+              "min": 45,
+              "max": 65
+            }
+          ]
+        ],
+        "stop_loss_atr_mult": 2.5,
+        "take_profit_atr_mult": 6.0,
+        "stop_loss_pct": 2.5,
+        "take_profit_pct": [
+          5.0
+        ],
+        "management": {
+          "move_to_breakeven_at_tp_pct": 0.5,
+          "breakeven_offset_pct": 0.1,
+          "trailing_atr_mult": null,
+          "max_hold_candles": 64,
+          "exit_on_level_failure": false,
+          "level_field": "resistance_1",
+          "level_failure_buffer_pct": 1.0,
+          "exit_on_trend_loss": false,
+          "exit_on_macd_flip": false
+        }
+      },
+      "short": {
+        "entry_any": [
+          [
+            {
+              "type": "compare",
+              "left": "close",
+              "op": "<",
+              "right": "sma_50_1h"
+            },
+            {
+              "type": "range",
+              "value": "rsi_14",
+              "min": 48,
+              "max": 67
+            },
+            {
+              "type": "volume",
+              "op": ">",
+              "ref": "avg_volume_96",
+              "mult": 1.25
+            }
+          ],
+          [
+            {
+              "type": "compare",
+              "left": "close",
+              "op": "<",
+              "right": "sma_50_1h"
+            },
+            {
+              "type": "compare",
+              "left": "macd_hist",
+              "op": "<",
+              "right": 0
+            },
+            {
+              "type": "volume",
+              "op": ">",
+              "ref": "avg_volume_96",
+              "mult": 1.5
+            },
+            {
+              "type": "range",
+              "value": "rsi_14",
+              "min": 35,
+              "max": 55
+            }
+          ]
+        ],
+        "stop_loss_atr_mult": 2.5,
+        "take_profit_atr_mult": 6.0,
+        "stop_loss_pct": 2.5,
+        "take_profit_pct": [
+          5.0
+        ],
+        "management": {
+          "move_to_breakeven_at_tp_pct": 0.5,
+          "breakeven_offset_pct": 0.1,
+          "trailing_atr_mult": null,
+          "max_hold_candles": 64,
+          "exit_on_level_failure": false,
+          "level_field": "support_1",
+          "level_failure_buffer_pct": 1.0,
+          "exit_on_trend_loss": false,
+          "exit_on_macd_flip": false
+        }
+      },
+      "filters": [
+        {
+          "type": "compare",
+          "left": "adx_14_1h",
+          "op": ">",
+          "right": 18
+        }
+      ],
+      "risk_controls": {
+        "enabled": true,
+        "max_consecutive_losses": 4,
+        "pause_candles_after_losses": 16,
+        "max_losses_in_window": 6,
+        "loss_window_trades": 10
+      }
+    },
+    "rules": "## Trading Rules\n- Global regime filter: adx_14_1h > 18 (soft; keeps frequency but skips flat regimes).\n- Long setup A (uptrend pullback): close > sma_50_1h, rsi_14 between 33 and 52 (buy the dip, not the extension), and volume > avg_volume_96 * 1.25.\n- Long setup B (trend continuation): close > sma_50_1h, macd_hist > 0, volume > avg_volume_96 * 1.5, and rsi_14 between 45 and 65 (no chasing above 65).\n- Short setup A (downtrend rally): close < sma_50_1h, rsi_14 between 48 and 67 (sell the bounce into strength), and volume > avg_volume_96 * 1.25.\n- Short setup B (trend breakdown): close < sma_50_1h, macd_hist < 0, volume > avg_volume_96 * 1.5, and rsi_14 between 35 and 55.\n- Entry only on the last closed 15m candle; fills at next candle open.\n\n## Risk Management\n- Stop-loss: 2.5 x atr_14 (fallback stop_loss_pct 2.5%). This is the key fix - the previous 1.0-1.8 x ATR stop sat inside 15m noise and produced 434/436 stop-outs.\n- Take-profit: 6.0 x atr_14 (fallback take_profit_pct 5.0%), i.e. RR ~2.4 so the breakeven win rate is ~30%.\n- Move to breakeven when price reaches 0.5 of the distance to TP (breakeven_offset_pct 0.1 covers commissions).\n- Time-stop: exit at close after 64 x 15m candles if neither stop nor target is hit.\n- exit_on_level_failure, exit_on_trend_loss and exit_on_macd_flip are disabled to avoid nervous early exits.\n- Risk controls: pause 16 candles after 4 consecutive losses; block after 6 losses within 10 trades.",
+    "window_robustness": {
+      "windows_total": 6,
+      "profitable_windows": 0,
+      "profitable_windows_ratio": 0.0,
+      "positive_expectancy_windows": 1,
+      "positive_expectancy_windows_ratio": 0.1667,
+      "pf_pass_windows": 0,
+      "pf_pass_windows_ratio": 0.0,
+      "median_window_return_pct": -6.895,
+      "median_window_expectancy_pct": -0.1456,
+      "return_std": 5.9683,
+      "expectancy_std": 0.1849,
+      "worst_window_return_pct": -19.36,
+      "worst_window_expectancy_pct": -0.5689,
+      "best_window_return_pct": -0.76,
+      "best_window_expectancy_pct": 0.0009,
+      "windows": [
+        {
+          "window_index": 1,
+          "return_pct": -19.36,
+          "expectancy_pct": -0.5689,
+          "profit_factor": 0.39,
+          "total_trades": 37,
+          "max_drawdown_pct": 21.84
+        },
+        {
+          "window_index": 2,
+          "return_pct": -5.93,
+          "expectancy_pct": -0.1317,
+          "profit_factor": 0.82,
+          "total_trades": 42,
+          "max_drawdown_pct": 10.99
+        },
+        {
+          "window_index": 3,
+          "return_pct": -6.77,
+          "expectancy_pct": -0.1595,
+          "profit_factor": 0.72,
+          "total_trades": 42,
+          "max_drawdown_pct": 8.16
+        },
+        {
+          "window_index": 4,
+          "return_pct": -0.76,
+          "expectancy_pct": 0.0009,
+          "profit_factor": 1.0,
+          "total_trades": 43,
+          "max_drawdown_pct": 16.45
+        },
+        {
+          "window_index": 5,
+          "return_pct": -7.02,
+          "expectancy_pct": -0.1167,
+          "profit_factor": 0.82,
+          "total_trades": 57,
+          "max_drawdown_pct": 13.52
+        },
+        {
+          "window_index": 6,
+          "return_pct": -13.5,
+          "expectancy_pct": -0.3316,
+          "profit_factor": 0.41,
+          "total_trades": 43,
+          "max_drawdown_pct": 13.92
+        }
+      ],
+      "stability_score": 0.1
+    },
+    "window_diagnostics": {
+      "stability_score": 0.1,
+      "warnings": [
+        "Only 0% of windows are profitable — strategy is unstable",
+        "Only 17% of windows have positive expectancy — strategy is fragile",
+        "PF > 1 in only 0% of windows — strategy does not pay off",
+        "Worst window -19.4% — catastrophic drawdowns possible",
+        "Moderate return volatility (6.0% std)"
+      ],
+      "recommendations": [
+        "Tighten entry filters or increase stop-loss",
+        "Check entry logic: possibly too many noisy signals",
+        "Increase take_profit or improve position management",
+        "Consider more aggressive breakeven or trailing stop",
+        "Test the strategy on longer history and an additional holdout period"
+      ]
+    },
+    "window_robustness_assessment": {
+      "status": "unstable",
+      "passed": false,
+      "fragile": false,
+      "warnings": [
+        "Not enough profitable windows: 0%",
+        "Not enough windows with positive expectancy: 17%",
+        "Not enough windows with PF > 1: 0%",
+        "Median window return is negative: -6.89%",
+        "Worst window is too weak: -19.36%",
+        "Low stability_score: 0.100"
+      ],
+      "reasons": [
+        "profitable_windows_ratio_too_low",
+        "positive_expectancy_windows_ratio_too_low",
+        "pf_pass_windows_ratio_too_low",
+        "median_window_return_negative",
+        "worst_window_return_too_low",
+        "stability_score_too_low"
+      ],
+      "profitable_windows_ratio": 0.0,
+      "positive_expectancy_windows_ratio": 0.1667,
+      "pf_pass_windows_ratio": 0.0,
+      "median_window_return_pct": -6.895,
+      "worst_window_return_pct": -19.36,
+      "stability_score": 0.1
+    },
+    "soft_warnings": [
+      "Profitable windows < 50%",
+      "Windows with positive expectancy < 50%",
+      "Windows with PF > 1 < 50%",
+      "Worst window -19.4%"
+    ]
+  },
+  {
+    "iteration": "3-local",
+    "train_trades": 765,
+    "test_trades": 258,
+    "train_winrate": 23.4,
+    "test_winrate": 25.6,
+    "train_return_pct": -81.47,
+    "test_return_pct": -26.2,
+    "train_expectancy_pct": -0.2033,
+    "test_expectancy_pct": -0.1057,
+    "train_profit_factor": 0.75,
+    "test_profit_factor": 0.84,
+    "train_max_drawdown_pct": 84.8,
+    "test_max_drawdown_pct": 14.82,
+    "test_total_pnl_pct": -27.27,
+    "selection_score": 1.8103999999999996,
+    "raw_selection_score": 4.8104,
+    "window_stability_penalty": 3.0,
+    "window_penalty_reasons": [
+      "too few profitable windows",
+      "too few windows with positive expectancy",
+      "too few windows with PF > 1",
+      "there is a very bad window",
+      "elevated return dispersion between windows"
+    ],
+    "score_breakdown": {
+      "acceptable": false,
+      "raw_selection_score": 4.8104,
+      "window_stability_penalty": 3.0,
+      "final_selection_score": 1.8104,
+      "train_total_trades": 765,
+      "test_total_trades": 258,
+      "train_return_pct": -81.47,
+      "test_return_pct": -26.2,
+      "train_expectancy_pct": -0.2033,
+      "test_expectancy_pct": -0.1057,
+      "train_profit_factor": 0.75,
+      "test_profit_factor": 0.84,
+      "train_max_drawdown_pct": 84.8,
+      "test_max_drawdown_pct": 14.82,
+      "train_minus_test_return_pct": -55.27,
+      "train_minus_test_expectancy_pct": -0.0976,
+      "train_minus_test_profit_factor": -0.09,
+      "train_profit_concentration": 0.021,
+      "test_profit_concentration": 0.048,
+      "windows_total": 6,
+      "profitable_windows_ratio": 0.1667,
+      "positive_expectancy_windows_ratio": 0.1667,
+      "pf_pass_windows_ratio": 0.1667,
+      "median_window_return_pct": -6.265,
+      "worst_window_return_pct": -14.55,
+      "window_return_std": 8.6419,
+      "window_stability_score": 0.1,
+      "robustness_status": "unstable",
+      "robustness_passed": false,
+      "robustness_fragile": false,
+      "robustness_warnings": [
+        "Not enough profitable windows: 17%",
+        "Not enough windows with positive expectancy: 17%",
+        "Not enough windows with PF > 1: 17%",
+        "Median window return is negative: -6.26%",
+        "Worst window is too weak: -14.55%",
+        "Low stability_score: 0.100"
+      ],
+      "robustness_reasons": [
+        "profitable_windows_ratio_too_low",
+        "positive_expectancy_windows_ratio_too_low",
+        "pf_pass_windows_ratio_too_low",
+        "median_window_return_negative",
+        "worst_window_return_too_low",
+        "stability_score_too_low"
+      ]
+    },
+    "acceptable": false,
+    "changes_summary": "Local mutation of numeric parameters.",
+    "spec": {
+      "long": {
+        "entry_any": [
+          [
+            {
+              "type": "compare",
+              "left": "close",
+              "op": ">",
+              "right": "sma_50_1h"
+            },
+            {
+              "type": "range",
+              "value": "rsi_14",
+              "min": 33,
+              "max": 52
+            },
+            {
+              "type": "volume",
+              "op": ">",
+              "ref": "avg_volume_96",
+              "mult": 0.9
+            }
+          ],
+          [
+            {
+              "type": "compare",
+              "left": "close",
+              "op": ">",
+              "right": "sma_50_1h"
+            },
+            {
+              "type": "compare",
+              "left": "macd_hist",
+              "op": ">",
+              "right": 0
+            },
+            {
+              "type": "volume",
+              "op": ">",
+              "ref": "avg_volume_96",
+              "mult": 1.61
+            },
+            {
+              "type": "range",
+              "value": "rsi_14",
+              "min": 42.5,
+              "max": 61.8
+            }
+          ]
+        ],
+        "stop_loss_atr_mult": 1.98,
+        "take_profit_atr_mult": 6.0,
+        "stop_loss_pct": 2.5,
+        "take_profit_pct": [
+          5.0
+        ],
+        "management": {
+          "move_to_breakeven_at_tp_pct": 0.5,
+          "breakeven_offset_pct": 0.1,
+          "trailing_atr_mult": null,
+          "max_hold_candles": 64,
+          "exit_on_level_failure": false,
+          "level_field": "resistance_1",
+          "level_failure_buffer_pct": 1.0,
+          "exit_on_trend_loss": false,
+          "exit_on_macd_flip": false
+        }
+      },
+      "short": {
+        "entry_any": [
+          [
+            {
+              "type": "compare",
+              "left": "close",
+              "op": "<",
+              "right": "sma_50_1h"
+            },
+            {
+              "type": "range",
+              "value": "rsi_14",
+              "min": 51.2,
+              "max": 62.9
+            },
+            {
+              "type": "volume",
+              "op": ">",
+              "ref": "avg_volume_96",
+              "mult": 1.25
+            }
+          ],
+          [
+            {
+              "type": "compare",
+              "left": "close",
+              "op": "<",
+              "right": "sma_50_1h"
+            },
+            {
+              "type": "compare",
+              "left": "macd_hist",
+              "op": "<",
+              "right": 0
+            },
+            {
+              "type": "volume",
+              "op": ">",
+              "ref": "avg_volume_96",
+              "mult": 1.74
+            },
+            {
+              "type": "range",
+              "value": "rsi_14",
+              "min": 35,
+              "max": 55
+            }
+          ]
+        ],
+        "stop_loss_atr_mult": 2.5,
+        "take_profit_atr_mult": 6.0,
+        "stop_loss_pct": 2.5,
+        "take_profit_pct": [
+          5.0
+        ],
+        "management": {
+          "move_to_breakeven_at_tp_pct": 0.5,
+          "breakeven_offset_pct": 0.1,
+          "trailing_atr_mult": null,
+          "max_hold_candles": 64,
+          "exit_on_level_failure": false,
+          "level_field": "support_1",
+          "level_failure_buffer_pct": 1.0,
+          "exit_on_trend_loss": false,
+          "exit_on_macd_flip": false
+        }
+      },
+      "filters": [
+        {
+          "type": "compare",
+          "left": "adx_14_1h",
+          "op": ">",
+          "right": 18
+        }
+      ],
+      "risk_controls": {
+        "enabled": true,
+        "max_consecutive_losses": 4,
+        "pause_candles_after_losses": 16,
+        "max_losses_in_window": 6,
+        "loss_window_trades": 10
+      }
+    },
+    "rules": "## Trading Rules\n- Global regime filter: adx_14_1h > 18 (soft; keeps frequency but skips flat regimes).\n- Long setup A (uptrend pullback): close > sma_50_1h, rsi_14 between 33 and 52 (buy the dip, not the extension), and volume > avg_volume_96 * 1.25.\n- Long setup B (trend continuation): close > sma_50_1h, macd_hist > 0, volume > avg_volume_96 * 1.5, and rsi_14 between 45 and 65 (no chasing above 65).\n- Short setup A (downtrend rally): close < sma_50_1h, rsi_14 between 48 and 67 (sell the bounce into strength), and volume > avg_volume_96 * 1.25.\n- Short setup B (trend breakdown): close < sma_50_1h, macd_hist < 0, volume > avg_volume_96 * 1.5, and rsi_14 between 35 and 55.\n- Entry only on the last closed 15m candle; fills at next candle open.\n\n## Risk Management\n- Stop-loss: 2.5 x atr_14 (fallback stop_loss_pct 2.5%). This is the key fix - the previous 1.0-1.8 x ATR stop sat inside 15m noise and produced 434/436 stop-outs.\n- Take-profit: 6.0 x atr_14 (fallback take_profit_pct 5.0%), i.e. RR ~2.4 so the breakeven win rate is ~30%.\n- Move to breakeven when price reaches 0.5 of the distance to TP (breakeven_offset_pct 0.1 covers commissions).\n- Time-stop: exit at close after 64 x 15m candles if neither stop nor target is hit.\n- exit_on_level_failure, exit_on_trend_loss and exit_on_macd_flip are disabled to avoid nervous early exits.\n- Risk controls: pause 16 candles after 4 consecutive losses; block after 6 losses within 10 trades.",
+    "window_robustness": {
+      "windows_total": 6,
+      "profitable_windows": 1,
+      "profitable_windows_ratio": 0.1667,
+      "positive_expectancy_windows": 1,
+      "positive_expectancy_windows_ratio": 0.1667,
+      "pf_pass_windows": 1,
+      "pf_pass_windows_ratio": 0.1667,
+      "median_window_return_pct": -6.265,
+      "median_window_expectancy_pct": -0.1522,
+      "return_std": 8.6419,
+      "expectancy_std": 0.2162,
+      "worst_window_return_pct": -14.55,
+      "worst_window_expectancy_pct": -0.39,
+      "best_window_return_pct": 12.49,
+      "best_window_expectancy_pct": 0.3165,
+      "windows": [
+        {
+          "window_index": 1,
+          "return_pct": -14.55,
+          "expectancy_pct": -0.39,
+          "profit_factor": 0.55,
+          "total_trades": 39,
+          "max_drawdown_pct": 14.82
+        },
+        {
+          "window_index": 2,
+          "return_pct": -1.82,
+          "expectancy_pct": -0.0312,
+          "profit_factor": 0.95,
+          "total_trades": 42,
+          "max_drawdown_pct": 7.78
+        },
+        {
+          "window_index": 3,
+          "return_pct": -7.5,
+          "expectancy_pct": -0.1888,
+          "profit_factor": 0.64,
+          "total_trades": 40,
+          "max_drawdown_pct": 11.83
+        },
+        {
+          "window_index": 4,
+          "return_pct": 12.49,
+          "expectancy_pct": 0.3165,
+          "profit_factor": 1.53,
+          "total_trades": 40,
+          "max_drawdown_pct": 13.44
+        },
+        {
+          "window_index": 5,
+          "return_pct": -10.98,
+          "expectancy_pct": -0.2,
+          "profit_factor": 0.73,
+          "total_trades": 55,
+          "max_drawdown_pct": 13.55
+        },
+        {
+          "window_index": 6,
+          "return_pct": -5.03,
+          "expectancy_pct": -0.1157,
+          "profit_factor": 0.78,
+          "total_trades": 42,
+          "max_drawdown_pct": 8.3
+        }
+      ],
+      "stability_score": 0.1
+    },
+    "window_diagnostics": {
+      "stability_score": 0.1,
+      "warnings": [
+        "Only 17% of windows are profitable — strategy is unstable",
+        "Only 17% of windows have positive expectancy — strategy is fragile",
+        "PF > 1 in only 17% of windows — strategy does not pay off",
+        "Worst window -14.6% — catastrophic drawdowns possible",
+        "Moderate return volatility (8.6% std)"
+      ],
+      "recommendations": [
+        "Tighten entry filters or increase stop-loss",
+        "Check entry logic: possibly too many noisy signals",
+        "Increase take_profit or improve position management",
+        "Consider more aggressive breakeven or trailing stop",
+        "Test the strategy on longer history and an additional holdout period"
+      ]
+    },
+    "window_robustness_assessment": {
+      "status": "unstable",
+      "passed": false,
+      "fragile": false,
+      "warnings": [
+        "Not enough profitable windows: 17%",
+        "Not enough windows with positive expectancy: 17%",
+        "Not enough windows with PF > 1: 17%",
+        "Median window return is negative: -6.26%",
+        "Worst window is too weak: -14.55%",
+        "Low stability_score: 0.100"
+      ],
+      "reasons": [
+        "profitable_windows_ratio_too_low",
+        "positive_expectancy_windows_ratio_too_low",
+        "pf_pass_windows_ratio_too_low",
+        "median_window_return_negative",
+        "worst_window_return_too_low",
+        "stability_score_too_low"
+      ],
+      "profitable_windows_ratio": 0.1667,
+      "positive_expectancy_windows_ratio": 0.1667,
+      "pf_pass_windows_ratio": 0.1667,
+      "median_window_return_pct": -6.265,
+      "worst_window_return_pct": -14.55,
+      "stability_score": 0.1
+    },
+    "soft_warnings": [
+      "Profitable windows < 50%",
+      "Windows with positive expectancy < 50%",
+      "Windows with PF > 1 < 50%",
+      "Worst window -14.6%"
+    ]
+  }
+]
+[18:57:39] Report saved: C:\Users\sanch\Projects\TRADING_AGENT_4\optimization_reports\ETHUSDT_20261115_184026.txt

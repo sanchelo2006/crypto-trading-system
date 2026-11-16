@@ -1,5 +1,5 @@
 """
-Страница общего чата с AI.
+General AI chat page.
 """
 
 from __future__ import annotations
@@ -17,14 +17,14 @@ from tool_registry import ToolExecutor, get_tool_definitions
 
 class ChatPage:
     """
-    Общий чат с AI по монетам.
+    General AI chat across coins.
 
-    Страница получает зависимости явно:
+    The page receives its dependencies explicitly:
     - memory;
     - fetcher;
     - ai_client;
     - app_settings;
-    - очередь UI-сообщений (callbacks queue_chat_message / loading).
+    - the UI message queue (queue_chat_message / loading callbacks).
     """
 
     def __init__(
@@ -54,28 +54,28 @@ class ChatPage:
         self.container.visible = False
 
     def build_ui(self):
-        ui.label("💬 Общий чат с AI").classes("text-h6")
+        ui.label("💬 General AI chat").classes("text-h6")
 
         with ui.row().classes("w-full justify-end"):
-            ui.button("🗑 Очистить чат", on_click=self.clear_chat, color="negative")
+            ui.button("🗑 Clear chat", on_click=self.clear_chat, color="negative")
 
         self.chat_container = ui.column().classes("w-full h-96 overflow-auto border rounded p-2")
 
         with ui.row().classes("w-full"):
-            self.chat_input = ui.input("Сообщение", placeholder="Напишите...").classes("flex-1").style("width: 100%;")
-            self.send_btn = ui.button("Отправить", on_click=self.send_message).classes("bg-primary text-white")
+            self.chat_input = ui.input("Message", placeholder="Type here...").classes("flex-1").style("width: 100%;")
+            self.send_btn = ui.button("Send", on_click=self.send_message).classes("bg-primary text-white")
 
     def clear_chat(self):
         self.messages = []
         self.chat_container.clear()
-        ui.notify("Чат очищен.", type="info")
+        ui.notify("Chat cleared.", type="info")
 
-    def _set_loading_ui(self, loading: bool, text: str = "Думаю..."):
+    def _set_loading_ui(self, loading: bool, text: str = "Thinking..."):
         """
-        Меняет состояние UI чата.
+        Changes the chat UI state.
 
-        text пока не используется визуально, но сигнатура сохранена
-        для совместимости с очередью событий.
+        text is not used visually yet, but the signature is kept
+        for compatibility with the event queue.
         """
         self.is_processing = loading
         self.send_btn.enabled = not loading
@@ -93,7 +93,7 @@ class ChatPage:
         self.messages.append(("user", message))
 
         with self.chat_container:
-            ui.chat_message(text=message, name="Вы", sent=True)
+            ui.chat_message(text=message, name="You", sent=True)
 
         self._set_loading_ui(True)
 
@@ -103,13 +103,13 @@ class ChatPage:
             try:
                 symbol = self.detect_symbol(message)
                 if not symbol:
-                    self.queue_chat_message_fn("❓ Не удалось определить монету.")
+                    self.queue_chat_message_fn("❓ Could not detect the coin.")
                     return
 
                 cm = self.memory.get(symbol)
                 if not cm.is_initialized():
                     self.queue_chat_message_fn(
-                        f"⚠️ Монета {symbol} не инициализирована."
+                        f"⚠️ Coin {symbol} is not initialized."
                     )
                     return
 
@@ -150,8 +150,8 @@ class ChatPage:
                 self.queue_chat_message_fn(reply)
 
             except Exception as e:
-                logger.exception("Ошибка ChatPage.send_message worker")
-                self.queue_chat_message_fn(f"❌ Ошибка: {e}")
+                logger.exception("ChatPage.send_message worker error")
+                self.queue_chat_message_fn(f"❌ Error: {e}")
 
             finally:
                 self.queue_chat_loading_fn(False)
@@ -160,7 +160,7 @@ class ChatPage:
 
     def detect_symbol(self, message: str) -> Optional[str]:
         """
-        Пытается определить символ монеты по тексту пользователя.
+        Tries to detect the coin symbol from the user's text.
         """
         for sym in self.memory.get_all_symbols():
             if re.search(r"\b" + re.escape(sym) + r"\b", message, re.IGNORECASE):

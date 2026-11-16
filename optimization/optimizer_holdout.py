@@ -1,5 +1,5 @@
 """
-Holdout-валидация финального кандидата.
+Holdout validation of the final candidate.
 """
 
 import logging
@@ -25,12 +25,12 @@ class OptimizerHoldout:
         commission_pct: float,
     ) -> Dict:
         """
-        Финальная оценка стратегии на holdout-периоде без TRAIN.
-        Использует прямой прогон движка на одном DataFrame.
+        Final evaluation of the strategy on the holdout period without TRAIN.
+        Uses a direct engine run on a single DataFrame.
         """
         try:
             if holdout_df is None or len(holdout_df) == 0:
-                return {"error": "Пустой holdout_df."}
+                return {"error": "Empty holdout_df."}
 
             result = self.engine.run_on_dataframe(
                 df=holdout_df,
@@ -42,7 +42,7 @@ class OptimizerHoldout:
             )
 
             if not result:
-                return {"error": "Движок не вернул результат holdout-бэктеста."}
+                return {"error": "Engine returned no holdout backtest result."}
 
             if "error" in result:
                 return {"error": result["error"]}
@@ -57,7 +57,7 @@ class OptimizerHoldout:
             }
 
         except Exception as e:
-            logger.exception("Ошибка при финальной оценке HOLDOUT")
+            logger.exception("Error during final HOLDOUT evaluation")
             return {"error": str(e)}
 
     @staticmethod
@@ -67,11 +67,11 @@ class OptimizerHoldout:
         min_weak_holdout_trades: int = MIN_WEAK_HOLDOUT_TRADES,
     ) -> Dict:
         """
-        Диагностика качества на holdout.
-        Статусы:
-        - passed: метрики хорошие и сделок достаточно
-        - weak_pass: метрики хорошие, но сделок мало
-        - failed: метрики плохие или сделок слишком мало
+        Quality diagnostics on holdout.
+        Statuses:
+        - passed: metrics are good and there are enough trades
+        - weak_pass: metrics are good, but there are few trades
+        - failed: metrics are bad or there are too few trades
         """
 
         def _f(key: str, default: float = 0.0) -> float:
@@ -102,24 +102,24 @@ class OptimizerHoldout:
         )
 
         if trades < min_holdout_trades:
-            warnings.append("На holdout мало сделок")
-            recommendations.append("Проверить стратегию на более длинном внешнем периоде")
+            warnings.append("Too few trades on holdout")
+            recommendations.append("Check the strategy on a longer external period")
 
         if expectancy <= 0:
-            warnings.append("На holdout expectancy <= 0")
-            recommendations.append("Пересмотреть качество входов и управление позицией")
+            warnings.append("Holdout expectancy <= 0")
+            recommendations.append("Review entry quality and position management")
 
         if pf <= 1.05:
-            warnings.append("На holdout PF <= 1.05")
-            recommendations.append("Проверить соотношение прибыль/убыток и фильтры входа")
+            warnings.append("Holdout PF <= 1.05")
+            recommendations.append("Check the profit/loss ratio and entry filters")
 
         if ret <= 0:
-            warnings.append("На holdout итоговая доходность <= 0")
-            recommendations.append("Проверить устойчивость стратегии вне оптимизационного периода")
+            warnings.append("Holdout final return <= 0")
+            recommendations.append("Check strategy robustness outside the optimization period")
 
         if dd > 10:
-            warnings.append("На holdout повышенная просадка")
-            recommendations.append("Снизить риск или ужесточить управление позицией")
+            warnings.append("Elevated drawdown on holdout")
+            recommendations.append("Reduce risk or tighten position management")
 
         passed = trades >= min_holdout_trades and quality_ok
         weak_pass = (
@@ -158,7 +158,7 @@ class OptimizerHoldout:
         holdout_period: Dict,
         profit_concentration_func,
     ) -> Dict:
-        """Сводка результатов holdout."""
+        """Summary of holdout results."""
         return {
             "enabled": bool(holdout_meta.get("enabled", False)),
             "reason": holdout_meta.get("reason"),

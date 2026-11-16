@@ -1,1 +1,1 @@
-"""Промпты для AI-модели."""
+"""Prompts for the AI model."""

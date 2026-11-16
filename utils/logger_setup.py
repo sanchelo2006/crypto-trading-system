@@ -251,3 +251,12 @@ class UserLogFilter(logging.Filter):
 
     def filter(self, record):
         return record.name in ("ai_client", "ai_client.token", "data_fetcher", "app")
+
+def get_logs_dir() -> Path:
+    """Return the directory where all log files are stored.
+
+    Uses the same resolution logic as the log handlers (LOGS_DIR env var,
+    OneDrive redirection, or the default ``logs/`` folder). Exposed so the
+    Logs page can list the real log files.
+    """
+    return _resolve_logs_dir()

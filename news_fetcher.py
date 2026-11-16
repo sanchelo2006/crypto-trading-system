@@ -1,7 +1,7 @@
 """
-Модуль для получения и анализа крипто-новостей через RSS-ленты.
-Использует CryptoBERT (ElKulako/cryptobert) для точного сентимент-анализа с fallback на ключевые слова.
-Добавлена дедупликация по сходству заголовков.
+Module for fetching and analyzing crypto news via RSS feeds.
+Uses CryptoBERT (ElKulako/cryptobert) for accurate sentiment analysis with a keyword fallback.
+Headline-similarity deduplication is included.
 """
 import logging
 import re
@@ -16,20 +16,20 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-# Таймаут на один RSS-источник (сек) и общий бюджет на весь обход лент.
-# feedparser.parse(url) не умеет таймаут и может висеть бесконечно,
-# поэтому качаем контент через requests, а feedparser отдаём уже байты.
+# Timeout per RSS source (sec) and the total budget for the whole feed sweep.
+# feedparser.parse(url) has no timeout support and can hang forever,
+# so we download the content with requests and pass the bytes to feedparser.
 RSS_TIMEOUT_SEC = 8
 RSS_TOTAL_BUDGET_SEC = 45
 
-# ==================== Вспомогательные функции ====================
+# ==================== Helper functions ====================
 def _similar(a: str, b: str) -> float:
-    """Возвращает коэффициент сходства двух строк (0.0 – 1.0)."""
+    """Returns the similarity ratio of two strings (0.0 – 1.0)."""
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
 
 def _deduplicate_articles(articles: List[Dict], threshold: float = 0.8) -> List[Dict]:
     """
-    Группирует статьи с похожими заголовками и оставляет одну с пометкой о количестве источников.
+    Groups articles with similar headlines and keeps one with a note about the number of sources.
     """
     if not articles:
         return articles
@@ -48,7 +48,7 @@ def _deduplicate_articles(articles: List[Dict], threshold: float = 0.8) -> List[
             rep = duplicates[0].copy()
             rep["duplicate_count"] = len(duplicates)
             rep["duplicate_sources"] = list(set(d.get("source", "?") for d in duplicates))
-            rep["title"] = rep.get("title", "") + f" (повторяется в {len(duplicates)} источниках)"
+            rep["title"] = rep.get("title", "") + f" (repeated in {len(duplicates)} sources)"
             result.append(rep)
         else:
             result.append(art)
@@ -57,8 +57,8 @@ def _deduplicate_articles(articles: List[Dict], threshold: float = 0.8) -> List[
 # ==================== CryptoBERT Sentiment Analyzer ====================
 class CryptoBERTSentiment:
     """
-    Сентимент-анализатор на основе CryptoBERT (ElKulako/cryptobert).
-    Ленивая загрузка (синглтон), потокобезопасный.
+    Sentiment analyzer based on CryptoBERT (ElKulako/cryptobert).
+    Lazy loading (singleton), thread-safe.
     """
     _instance = None
     _pipeline = None
@@ -79,7 +79,7 @@ class CryptoBERTSentiment:
             import torch
 
             model_name = "ElKulako/cryptobert"
-            logger.info(f"Загрузка CryptoBERT: {model_name}...")
+            logger.info(f"Loading CryptoBERT: {model_name}...")
             tokenizer = AutoTokenizer.from_pretrained(model_name)
             model = AutoModelForSequenceClassification.from_pretrained(model_name)
             self._pipeline = pipeline(
@@ -90,41 +90,41 @@ class CryptoBERTSentiment:
                 truncation=True,
                 max_length=512
             )
-            logger.info("CryptoBERT успешно загружен")
+            logger.info("CryptoBERT loaded successfully")
             return True
         except Exception as e:
             self._init_error = str(e)
             logger.warning(
-                f"Не удалось загрузить CryptoBERT: {e}. "
-                f"Будет использован fallback (ключевые слова)."
+                f"Failed to load CryptoBERT: {e}. "
+                f"The keyword fallback will be used."
             )
             return False
 
     def analyze(self, text: str) -> Tuple[str, float]:
-        """Возвращает (sentiment, confidence) для одного текста."""
+        """Returns (sentiment, confidence) for a single text."""
         if not self._load_model():
             return "neutral", 0.0
         if not text or not text.strip():
             return "neutral", 0.0
         try:
             results = self._pipeline(text)
-            # results — это список словарей. 
-            # При return_all_scores=True каждый элемент списка — список всех меток с их скорами.
-            # Формат: [[{'label': 'Bearish', 'score': 0.1}, {'label': 'Neutral', 'score': 0.8}, ...]]
-            
-            # Проверяем структуру
+            # results is a list of dicts.
+            # With return_all_scores=True each list item is a list of all labels with their scores.
+            # Format: [[{'label': 'Bearish', 'score': 0.1}, {'label': 'Neutral', 'score': 0.8}, ...]]
+
+            # Check the structure
             if isinstance(results, list) and len(results) > 0:
                 first_item = results[0]
                 if isinstance(first_item, list):
-                    # Это список словарей — стандартный формат return_all_scores
+                    # A list of dicts — the standard return_all_scores format
                     scores = first_item
                 elif isinstance(first_item, dict) and 'label' in first_item:
-                    # Это один словарь (без return_all_scores) — оборачиваем в список
+                    # A single dict (without return_all_scores) — wrap it into a list
                     scores = results
                 else:
-                    logger.warning(f"Неожиданный формат ответа CryptoBERT: {type(results)} {str(results)[:200]}")
+                    logger.warning(f"Unexpected CryptoBERT response format: {type(results)} {str(results)[:200]}")
                     return "neutral", 0.0
-                
+
                 best = max(scores, key=lambda x: x['score'] if isinstance(x, dict) else 0)
                 if isinstance(best, dict):
                     label = best.get('label', '').lower()
@@ -135,10 +135,10 @@ class CryptoBERTSentiment:
                         return "positive", score
                     else:
                         return "neutral", score
-            
+
             return "neutral", 0.0
         except Exception as e:
-            logger.error(f"Ошибка анализа CryptoBERT: {e}")
+            logger.error(f"CryptoBERT analysis error: {e}")
             return "neutral", 0.0
 
     def analyze_batch(self, texts: List[str]) -> List[Tuple[str, float]]:
@@ -149,7 +149,7 @@ class CryptoBERTSentiment:
             results.append(self.analyze(text))
         return results
 
-# Глобальный экземпляр (синглтон)
+# Global instance (singleton)
 cryptobert_sentiment = CryptoBERTSentiment()
 
 # ==================== News Aggregator ====================
@@ -202,12 +202,12 @@ class NewsAggregator:
         for source_name, feed_url in self.RSS_FEEDS.items():
             if time.monotonic() - started > RSS_TOTAL_BUDGET_SEC:
                 logger.warning(
-                    f"RSS: бюджет {RSS_TOTAL_BUDGET_SEC}с исчерпан, "
-                    f"остальные ленты пропущены (не дошли до: {source_name})"
+                    f"RSS: budget of {RSS_TOTAL_BUDGET_SEC}s exhausted, "
+                    f"remaining feeds skipped (did not reach: {source_name})"
                 )
                 break
             try:
-                logger.debug(f"Парсинг RSS: {source_name}")
+                logger.debug(f"Parsing RSS: {source_name}")
                 resp = requests.get(
                     feed_url,
                     timeout=RSS_TIMEOUT_SEC,
@@ -224,17 +224,17 @@ class NewsAggregator:
                         "source": source_name
                     })
             except Exception as e:
-                logger.warning(f"Ошибка парсинга {source_name}: {e}")
-        logger.info(f"Всего статей из RSS: {len(articles)}")
+                logger.warning(f"Failed to parse {source_name}: {e}")
+        logger.info(f"Total articles from RSS: {len(articles)}")
         if self.deduplicate and articles:
             articles = _deduplicate_articles(articles)
-            logger.info(f"После дедупликации: {len(articles)} статей")
+            logger.info(f"After deduplication: {len(articles)} articles")
         return articles
 
     def filter_articles_by_symbol(self, articles: List[Dict], coin_symbol: str) -> List[Dict]:
         coin_lower = coin_symbol.lower()
         filtered = [a for a in articles if coin_lower in a["title"].lower()]
-        logger.info(f"После фильтрации по '{coin_symbol}': {len(filtered)} статей (из {len(articles)})")
+        logger.info(f"After filtering by '{coin_symbol}': {len(filtered)} articles (out of {len(articles)})")
         return filtered
 
     def _parse_date(self, date_val) -> datetime:
@@ -263,13 +263,13 @@ class NewsAggregator:
                    limit: int = 20, max_age_days: int = 30) -> pd.DataFrame:
         articles = self.fetch_articles_from_feeds(limit=limit * 2)
         if not articles:
-            logger.warning(f"Нет статей из RSS-лент для {coin_symbol}")
+            logger.warning(f"No articles from RSS feeds for {coin_symbol}")
             return pd.DataFrame()
         filtered = self.filter_articles_by_symbol(articles, coin_symbol)
         if max_age_days is not None:
             cutoff = datetime.now() - timedelta(days=max_age_days)
             filtered = [a for a in filtered if self._parse_date(a.get("date")) >= cutoff]
-        logger.info(f"После фильтрации по дате (<{max_age_days} дн): {len(filtered)} статей")
+        logger.info(f"After date filtering (<{max_age_days} days): {len(filtered)} articles")
         if not filtered:
             return pd.DataFrame()
         data = []
@@ -285,13 +285,13 @@ class NewsAggregator:
                 "duplicate_count": article.get("duplicate_count", 0),
                 "duplicate_sources": article.get("duplicate_sources", []),
             })
-        logger.info(f"Новостей собрано для {coin_symbol}: {len(data)}")
+        logger.info(f"News collected for {coin_symbol}: {len(data)}")
         return pd.DataFrame(data)
 
     def get_news_for_symbol(self, symbol: str, max_items: int = 15,
                             hours_back: int = 24) -> pd.DataFrame:
         base = self._extract_base_asset(symbol)
-        logger.info(f"Поиск новостей для {symbol} (базовый актив: {base})")
+        logger.info(f"Searching news for {symbol} (base asset: {base})")
         max_age_days = max(1, hours_back // 24)
         df = self.fetch_news(base, limit=max_items, max_age_days=max_age_days)
         if not df.empty and hours_back < 24:
@@ -304,10 +304,10 @@ class NewsAggregator:
 
     def format_news_for_prompt(self, df: pd.DataFrame) -> str:
         if df.empty:
-            return "Новости не найдены за указанный период."
-        lines = [f"### Новостной фон ({len(df)} новостей):\n"]
+            return "No news found for the specified period."
+        lines = [f"### News background ({len(df)} items):\n"]
         for i, (_, row) in enumerate(df.iterrows(), 1):
-            title = row.get("title", "Без заголовка")
+            title = row.get("title", "Untitled")
             source = row.get("source", "?")
             date = row.get("date", "?")
             summary = row.get("summary", "")
@@ -322,7 +322,7 @@ class NewsAggregator:
                 time_str = str(date)[:16]
             lines.append(f"{i}. [{source}] {title} ({time_str})")
             if duplicate_count > 1:
-                lines.append(f"   ⚠️ Эта новость повторяется в {duplicate_count} источниках")
+                lines.append(f"   ⚠️ This news item is repeated in {duplicate_count} sources")
             if summary:
                 lines.append(f"   {summary}")
         return "\n".join(lines)
@@ -338,7 +338,7 @@ class NewsAggregator:
                 "method": "none"
             }
 
-        # Пытаемся использовать CryptoBERT
+        # Try to use CryptoBERT
         if self.use_ml:
             try:
                 texts = []
@@ -364,7 +364,7 @@ class NewsAggregator:
                 else:
                     impact = "neutral"
 
-                logger.info(f"Сентимент (CryptoBERT): {impact} (pos={pos}, neg={neg}, neu={neu})")
+                logger.info(f"Sentiment (CryptoBERT): {impact} (pos={pos}, neg={neg}, neu={neu})")
                 return {
                     "impact": impact,
                     "positive_count": pos,
@@ -374,9 +374,9 @@ class NewsAggregator:
                     "method": "cryptobert"
                 }
             except Exception as e:
-                logger.warning(f"Ошибка CryptoBERT анализа, использую fallback: {e}")
+                logger.warning(f"CryptoBERT analysis error, using fallback: {e}")
 
-        # Fallback: ключевые слова
+        # Fallback: keywords
         return self._keyword_sentiment(df)
 
     def _keyword_sentiment(self, df: pd.DataFrame) -> Dict:
@@ -410,7 +410,7 @@ class NewsAggregator:
         impact = "negative" if (neg > pos and neg >= 2) else (
             "positive" if (pos > neg and pos >= 2) else "neutral"
         )
-        logger.info(f"Сентимент (keywords): {impact} (pos={pos}, neg={neg}, neu={neu})")
+        logger.info(f"Sentiment (keywords): {impact} (pos={pos}, neg={neg}, neu={neu})")
         return {
             "impact": impact,
             "positive_count": pos,

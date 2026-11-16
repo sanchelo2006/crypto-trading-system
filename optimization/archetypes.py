@@ -1,17 +1,17 @@
 """
-Архетипы Фазы 0: фиксированные торговые идеи с малым числом параметров.
-У каждого архетипа:
+Phase 0 archetypes: fixed trading ideas with a small number of parameters.
+Each archetype has:
 - build(p) -> strategy_spec (dict);
-- grid()   -> список наборов параметров для грубого перебора.
-Структура условий зашита в коде: наружу торчат только 2-3 числовые ручки
-(стоп, тейк, один фильтр). Это барьер переобучения: идею нельзя
-«переписать», можно лишь настроить риск под волатильность.
+- grid()   -> list of parameter sets for a coarse sweep.
+The condition structure is hard-coded: only 2-3 numeric knobs are exposed
+(stop, take, one filter). This is an overfitting barrier: the idea cannot be
+"rewritten", only risk can be tuned to volatility.
 
-Две семьи идей:
-- A1-A5: импульсные/трендовые (пробои, откаты, моментум);
-- R1-R4: mean-reversion (возврат к среднему внутри диапазона).
-Каждая группа входа обязана проходить барьер strategy_spec:
-объёмный фильтр + трендовый фильтр + привязка к уровню/импульсу.
+Two idea families:
+- A1-A5: impulse/trend (breakouts, pullbacks, momentum);
+- R1-R4: mean-reversion (return to the mean inside a range).
+Every entry group must pass the strategy_spec barrier:
+volume filter + trend filter + level/impulse tie-in.
 """
 from __future__ import annotations
 from typing import Dict, List
@@ -49,7 +49,7 @@ def _risk() -> Dict:
 
 
 # ------------------------------------------------------------------
-# A1. Тренд 1h + откат к SMA20 на 15m (свинг)
+# A1. 1h trend + pullback to SMA20 on 15m (swing)
 # ------------------------------------------------------------------
 def _build_pullback(p: Dict) -> Dict:
     s, t, vm = p["stop"], p["tp"], p["vol"]
@@ -83,8 +83,8 @@ def _grid_pullback() -> List[Dict]:
 
 
 # ------------------------------------------------------------------
-# A2. Пробой волатильности (Боллинджер) по тренду 1h
-# Объём зафиксирован 1.2: пробой без объёма — ложный пробой.
+# A2. Volatility breakout (Bollinger) along the 1h trend
+# Volume is fixed at 1.2: a breakout without volume is a false breakout.
 # ------------------------------------------------------------------
 def _build_breakout(p: Dict) -> Dict:
     s, t, ax = p["stop"], p["tp"], p["adx"]
@@ -116,7 +116,7 @@ def _grid_breakout() -> List[Dict]:
 
 
 # ------------------------------------------------------------------
-# A3. Mean-reversion от экстремума RSI ВНУТРИ тренда 1h
+# A3. Mean-reversion from an RSI extreme INSIDE the 1h trend
 # ------------------------------------------------------------------
 def _build_meanrev(p: Dict) -> Dict:
     s, t, r = p["stop"], p["tp"], p["rsi"]
@@ -146,7 +146,7 @@ def _grid_meanrev() -> List[Dict]:
 
 
 # ------------------------------------------------------------------
-# A4. Чистый тренд-моментум 1h (максимально просто)
+# A4. Pure 1h trend momentum (as simple as possible)
 # ------------------------------------------------------------------
 def _build_momentum(p: Dict) -> Dict:
     s, t = p["stop"], p["tp"]
@@ -175,8 +175,8 @@ def _grid_momentum() -> List[Dict]:
 
 
 # ------------------------------------------------------------------
-# R1. Mean-reversion от полос Боллинджера во флэте
-# Вход — возврат цены внутрь канала после выхода за границу.
+# R1. Mean-reversion from Bollinger bands in a flat market
+# Entry — price returning inside the channel after crossing the boundary.
 # ------------------------------------------------------------------
 def _build_bb_meanrev(p: Dict) -> Dict:
     s, t, ax = p["stop"], p["tp"], p["adx"]
@@ -208,7 +208,7 @@ def _grid_bb_meanrev() -> List[Dict]:
 
 
 # ------------------------------------------------------------------
-# R2. RSI-реверсия от экстремума во флэте (цель — vwap)
+# R2. RSI reversion from an extreme in a flat market (target — vwap)
 # ------------------------------------------------------------------
 def _build_rsi_reversion(p: Dict) -> Dict:
     s, t, ax, r = p["stop"], p["tp"], p["adx"], p["rsi"]
@@ -241,8 +241,8 @@ def _grid_rsi_reversion() -> List[Dict]:
 
 
 # ------------------------------------------------------------------
-# R3. Отскок от границ диапазона (support_1 / resistance_1) во флэте
-# Вход в узкой зоне у уровня, но НЕ после пробоя уровня.
+# R3. Bounce off range boundaries (support_1 / resistance_1) in a flat market
+# Entry in a narrow zone near the level, but NOT after the level has been broken.
 # ------------------------------------------------------------------
 def _build_range_boundaries(p: Dict) -> Dict:
     s, t, ax = p["stop"], p["tp"], p["adx"]
@@ -274,7 +274,7 @@ def _grid_range_boundaries() -> List[Dict]:
 
 
 # ------------------------------------------------------------------
-# R4. Реверсия к VWAP после растяжения во флэте
+# R4. Reversion to VWAP after an extension in a flat market
 # ------------------------------------------------------------------
 def _build_vwap_reversion(p: Dict) -> Dict:
     s, t, ax = p["stop"], p["tp"], p["adx"]
@@ -304,9 +304,10 @@ def _grid_vwap_reversion() -> List[Dict]:
         for a in (18.0, 22.0, 26.0)
     ]
 
+
 # ------------------------------------------------------------------
-# A5. Пробой 32-свечного экстремума с всплеском объема и сильным закрытием
-# (Основан на успешных результатах impulse_lab итерации 3, без lookahead)
+# A5. Breakout of the 32-candle extreme with a volume spike and a strong close
+# (Based on the successful results of impulse_lab iteration 3, no lookahead)
 # ------------------------------------------------------------------
 def _build_strong_vol_breakout(p: Dict) -> Dict:
     s, t, vm, h = p["stop"], p["tp"], p["vol"], p["hold"]
@@ -334,8 +335,8 @@ def _build_strong_vol_breakout(p: Dict) -> Dict:
 
 
 def _grid_strong_vol_breakout() -> List[Dict]:
-    # Согласовано с impulse_lab (итерация 3): узкие ATR-стопы,
-    # короткий горизонт. 3*3*2*2 = 36 комбинаций.
+    # Aligned with impulse_lab (iteration 3): narrow ATR stops,
+    # short horizon. 3*3*2*2 = 36 combinations.
     return [
         {"stop": s, "tp": t, "vol": v, "hold": h}
         for s in (0.75, 1.0, 1.5)
@@ -346,13 +347,14 @@ def _grid_strong_vol_breakout() -> List[Dict]:
 
 
 # ------------------------------------------------------------------
-# A6. Моментум-шорт: продолжение ВНИЗ после обвала с объёмом.
-# Гипотеза impulse_lab iter 5 (m2s2_vol2.0): падение >2 ATR за 2 свечи
-# + volume > 2.0*avg_volume_96. Лонг-пробои и лонг-моментум на 15m
-# убыточны всегда и везде (эмпирический вывод итерации 4), поэтому
-# archетип SHORT-ONLY — ключ "long" НЕ включается в спеку.
-# Это не режим-гейт: валидатор strategy_spec допускает отсутствие
-# одной из сторон, а движок просто не генерирует сигналы по пустому блоку.
+# A6. Momentum short: continuation DOWN after a volume crash.
+# Hypothesis from impulse_lab iter 5 (m2s2_vol2.0): a drop >2 ATR over
+# 2 candles + volume > 2.0*avg_volume_96. Long breakouts and long momentum
+# on 15m are unprofitable always and everywhere (empirical conclusion of
+# iteration 4), so the archetype is SHORT-ONLY — the "long" key is NOT
+# included in the spec. This is not a regime gate: the strategy_spec
+# validator allows the absence of one side, and the engine simply does not
+# generate signals for an empty block.
 # ------------------------------------------------------------------
 def _build_a6_short_momentum(p: Dict) -> Dict:
     s, t, vm, h = p["stop"], p["tp"], p["vol"], p["hold"]
@@ -361,8 +363,8 @@ def _build_a6_short_momentum(p: Dict) -> Dict:
         {"type": "volume", "op": ">", "ref": "avg_volume_96", "mult": vm},
     ], s, t)
     short_side["management"]["max_hold_candles"] = h
-    # Лаборатория выходов: трейлинг и безубыток ВРЕДНЫ для этого сигнала
-    # (выбивают на отскоке после обвала). Фиксируем на null.
+    # Exit laboratory: trailing and breakeven are HARMFUL for this signal
+    # (they knock you out on the bounce after the crash). Fixed to null.
     short_side["management"]["trailing_atr_mult"] = None
     short_side["management"]["move_to_breakeven_at_tp_pct"] = None
     return {
@@ -370,8 +372,8 @@ def _build_a6_short_momentum(p: Dict) -> Dict:
         "filters": [],
         "risk_controls": _risk(),
         "frozen_entries": True,
-        # Коридор выходов вокруг лабораторного оптимума (Вариант 2).
-        # Оптимизатор может двигать параметры ТОЛЬКО в этих пределах.
+        # Exit corridor around the laboratory optimum (Option 2).
+        # The optimizer may move parameters ONLY within these bounds.
         "exit_corridor": {
             "stop_loss_atr_mult": [1.8, 2.2],
             "take_profit_atr_mult": [1.3, 1.7],
@@ -379,19 +381,21 @@ def _build_a6_short_momentum(p: Dict) -> Dict:
         },
     }
 
+
 def _grid_a6_short_momentum() -> List[Dict]:
-    # Выходы зафиксированы лабораторией выходов (34 датасета + стресс-тест):
-    #   stop=2.0 — широкий стоп переживает отскок после обвала;
-    #   tp=1.5   — быстрый тейк фиксирует продолжение до разворота;
-    #   hold=8   — интрадей (2 часа), без переноса на ночь.
-    # Лабораторный оптимум: exp=+0.19% при slip=0.05%, frac_pos=0.91.
-    # Узкие стопы (0.75-1.0) выбиваются отскоком — НЕ использовать.
+    # Exits fixed by the exit laboratory (34 datasets + stress test):
+    #   stop=2.0 — a wide stop survives the bounce after the crash;
+    #   tp=1.5   — a fast take fixes the continuation before the reversal;
+    #   hold=8   — intraday (2 hours), no overnight carry.
+    # Laboratory optimum: exp=+0.19% at slip=0.05%, frac_pos=0.91.
+    # Narrow stops (0.75-1.0) get knocked out by the bounce — DO NOT use.
     return [{"stop": 2.0, "tp": 1.5, "vol": 2.0, "hold": 8}]
 
+
 # ------------------------------------------------------------------
-# Реестр архетипов. Каждый билдер возвращает чистую спеку без
-# служебных обёрток: структура идеи зашита в коде, наружу торчат
-# только числовые ручки из grid().
+# Archetype registry. Each builder returns a clean spec without service
+# wrappers: the idea structure is hard-coded, only the numeric knobs from
+# grid() are exposed.
 # ------------------------------------------------------------------
 ARCHETYPES = [
     {"name": "A1_TREND_PULLBACK",      "build": _build_pullback,             "grid": _grid_pullback},

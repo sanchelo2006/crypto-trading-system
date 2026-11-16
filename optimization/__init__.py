@@ -1,1 +1,1 @@
-"""Пакет итеративного оптимизатора стратегии."""
+"""Iterative strategy optimizer package."""

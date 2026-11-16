@@ -1,12 +1,12 @@
 """
-Страницы NiceGUI-интерфейса.
+NiceGUI interface pages.
 
-На текущем этапе сюда вынесены только сравнительно независимые страницы:
-- настройки;
-- сводка;
-- журнал;
-- чат.
+At this stage only the relatively independent pages have been moved here:
+- settings;
+- summary;
+- journal;
+- chat.
 
-Более тяжёлые страницы (например CoinPage и BacktestPage) можно выносить
-отдельными этапами, чтобы минимизировать риск регрессий.
+Heavier pages (for example CoinPage and BacktestPage) can be extracted
+in separate stages to minimize the risk of regressions.
 """
