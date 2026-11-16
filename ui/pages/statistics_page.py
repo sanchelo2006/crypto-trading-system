@@ -44,10 +44,14 @@ class StatisticsPage:
 
         self.chart = ui.echart({
             "tooltip": {"trigger": "axis"},
-            "legend": {"data": ["P&L (USDT)", "Capital at month end"]},
+            # FIX 1: legend pinned to the very bottom of the container
+            "legend": {"data": ["P&L (USDT)", "Capital at month end"], "bottom": 0},
             "grid": {
                 "left": "70px", "right": "70px",
-                "top": "60px", "bottom": "40px",
+                "top": "60px",
+                # FIX 2: increased bottom margin (was 40px) —
+                # X-axis labels are drawn ABOVE the legend and do not overlap it
+                "bottom": "70px",
             },
             "xAxis": {"type": "category", "data": []},
             "yAxis": [
@@ -60,6 +64,9 @@ class StatisticsPage:
                     "type": "bar",
                     "yAxisIndex": 0,
                     "data": [],
+                    # FIX 3: bar width capped at 60 px —
+                    # with a single month the bar no longer stretches over the whole chart
+                    "barMaxWidth": 60,
                     "itemStyle": {"color": "#4d6bfe"},
                 },
                 {

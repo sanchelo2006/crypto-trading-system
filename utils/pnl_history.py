@@ -69,6 +69,39 @@ def _read_month_csv(path: Path) -> Dict:
         return {"trades": 0, "pnl_usdt": 0.0}
     return {"trades": trades, "pnl_usdt": pnl_sum}
 
+def _read_manual_trades(symbol: str) -> Dict[str, Dict]:
+    """
+    Reads manual trades from data/{SYMBOL}/trade_journal.csv
+    and aggregates them by month.
+    Returns: {"YYYY-MM": {"pnl_usdt": float, "trades": int}, ...}
+    """
+    journal_path = config.DATA_DIR / symbol / "trade_journal.csv"
+    if not journal_path.exists():
+        return {}
+
+    months: Dict[str, Dict] = {}
+    try:
+        with open(journal_path, "r", encoding="utf-8-sig", newline="") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                date_str = row.get("date", "")
+                if not date_str or len(date_str) < 7:
+                    continue
+                month = date_str[:7]  # "YYYY-MM"
+
+                pnl = _safe_float(row.get("pnl_usdt", 0.0))
+                if pnl != pnl:  # NaN check (old records without pnl_usdt)
+                    pnl = 0.0
+
+                if month not in months:
+                    months[month] = {"pnl_usdt": 0.0, "trades": 0}
+                months[month]["pnl_usdt"] += pnl
+                months[month]["trades"] += 1
+    except Exception:
+        logger.exception(f"Failed to read manual trades journal {journal_path}")
+
+    return months
+
 
 def _load_current_capital(symbol: str) -> Optional[float]:
     """The coin's current_capital from risk_state.json (None if absent)."""
@@ -89,30 +122,42 @@ def _load_current_capital(symbol: str) -> Optional[float]:
 
 def get_monthly_pnl(symbol: str) -> List[Dict]:
     """
-    Monthly records for one coin, sorted by month ascending:
-    [{"month": "2026-09", "pnl_usdt": -1.23, "trades": 5, "capital_end": 24.5}, ...]
-    capital_end = None if there is no capital data.
+    Monthly records for one coin, sorted by month ascending.
+    Includes both auto-trading trades and manual trades.
     """
-    files = _iter_trade_csvs(symbol)
-    if not files:
-        return []
-
     months: Dict[str, Dict] = {}
+
+    # 1. Auto-trading trades
+    files = _iter_trade_csvs(symbol)
     for path in files:
         month = _month_from_filename(path, symbol)
         if month is None:
             continue
         agg = _read_month_csv(path)
-        months[month] = {
-            "month": month,
-            "pnl_usdt": round(agg["pnl_usdt"], 2),
-            "trades": agg["trades"],
-        }
+        if month not in months:
+            months[month] = {"month": month, "pnl_usdt": 0.0, "trades": 0}
+        months[month]["pnl_usdt"] += agg["pnl_usdt"]
+        months[month]["trades"] += agg["trades"]
+
+    # 2. Manual trades
+    manual = _read_manual_trades(symbol)
+    for month, agg in manual.items():
+        if month not in months:
+            months[month] = {"month": month, "pnl_usdt": 0.0, "trades": 0}
+        months[month]["pnl_usdt"] += agg["pnl_usdt"]
+        months[month]["trades"] += agg["trades"]
 
     if not months:
         return []
 
-    result = [months[m] for m in sorted(months.keys())]
+    result = [
+        {
+            "month": m,
+            "pnl_usdt": round(months[m]["pnl_usdt"], 2),
+            "trades": months[m]["trades"],
+        }
+        for m in sorted(months.keys())
+    ]
 
     current_cap = _load_current_capital(symbol)
     if current_cap is not None:

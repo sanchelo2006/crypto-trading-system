@@ -221,10 +221,77 @@ def clear_all_journals(memory_manager: MemoryManager) -> None:
         coin_memory.journal = coin_memory._empty_journal()
         coin_memory.save()
 
+def get_auto_trading_trades() -> pd.DataFrame:
+    """
+    Reads all auto-trading trade logs from data/auto_trading/logs/
+    and returns a DataFrame compatible with the manual journal format.
+    """
+    logs_dir = config.DATA_DIR / "auto_trading" / "logs"
+    journal_columns = [
+        "date", "time_utc", "pair", "direction", "entry_price",
+        "stop_loss", "take_profit", "exit_price", "result_pct",
+        "reason", "errors", "entry_type", "exit_type",
+        "position_value_usdt", "pnl_usdt",
+    ]
+    if not logs_dir.exists():
+        return pd.DataFrame(columns=journal_columns)
+
+    frames = []
+    for csv_file in logs_dir.glob("*_trades_*.csv"):
+        # Extract symbol from filename: {SYMBOL}_trades_YYYY_Www.csv
+        symbol = csv_file.stem.split("_trades_")[0]
+        try:
+            df = pd.read_csv(csv_file)
+        except Exception:
+            logger.warning(f"Failed to read auto-trading log: {csv_file}")
+            continue
+        if df.empty:
+            continue
+
+        df = df.copy()
+
+        # Parse exit_time into date / time columns
+        if "exit_time" in df.columns:
+            exit_dt = pd.to_datetime(df["exit_time"], errors="coerce")
+        else:
+            exit_dt = pd.Series([pd.NaT] * len(df), index=df.index)
+        df["date"] = exit_dt.dt.strftime("%Y-%m-%d").fillna("")
+        df["time_utc"] = exit_dt.dt.strftime("%H:%M:%S").fillna("")
+
+        df["pair"] = symbol
+        df["errors"] = ""
+
+        # Build reason / exit_type from exit_reason
+        if "exit_reason" in df.columns:
+            exit_reason = df["exit_reason"].fillna("").astype(str)
+        else:
+            exit_reason = pd.Series([""] * len(df), index=df.index)
+        df["reason"] = "Auto: " + exit_reason
+        df["exit_type"] = exit_reason
+
+        # Safely select journal columns (missing ones become NaN)
+        mapped = df.reindex(columns=journal_columns)
+        frames.append(mapped)
+
+    if not frames:
+        return pd.DataFrame(columns=journal_columns)
+
+    result = pd.concat(frames, ignore_index=True)
+    numeric_cols = [
+        "entry_price", "stop_loss", "take_profit", "exit_price",
+        "result_pct", "position_value_usdt", "pnl_usdt",
+    ]
+    for col in numeric_cols:
+        if col in result.columns:
+            result[col] = pd.to_numeric(result[col], errors="coerce").fillna(0)
+    return result
+
 
 def get_all_trades(memory_manager: MemoryManager) -> pd.DataFrame:
     """
     Collects trade journals of all coins into a single DataFrame.
+    Includes both manual trades (from trade_journal.csv) and
+    auto-trading trades (from data/auto_trading/logs/).
     """
     dataframes = []
     for symbol in memory_manager.get_all_symbols():
@@ -236,6 +303,11 @@ def get_all_trades(memory_manager: MemoryManager) -> pd.DataFrame:
         if "pair" not in journal_df.columns:
             journal_df["pair"] = symbol
         dataframes.append(journal_df)
+
+    # Add auto-trading trades
+    auto_df = get_auto_trading_trades()
+    if not auto_df.empty:
+        dataframes.append(auto_df)
 
     if not dataframes:
         return pd.DataFrame(
@@ -251,7 +323,6 @@ def get_all_trades(memory_manager: MemoryManager) -> pd.DataFrame:
                 "errors",
             ]
         )
-
     return pd.concat(dataframes, ignore_index=True)
 
 

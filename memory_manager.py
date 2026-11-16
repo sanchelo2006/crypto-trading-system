@@ -82,7 +82,8 @@ class CoinMemory:
             "date", "time_utc", "pair", "direction", "entry_price",
             "stop_loss", "take_profit", "exit_price", "result_pct",
             "reason", "errors", "entry_type", "exit_type",
-            "signal_snapshot", "market_snapshot"
+            "signal_snapshot", "market_snapshot",
+            "position_value_usdt", "pnl_usdt"
         ])
 
     def _default_state(self) -> Dict:
@@ -506,6 +507,8 @@ class CoinMemory:
             "exit_type": entry.get("exit_type", "manual"),
             "signal_snapshot": json.dumps(entry.get("signal_snapshot", {}), ensure_ascii=False) if entry.get("signal_snapshot") else "",
             "market_snapshot": json.dumps(entry.get("market_snapshot", {}), ensure_ascii=False) if entry.get("market_snapshot") else "",
+            "position_value_usdt": entry.get("position_value_usdt", 0),
+            "pnl_usdt": entry.get("pnl_usdt", 0),
         }
         self.journal = pd.concat([self.journal, pd.DataFrame([row])], ignore_index=True)
         self.save()

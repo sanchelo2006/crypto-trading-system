@@ -182,6 +182,7 @@ class CoinPage:
 
                     with ui.row().classes("gap-2"):
                         self.close_price_input = ui.input("Exit price", value="0").classes("w-32")
+                        self.close_position_size_input = ui.input("Position size (USDT)", value="0").classes("w-40")
                         self.close_reason = ui.select(
                             options=["manual", "stop_loss", "take_profit"],
                             value="manual",
@@ -1038,6 +1039,15 @@ class CoinPage:
             ui.notify("Price must be positive", type="warning")
             return
 
+        try:
+            position_size = float(self.close_position_size_input.value)
+        except ValueError:
+            ui.notify("Enter a valid position size in USDT (number)", type="warning")
+            return
+        if position_size <= 0:
+            ui.notify("Position size must be a positive number", type="warning")
+            return
+
         direction = active.get("direction", "long")
         entry_price = active.get("entry_price", 0)
         if entry_price == 0:
@@ -1063,6 +1073,8 @@ class CoinPage:
             "signal_snapshot": active.get("signal_snapshot", {}),
             "market_snapshot": active.get("market_snapshot", {}),
             "errors": "",
+            "position_value_usdt": round(position_size, 2),
+            "pnl_usdt": round(position_size * (result_pct / 100), 2),
         }
 
         cm.add_trade_entry(trade_entry)
